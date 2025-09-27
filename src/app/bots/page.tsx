@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Bot, Plus, Settings, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Bot, Plus, Settings, TrendingUp, Webhook, Monitor } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Bots() {
@@ -41,10 +41,24 @@ export default function Bots() {
             <h1 className="text-3xl font-bold text-gray-900">Trading Bots</h1>
             <p className="text-gray-600">Manage your automated trading strategies</p>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Bot
-          </Button>
+          <div className="flex gap-2">
+            <Link href="/bots/webhooks">
+              <Button variant="outline">
+                <Webhook className="h-4 w-4 mr-2" />
+                Webhooks
+              </Button>
+            </Link>
+            <Link href="/bots/config">
+              <Button variant="outline">
+                <Settings className="h-4 w-4 mr-2" />
+                Configure
+              </Button>
+            </Link>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Bot
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -83,10 +97,12 @@ export default function Bots() {
                 <span>Trade Method:</span>
                 <span className="text-gray-700">Tradingview Webhook</span>
               </div>
-              <Button className="w-full" disabled>
-                <Settings className="h-4 w-4 mr-2" />
-                Configure
-              </Button>
+              <Link href="/bots/config">
+                <Button className="w-full">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Configure
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
