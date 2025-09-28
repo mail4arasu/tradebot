@@ -20,7 +20,8 @@ import {
   RefreshCw,
   Send,
   Eye,
-  Clock
+  Clock,
+  Settings
 } from 'lucide-react'
 import Link from 'next/link'
 
