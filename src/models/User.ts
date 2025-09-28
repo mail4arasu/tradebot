@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 const ZerodhaConfigSchema = new mongoose.Schema({
   apiKey: { type: String, required: true },
   apiSecret: { type: String, required: true },
+  accessToken: { type: String }, // OAuth access token for API calls
   isConnected: { type: Boolean, default: false },
   balance: { type: Number },
   lastSync: { type: Date }
