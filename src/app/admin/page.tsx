@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Users, UserCheck, UserX, Shield, Activity, Calendar } from 'lucide-react'
+import { Users, UserCheck, UserX, Shield, Activity, Calendar, Bot, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
 
 interface UserStats {
   totalUsers: number
@@ -168,8 +169,18 @@ export default function AdminDashboard() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-        <p className="text-gray-600">Manage users and monitor platform statistics</p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+            <p className="text-gray-600">Manage users and monitor platform statistics</p>
+          </div>
+          <Link href="/admin/trading">
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Bot className="h-4 w-4 mr-2" />
+              Trading Control
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Statistics Cards */}
