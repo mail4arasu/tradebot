@@ -7,6 +7,7 @@ import clientPromise from './mongodb'
 import bcrypt from 'bcryptjs'
 
 export const authOptions: NextAuthOptions = {
+  adapter: MongoDBAdapter(clientPromise),
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -52,9 +53,21 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
-        token.id = user.id
+        // For both credential and OAuth users, get the ID from our users collection
+        try {
+          const client = await clientPromise
+          const usersCollection = client.db('tradebot').collection('users')
+          const dbUser = await usersCollection.findOne({ email: user.email })
+          if (dbUser) {
+            token.id = dbUser._id.toString()
+            token.role = dbUser.role || 'user'
+          }
+        } catch (error) {
+          console.error('Error fetching user in JWT callback:', error)
+          token.id = user.id
+        }
       }
       return token
     },
@@ -65,6 +78,30 @@ export const authOptions: NextAuthOptions = {
       return session
     },
     async signIn({ user, account, profile }) {
+      if (account?.provider === 'google') {
+        // For Google OAuth users, ensure they get saved to our users collection with default role
+        try {
+          const client = await clientPromise
+          const usersCollection = client.db('tradebot').collection('users')
+          
+          const existingUser = await usersCollection.findOne({ email: user.email })
+          if (!existingUser) {
+            await usersCollection.insertOne({
+              name: user.name,
+              email: user.email,
+              image: user.image,
+              emailVerified: new Date(),
+              role: 'user',
+              status: 'active',
+              authProvider: 'google',
+              createdAt: new Date(),
+              updatedAt: new Date()
+            })
+          }
+        } catch (error) {
+          console.error('Error saving Google OAuth user:', error)
+        }
+      }
       return true
     },
   },
