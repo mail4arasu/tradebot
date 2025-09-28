@@ -77,7 +77,7 @@ export default function Trades() {
   
   // Order filtering states
   const [orderFilters, setOrderFilters] = useState({
-    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 7 days
+    startDate: new Date().toISOString().split('T')[0], // Today (Zerodha API limitation)
     endDate: new Date().toISOString().split('T')[0], // Today
     orderStatus: 'all' as 'all' | 'complete' | 'open' | 'cancelled'
   })
@@ -504,7 +504,7 @@ export default function Trades() {
                 Order Filters
               </CardTitle>
               <CardDescription>
-                Filter orders by date range and status
+                Filter orders by date range and status. Note: Zerodha API only provides current day orders.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -642,7 +642,13 @@ export default function Trades() {
                     <div className="text-center py-8">
                       <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
-                      <p className="text-gray-600">No orders match your current filter criteria.</p>
+                      <p className="text-gray-600">
+                        No orders match your current filter criteria. 
+                        <br />
+                        <span className="text-sm text-orange-600 mt-2 inline-block">
+                          Note: Zerodha API only provides orders for the current trading day.
+                        </span>
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

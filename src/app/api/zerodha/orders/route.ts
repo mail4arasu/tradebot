@@ -42,8 +42,12 @@ export async function GET(request: NextRequest) {
       )
 
       // Fetch orders from Zerodha (this gets all orders for the current day by default)
+      // Note: Zerodha API only provides orders for the current trading day
       const ordersResponse = await zerodhaAPI.getOrders()
-      console.log('Orders API response:', ordersResponse)
+      console.log('Orders API response (current day only):', {
+        total: ordersResponse.data?.length || 0,
+        filters: { startDate, endDate, orderStatus }
+      })
 
       let orders = ordersResponse.data || []
 
