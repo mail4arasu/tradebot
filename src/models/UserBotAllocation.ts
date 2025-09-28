@@ -8,7 +8,21 @@ const UserBotAllocationSchema = new mongoose.Schema({
   startDate: { type: Date, required: true },
   endDate: { type: Date },
   currentValue: { type: Number, default: 0 },
-  totalPnl: { type: Number, default: 0 }
+  totalPnl: { type: Number, default: 0 },
+  // New fields for automated trading control
+  quantity: { type: Number, required: true }, // User-defined position size
+  maxTradesPerDay: { type: Number, required: true, default: 1 }, // Daily trade limit
+  currentDayTrades: { type: Number, default: 0 }, // Today's trade count
+  lastTradeDate: { type: Date }, // Last trade execution date
+  // Trading preferences
+  enabledHours: {
+    start: { type: String, default: '09:15' }, // Market start time
+    end: { type: String, default: '15:30' } // Market end time
+  },
+  // Performance tracking
+  totalTrades: { type: Number, default: 0 },
+  successfulTrades: { type: Number, default: 0 },
+  lastSignalTime: { type: Date } // Last webhook signal processed
 }, {
   timestamps: true
 })

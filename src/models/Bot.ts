@@ -9,7 +9,13 @@ const BotSchema = new mongoose.Schema({
   maxInvestment: { type: Number, required: true },
   expectedReturn: { type: Number, required: true },
   isActive: { type: Boolean, default: true },
-  parameters: { type: mongoose.Schema.Types.Mixed, default: {} }
+  parameters: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // New fields for automated trading
+  webhookUrl: { type: String }, // TradingView webhook URL
+  emergencyStop: { type: Boolean, default: false }, // Emergency stop flag
+  symbol: { type: String }, // Trading symbol (e.g., "NIFTY50")
+  exchange: { type: String }, // Exchange (e.g., "NFO")
+  instrumentType: { type: String } // Instrument type (e.g., "FUTURES")
 }, {
   timestamps: true
 })
