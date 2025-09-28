@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
+import { useAdmin } from '@/hooks/useAdmin'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -56,6 +57,7 @@ interface EmergencyStatus {
 
 export default function TradingAdminDashboard() {
   const { data: session, status } = useSession()
+  const { isAdmin, loading: adminLoading } = useAdmin()
   const [signals, setSignals] = useState<SignalData[]>([])
   const [emergencyStatus, setEmergencyStatus] = useState<EmergencyStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -166,11 +168,11 @@ export default function TradingAdminDashboard() {
     return 'bg-green-100 text-green-800'
   }
 
-  if (status === 'loading') {
+  if (status === 'loading' || adminLoading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>
   }
 
-  if (!session || session.user?.email !== 'mail4arasu@gmail.com') {
+  if (!session || !isAdmin) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">

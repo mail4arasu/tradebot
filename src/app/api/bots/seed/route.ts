@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/mongodb'
+import { isAdminUser } from '@/lib/admin'
 
 // POST - Seed database with sample bots (admin only)
 export async function POST(request: NextRequest) {
@@ -11,8 +12,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is admin (for now, just check if it's the main user)
-    if (session.user.email !== 'mail4arasu@gmail.com') {
+    // Check if user is admin
+    if (!(await isAdminUser())) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/mongodb'
+import { isAdminUser } from '@/lib/admin'
 import { ObjectId } from 'mongodb'
 
 export async function GET(request: NextRequest) {
@@ -17,8 +18,7 @@ export async function GET(request: NextRequest) {
     const users = db.collection('users')
 
     // Check if current user is admin
-    const currentUser = await users.findOne({ _id: new ObjectId(session.user.id) })
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!(await isAdminUser())) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
@@ -130,8 +130,7 @@ export async function PATCH(request: NextRequest) {
     const users = db.collection('users')
 
     // Check if current user is admin
-    const currentUser = await users.findOne({ _id: new ObjectId(session.user.id) })
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!(await isAdminUser())) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
@@ -194,8 +193,7 @@ export async function DELETE(request: NextRequest) {
     const users = db.collection('users')
 
     // Check if current user is admin
-    const currentUser = await users.findOne({ _id: new ObjectId(session.user.id) })
-    if (!currentUser || currentUser.role !== 'admin') {
+    if (!(await isAdminUser())) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 

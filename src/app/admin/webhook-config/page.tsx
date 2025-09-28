@@ -1,6 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
+import { useAdmin } from '@/hooks/useAdmin'
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,7 @@ interface BotInfo {
 
 export default function WebhookConfigPage() {
   const { data: session, status } = useSession()
+  const { isAdmin, loading: adminLoading } = useAdmin()
   const [bots, setBots] = useState<BotInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedBot, setSelectedBot] = useState<BotInfo | null>(null)
@@ -100,11 +102,11 @@ export default function WebhookConfigPage() {
 }`
   }
 
-  if (status === 'loading') {
+  if (status === 'loading' || adminLoading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>
   }
 
-  if (!session || session.user?.email !== 'mail4arasu@gmail.com') {
+  if (!session || !isAdmin) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">

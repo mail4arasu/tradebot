@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useState } from 'react'
+import { useAdmin } from '@/hooks/useAdmin'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Bot, Plus, Settings, TrendingUp, Webhook, Monitor, Users } from 'lucide-react'
@@ -9,10 +10,8 @@ import Link from 'next/link'
 
 export default function Bots() {
   const { data: session, status } = useSession()
+  const { isAdmin } = useAdmin()
   const [setupLoading, setSetupLoading] = useState(false)
-  
-  // Check if current user is admin
-  const isAdmin = session?.user?.email === 'mail4arasu@gmail.com'
 
   const handleSetup = async () => {
     setSetupLoading(true)

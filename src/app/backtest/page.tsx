@@ -1,13 +1,110 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BarChart3, TrendingUp, Calendar, Target } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { ArrowLeft, BarChart3, TrendingUp, Calendar, Target, Bot, PlayCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+
+interface Bot {
+  _id: string
+  name: string
+  description: string
+  strategy: string
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'
+  symbol: string
+  exchange: string
+  instrumentType: string
+  isActive: boolean
+  emergencyStop: boolean
+  minInvestment: number
+  maxInvestment: number
+  expectedReturn: number
+}
+
+interface BacktestConfig {
+  botId: string
+  startDate: string
+  endDate: string
+  initialCapital: number
+}
 
 export default function Backtest() {
   const { data: session, status } = useSession()
+  const [bots, setBots] = useState<Bot[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedBot, setSelectedBot] = useState<Bot | null>(null)
+  const [backtestConfig, setBacktestConfig] = useState<BacktestConfig>({
+    botId: '',
+    startDate: '',
+    endDate: '',
+    initialCapital: 100000
+  })
+  const [backtesting, setBacktesting] = useState(false)
+
+  useEffect(() => {
+    if (session) {
+      fetchBots()
+    }
+  }, [session])
+
+  const fetchBots = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/bots/available')
+      if (response.ok) {
+        const data = await response.json()
+        setBots(data.bots || [])
+      }
+    } catch (error) {
+      console.error('Error fetching bots:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBotSelect = (bot: Bot) => {
+    setSelectedBot(bot)
+    setBacktestConfig(prev => ({
+      ...prev,
+      botId: bot._id,
+      initialCapital: bot.minInvestment
+    }))
+  }
+
+  const handleRunBacktest = async () => {
+    if (!selectedBot || !backtestConfig.startDate || !backtestConfig.endDate) {
+      alert('Please select a bot and complete all required fields')
+      return
+    }
+
+    setBacktesting(true)
+    try {
+      // TODO: Implement backtest API call
+      console.log('Running backtest with config:', backtestConfig)
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      alert('Backtest completed! (This is a demo - full implementation coming soon)')
+    } catch (error) {
+      console.error('Backtest error:', error)
+      alert('Backtest failed. Please try again.')
+    } finally {
+      setBacktesting(false)
+    }
+  }
+
+  const getRiskColor = (level: string) => {
+    switch (level) {
+      case 'LOW': return 'bg-green-100 text-green-800'
+      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800'
+      case 'HIGH': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
 
   if (status === 'loading') {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>
@@ -38,195 +135,212 @@ export default function Backtest() {
             </Button>
           </Link>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">Strategy Backtesting</h1>
-            <p className="text-gray-600">Test trading strategies on historical data</p>
+            <h1 className="text-3xl font-bold text-gray-900">Backtest Trading Bots</h1>
+            <p className="text-gray-600">Test bot performance on historical data</p>
           </div>
-          <Button disabled>
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Run Backtest
+          <Button 
+            onClick={handleRunBacktest}
+            disabled={!selectedBot || backtesting}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {backtesting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Running...
+              </>
+            ) : (
+              <>
+                <PlayCircle className="h-4 w-4 mr-2" />
+                Run Backtest
+              </>
+            )}
           </Button>
         </div>
       </div>
 
-      {/* Coming Soon Notice */}
-      <Card className="mb-8 border-purple-200 bg-purple-50">
-        <CardHeader>
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="h-5 w-5 text-purple-600" />
-            <CardTitle className="text-purple-800">Strategy Backtesting - Coming Soon</CardTitle>
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin mr-2" />
+          <span>Loading available bots...</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Bot Selection */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bot className="h-5 w-5" />
+                  Select Trading Bot
+                </CardTitle>
+                <CardDescription>
+                  Choose a bot to backtest from your available options
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {bots.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No trading bots available</p>
+                    <p className="text-sm">Please contact admin to set up bots</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {bots.map((bot) => (
+                      <Card
+                        key={bot._id}
+                        className={`cursor-pointer transition-all hover:shadow-md ${
+                          selectedBot?._id === bot._id
+                            ? 'ring-2 ring-blue-500 border-blue-200'
+                            : 'hover:border-gray-300'
+                        }`}
+                        onClick={() => handleBotSelect(bot)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="font-semibold text-lg">{bot.name}</h3>
+                                <Badge className={getRiskColor(bot.riskLevel)}>
+                                  {bot.riskLevel}
+                                </Badge>
+                                {bot.isActive ? (
+                                  <Badge className="bg-green-100 text-green-800">Active</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Inactive</Badge>
+                                )}
+                              </div>
+                              <p className="text-gray-600 text-sm mb-3">{bot.description}</p>
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-gray-500">Strategy:</span>
+                                  <span className="ml-2 font-medium">{bot.strategy}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Symbol:</span>
+                                  <span className="ml-2 font-medium">{bot.symbol}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Min Investment:</span>
+                                  <span className="ml-2 font-medium">₹{bot.minInvestment.toLocaleString()}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-500">Expected Return:</span>
+                                  <span className="ml-2 font-medium">{bot.expectedReturn}%</span>
+                                </div>
+                              </div>
+                            </div>
+                            {selectedBot?._id === bot._id && (
+                              <div className="ml-4">
+                                <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
-          <CardDescription className="text-purple-700">
-            Advanced backtesting capabilities are in development. Soon you&apos;ll be able to test strategies against historical market data!
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <h4 className="font-medium text-purple-800">Planned Features:</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <h5 className="font-medium text-purple-700">Backtesting Engine:</h5>
-                <ul className="text-sm text-purple-600 space-y-1 list-disc list-inside">
-                  <li>Historical data from multiple timeframes</li>
-                  <li>Commission and slippage modeling</li>
-                  <li>Risk-adjusted performance metrics</li>
-                  <li>Monte Carlo simulation</li>
-                  <li>Walk-forward analysis</li>
-                </ul>
-              </div>
-              <div className="space-y-3">
-                <h5 className="font-medium text-purple-700">Strategy Builder:</h5>
-                <ul className="text-sm text-purple-600 space-y-1 list-disc list-inside">
-                  <li>Visual strategy designer</li>
-                  <li>Custom indicator support</li>
-                  <li>Multiple entry/exit conditions</li>
-                  <li>Portfolio-level backtesting</li>
-                  <li>Strategy optimization tools</li>
-                </ul>
-              </div>
-            </div>
+
+          {/* Backtest Configuration */}
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Backtest Settings
+                </CardTitle>
+                <CardDescription>
+                  Configure your backtest parameters
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="startDate">Start Date</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={backtestConfig.startDate}
+                    onChange={(e) => setBacktestConfig(prev => ({
+                      ...prev,
+                      startDate: e.target.value
+                    }))}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="endDate">End Date</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={backtestConfig.endDate}
+                    onChange={(e) => setBacktestConfig(prev => ({
+                      ...prev,
+                      endDate: e.target.value
+                    }))}
+                    min={backtestConfig.startDate}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="initialCapital">Initial Capital (₹)</Label>
+                  <Input
+                    id="initialCapital"
+                    type="number"
+                    value={backtestConfig.initialCapital}
+                    onChange={(e) => setBacktestConfig(prev => ({
+                      ...prev,
+                      initialCapital: parseInt(e.target.value) || 0
+                    }))}
+                    min={selectedBot?.minInvestment || 10000}
+                    max={selectedBot?.maxInvestment || 5000000}
+                  />
+                  {selectedBot && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Range: ₹{selectedBot.minInvestment.toLocaleString()} - ₹{selectedBot.maxInvestment.toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                {selectedBot && (
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">Selected Bot:</h4>
+                    <p className="text-sm text-blue-800">{selectedBot.name}</p>
+                    <p className="text-sm text-blue-700">{selectedBot.strategy}</p>
+                  </div>
+                )}
+
+                <div className="pt-4">
+                  <Button
+                    onClick={handleRunBacktest}
+                    disabled={!selectedBot || !backtestConfig.startDate || !backtestConfig.endDate || backtesting}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {backtesting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Running Backtest...
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="h-4 w-4 mr-2" />
+                        Run Backtest
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Strategy Templates */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <Card className="opacity-60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Moving Average Crossover
-            </CardTitle>
-            <CardDescription>
-              Classic trend-following strategy using MA crossovers
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span>Type:</span>
-                <span className="text-gray-500">Trend Following</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Timeframe:</span>
-                <span className="text-gray-500">1D, 4H, 1H</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Complexity:</span>
-                <span className="text-gray-500">Beginner</span>
-              </div>
-              <Button className="w-full" disabled>
-                <Target className="h-4 w-4 mr-2" />
-                Test Strategy
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="opacity-60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              RSI Mean Reversion
-            </CardTitle>
-            <CardDescription>
-              Counter-trend strategy based on RSI oversold/overbought
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span>Type:</span>
-                <span className="text-gray-500">Mean Reversion</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Timeframe:</span>
-                <span className="text-gray-500">1H, 30M, 15M</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Complexity:</span>
-                <span className="text-gray-500">Intermediate</span>
-              </div>
-              <Button className="w-full" disabled>
-                <Target className="h-4 w-4 mr-2" />
-                Test Strategy
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="opacity-60">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Breakout Strategy
-            </CardTitle>
-            <CardDescription>
-              Momentum-based breakout from key support/resistance levels
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span>Type:</span>
-                <span className="text-gray-500">Breakout</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Timeframe:</span>
-                <span className="text-gray-500">4H, 1H, 30M</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Complexity:</span>
-                <span className="text-gray-500">Advanced</span>
-              </div>
-              <Button className="w-full" disabled>
-                <Target className="h-4 w-4 mr-2" />
-                Test Strategy
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Backtesting Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>What is Strategy Backtesting?</CardTitle>
-          <CardDescription>
-            Learn how backtesting can help you validate trading strategies before risking real money
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4 text-sm text-gray-600">
-            <p>
-              <strong>Backtesting</strong> is the process of testing a trading strategy using historical market data 
-              to see how it would have performed in the past. This helps you understand the potential risks and 
-              returns of a strategy before deploying it with real money.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <h4 className="font-medium text-gray-900 mb-2">Key Benefits:</h4>
-                <ul className="space-y-1 list-disc list-inside">
-                  <li>Validate strategy effectiveness</li>
-                  <li>Understand risk characteristics</li>
-                  <li>Optimize parameters</li>
-                  <li>Build confidence in your approach</li>
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="font-medium text-gray-900 mb-2">Important Considerations:</h4>
-                <ul className="space-y-1 list-disc list-inside">
-                  <li>Past performance doesn&apos;t guarantee future results</li>
-                  <li>Account for transaction costs and slippage</li>
-                  <li>Test across different market conditions</li>
-                  <li>Avoid overfitting to historical data</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }

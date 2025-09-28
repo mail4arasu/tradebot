@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/mongodb'
+import { isAdminUser } from '@/lib/admin'
 
 // GET - List all bots with their IDs for TradingView configuration
 export async function GET(request: NextRequest) {
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user is admin
-    if (session.user.email !== 'mail4arasu@gmail.com') {
+    if (!(await isAdminUser())) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
