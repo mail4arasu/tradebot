@@ -113,6 +113,31 @@ export class ZerodhaAPI {
     }
   }
 
+  async getPositions() {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/portfolio/positions`, {
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.accessToken}`,
+          'X-Kite-Version': '3'
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to fetch positions: ${error}`)
+      }
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Error fetching positions:', error)
+      throw error
+    }
+  }
+
   static getLoginUrl(apiKey: string, redirectUrl: string): string {
     return `https://kite.zerodha.com/connect/login?api_key=${apiKey}&v=3&redirect_url=${encodeURIComponent(redirectUrl)}`
   }
