@@ -23,4 +23,4 @@ pm2 restart tradebot-portal
 "
 
 echo "✅ Deployment complete\!"
-echo "🔗 Application running at: http://35.244.35.145:3000"
+echo "🔗 Application running at: https://niveshawealth.in"
