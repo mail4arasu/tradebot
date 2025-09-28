@@ -73,10 +73,36 @@ export async function GET(request: NextRequest) {
         .limit(limit)
         .toArray()
 
+      // Get bot allocations for each user
+      const userBotAllocations = db.collection('userbotallocations')
+      const bots = db.collection('bots')
+      
+      const usersWithBots = await Promise.all(allUsers.map(async (user) => {
+        const allocations = await userBotAllocations
+          .find({ userId: user._id })
+          .toArray()
+        
+        const botDetails = await Promise.all(allocations.map(async (allocation) => {
+          const bot = await bots.findOne({ _id: allocation.botId })
+          return {
+            botName: bot?.name || 'Unknown Bot',
+            strategy: bot?.strategy || 'Unknown',
+            allocatedAmount: allocation.allocatedAmount,
+            isActive: allocation.isActive,
+            totalPnl: allocation.totalPnl || 0
+          }
+        }))
+        
+        return {
+          ...user,
+          botAllocations: botDetails
+        }
+      }))
+
       const totalUsers = await users.countDocuments()
 
       return NextResponse.json({
-        users: allUsers,
+        users: usersWithBots,
         pagination: {
           page,
           limit,

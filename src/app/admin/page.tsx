@@ -18,6 +18,14 @@ interface UserStats {
   zerodhaConnectedUsers: number
 }
 
+interface BotAllocation {
+  botName: string
+  strategy: string
+  allocatedAmount: number
+  isActive: boolean
+  totalPnl: number
+}
+
 interface User {
   _id: string
   name: string
@@ -29,6 +37,7 @@ interface User {
   zerodhaConfig?: {
     isConnected: boolean
   }
+  botAllocations?: BotAllocation[]
 }
 
 interface UserListResponse {
@@ -227,6 +236,7 @@ export default function AdminDashboard() {
                   <th className="text-left p-2">Role</th>
                   <th className="text-left p-2">Status</th>
                   <th className="text-left p-2">Zerodha</th>
+                  <th className="text-left p-2">Active Bots</th>
                   <th className="text-left p-2">Joined</th>
                   <th className="text-left p-2">Actions</th>
                 </tr>
@@ -247,6 +257,29 @@ export default function AdminDashboard() {
                         <Badge className="bg-green-100 text-green-800">Connected</Badge> :
                         <Badge className="bg-gray-100 text-gray-800">Not Connected</Badge>
                       }
+                    </td>
+                    <td className="p-2">
+                      {user.botAllocations && user.botAllocations.length > 0 ? (
+                        <div className="space-y-1">
+                          {user.botAllocations
+                            .filter(bot => bot.isActive)
+                            .map((bot, index) => (
+                            <div key={index} className="text-xs">
+                              <Badge className={bot.isActive ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"}>
+                                {bot.botName}
+                              </Badge>
+                              <div className="text-gray-500">
+                                ₹{bot.allocatedAmount.toLocaleString()} • {bot.strategy}
+                              </div>
+                            </div>
+                          ))}
+                          {user.botAllocations.filter(bot => bot.isActive).length === 0 && (
+                            <Badge className="bg-gray-100 text-gray-800">No Active Bots</Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge className="bg-gray-100 text-gray-800">No Bots</Badge>
+                      )}
                     </td>
                     <td className="p-2">
                       {new Date(user.createdAt).toLocaleDateString()}
