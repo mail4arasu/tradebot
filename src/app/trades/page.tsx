@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download } from 'lucide-react'
 import Link from 'next/link'
 
 interface Trade {
@@ -74,6 +74,8 @@ export default function Trades() {
   const [positionsError, setPositionsError] = useState('')
   const [ordersError, setOrdersError] = useState('')
   const [activeTab, setActiveTab] = useState<'trades' | 'positions' | 'orders'>('positions')
+  const [syncing, setSyncing] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<any>(null)
   
   // Order filtering states
   const [orderFilters, setOrderFilters] = useState({
@@ -94,6 +96,7 @@ export default function Trades() {
       fetchTrades()
       fetchPositions()
       fetchOrders()
+      fetchSyncStatus()
     }
   }, [session])
 
@@ -181,6 +184,42 @@ export default function Trades() {
     }
   }
 
+  const fetchSyncStatus = async () => {
+    try {
+      const response = await fetch('/api/zerodha/sync-trades')
+      if (response.ok) {
+        const data = await response.json()
+        setSyncStatus(data.syncStatus)
+      }
+    } catch (error) {
+      console.error('Error fetching sync status:', error)
+    }
+  }
+
+  const syncTrades = async () => {
+    try {
+      setSyncing(true)
+      const response = await fetch('/api/zerodha/sync-trades', {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Sync result:', data)
+        // Refresh trades and sync status after sync
+        await fetchTrades()
+        await fetchSyncStatus()
+      } else {
+        const errorData = await response.json()
+        console.error('Sync failed:', errorData)
+      }
+    } catch (error) {
+      console.error('Error syncing trades:', error)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const refreshAll = async () => {
     await Promise.all([fetchTrades(), fetchPositions(), fetchOrders()])
   }
@@ -253,12 +292,47 @@ export default function Trades() {
             <h1 className="text-3xl font-bold text-gray-900">Trading Overview</h1>
             <p className="text-gray-600">Review your positions and trade history</p>
           </div>
-          <Button onClick={refreshAll} disabled={loading || positionsLoading || ordersLoading} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${(loading || positionsLoading || ordersLoading) ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={syncTrades} disabled={syncing} variant="outline">
+              <Download className={`h-4 w-4 mr-2 ${syncing ? 'animate-bounce' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync Trades'}
+            </Button>
+            <Button onClick={refreshAll} disabled={loading || positionsLoading || ordersLoading} variant="outline">
+              <RefreshCw className={`h-4 w-4 mr-2 ${(loading || positionsLoading || ordersLoading) ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* Sync Status */}
+      {syncStatus && (
+        <div className="mb-6">
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Trade Sync Status</p>
+                    <p className="text-xs text-blue-700">
+                      {syncStatus.totalStoredTrades} trades stored | 
+                      Last sync: {syncStatus.lastSync ? formatDate(syncStatus.lastSync) : 'Never'}
+                    </p>
+                  </div>
+                  {syncStatus.todayTrades > 0 && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      {syncStatus.todayTrades} today
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-xs text-blue-600">
+                  Historical data available
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6">
