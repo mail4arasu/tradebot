@@ -10,6 +10,9 @@ import Link from 'next/link'
 export default function Bots() {
   const { data: session, status } = useSession()
   const [setupLoading, setSetupLoading] = useState(false)
+  
+  // Check if current user is admin
+  const isAdmin = session?.user?.email === 'mail4arasu@gmail.com'
 
   const handleSetup = async () => {
     setSetupLoading(true)
@@ -69,26 +72,30 @@ export default function Bots() {
                 Manage Your Bots
               </Button>
             </Link>
-            <Link href="/bots/webhooks">
-              <Button variant="outline">
-                <Webhook className="h-4 w-4 mr-2" />
-                Webhooks
-              </Button>
-            </Link>
-            <Link href="/bots/config">
-              <Button variant="outline">
-                <Settings className="h-4 w-4 mr-2" />
-                Configure
-              </Button>
-            </Link>
-            <Button 
-              variant="outline" 
-              onClick={handleSetup}
-              disabled={setupLoading}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              {setupLoading ? 'Setting up...' : 'Setup Bots'}
-            </Button>
+            {isAdmin && (
+              <>
+                <Link href="/bots/webhooks">
+                  <Button variant="outline">
+                    <Webhook className="h-4 w-4 mr-2" />
+                    Webhooks
+                  </Button>
+                </Link>
+                <Link href="/bots/config">
+                  <Button variant="outline">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Configure
+                  </Button>
+                </Link>
+                <Button 
+                  variant="outline" 
+                  onClick={handleSetup}
+                  disabled={setupLoading}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {setupLoading ? 'Setting up...' : 'Setup Bots'}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -101,7 +108,10 @@ export default function Bots() {
             Manage Your Trading Bots
           </CardTitle>
           <CardDescription className="text-blue-700">
-            Enable/disable bots, set position sizes, configure trading hours, and monitor performance
+            {isAdmin 
+              ? "Enable/disable bots, set position sizes, configure trading hours, and monitor performance"
+              : "Enable or disable trading bots and configure your position sizes and trading preferences"
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -111,10 +121,10 @@ export default function Bots() {
                 • Enable or disable any available trading bot
               </p>
               <p className="text-sm text-blue-800 mb-2">
-                • Set custom position quantities and daily trade limits
+                • Set your position quantities and daily trade limits
               </p>
               <p className="text-sm text-blue-800 mb-2">
-                • Configure trading hours and monitor real-time performance
+                • Configure your trading hours and monitor performance
               </p>
             </div>
             <Link href="/bots/manage">
