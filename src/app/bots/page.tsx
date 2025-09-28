@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Bot, Plus, Settings, TrendingUp, Webhook, Monitor } from 'lucide-react'
+import { ArrowLeft, Bot, Plus, Settings, TrendingUp, Webhook, Monitor, Users } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Bots() {
@@ -42,6 +42,12 @@ export default function Bots() {
             <p className="text-gray-600">Manage your automated trading strategies</p>
           </div>
           <div className="flex gap-2">
+            <Link href="/bots/manage">
+              <Button>
+                <Users className="h-4 w-4 mr-2" />
+                Manage Your Bots
+              </Button>
+            </Link>
             <Link href="/bots/webhooks">
               <Button variant="outline">
                 <Webhook className="h-4 w-4 mr-2" />
@@ -54,10 +60,6 @@ export default function Bots() {
                 Configure
               </Button>
             </Link>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Bot
-            </Button>
           </div>
         </div>
       </div>
@@ -97,10 +99,10 @@ export default function Bots() {
                 <span>Trade Method:</span>
                 <span className="text-gray-700">Tradingview Webhook</span>
               </div>
-              <Link href="/bots/config">
+              <Link href="/bots/manage">
                 <Button className="w-full">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Configure
+                  <Users className="h-4 w-4 mr-2" />
+                  Manage Bot
                 </Button>
               </Link>
             </div>
