@@ -196,6 +196,12 @@ export default function TradingAdminDashboard() {
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+            <Link href="/admin/webhook-config">
+              <Button variant="outline">
+                <Settings className="h-4 w-4 mr-2" />
+                Webhook Config
+              </Button>
+            </Link>
             <Link href="/admin">
               <Button variant="outline">Back to Admin</Button>
             </Link>
