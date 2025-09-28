@@ -44,7 +44,7 @@ export default function Home() {
             and let our advanced algorithms trade for you 24/7.
           </p>
           <div className="space-x-4">
-            <Link href="/auth/signin">
+            <Link href="/api/auth/signin">
               <Button size="lg" className="bg-white text-blue-600 hover:bg-gray-100">
                 Get Started Free
               </Button>
@@ -143,7 +143,7 @@ export default function Home() {
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
             Join thousands of traders who are already using our platform to maximize their profits.
           </p>
-          <Link href="/auth/signin">
+          <Link href="/api/auth/signin">
             <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
               Start Trading Now
             </Button>
