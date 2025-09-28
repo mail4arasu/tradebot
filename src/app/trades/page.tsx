@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 
 interface Trade {
@@ -38,22 +40,69 @@ interface Position {
   realised: number
 }
 
+interface Order {
+  order_id: string
+  parent_order_id: string
+  tradingsymbol: string
+  exchange: string
+  transaction_type: 'BUY' | 'SELL'
+  order_type: string
+  product: string
+  quantity: number
+  filled_quantity: number
+  pending_quantity: number
+  price: number
+  trigger_price: number
+  average_price: number
+  status: string
+  status_message: string
+  order_timestamp: string
+  exchange_timestamp: string
+  variety: string
+  validity: string
+}
+
 export default function Trades() {
   const { data: session, status } = useSession()
   const [trades, setTrades] = useState<Trade[]>([])
   const [positions, setPositions] = useState<{net: Position[], day: Position[]}>({net: [], day: []})
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [positionsLoading, setPositionsLoading] = useState(true)
+  const [ordersLoading, setOrdersLoading] = useState(true)
   const [error, setError] = useState('')
   const [positionsError, setPositionsError] = useState('')
-  const [activeTab, setActiveTab] = useState<'trades' | 'positions'>('positions')
+  const [ordersError, setOrdersError] = useState('')
+  const [activeTab, setActiveTab] = useState<'trades' | 'positions' | 'orders'>('positions')
+  
+  // Order filtering states
+  const [orderFilters, setOrderFilters] = useState({
+    startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Last 7 days
+    endDate: new Date().toISOString().split('T')[0], // Today
+    orderStatus: 'all' as 'all' | 'complete' | 'open' | 'cancelled'
+  })
+  const [orderSummary, setOrderSummary] = useState({
+    total: 0,
+    complete: 0,
+    open: 0,
+    cancelled: 0,
+    totalValue: 0
+  })
 
   useEffect(() => {
     if (session) {
       fetchTrades()
       fetchPositions()
+      fetchOrders()
     }
   }, [session])
+
+  // Refetch orders when filters change
+  useEffect(() => {
+    if (session) {
+      fetchOrders()
+    }
+  }, [orderFilters, session])
 
   const fetchTrades = async () => {
     try {
@@ -97,8 +146,43 @@ export default function Trades() {
     }
   }
 
+  const fetchOrders = async () => {
+    try {
+      setOrdersLoading(true)
+      setOrdersError('')
+      
+      const queryParams = new URLSearchParams({
+        startDate: orderFilters.startDate,
+        endDate: orderFilters.endDate,
+        status: orderFilters.orderStatus
+      })
+      
+      const response = await fetch(`/api/zerodha/orders?${queryParams}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setOrders(data.orders || [])
+        setOrderSummary(data.summary || {
+          total: 0,
+          complete: 0,
+          open: 0,
+          cancelled: 0,
+          totalValue: 0
+        })
+      } else {
+        const errorData = await response.json()
+        setOrdersError(errorData.error || 'Failed to fetch orders')
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error)
+      setOrdersError('Error connecting to server')
+    } finally {
+      setOrdersLoading(false)
+    }
+  }
+
   const refreshAll = async () => {
-    await Promise.all([fetchTrades(), fetchPositions()])
+    await Promise.all([fetchTrades(), fetchPositions(), fetchOrders()])
   }
 
   const formatDate = (dateString: string) => {
@@ -113,6 +197,28 @@ export default function Trades() {
 
   const formatCurrency = (amount: number) => {
     return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  }
+
+  const getOrderStatusColor = (status: string) => {
+    switch (status) {
+      case 'COMPLETE': return 'bg-green-100 text-green-800'
+      case 'OPEN': 
+      case 'TRIGGER PENDING': return 'bg-blue-100 text-blue-800'
+      case 'CANCELLED': 
+      case 'REJECTED': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getOrderStatusIcon = (status: string) => {
+    switch (status) {
+      case 'COMPLETE': return <TrendingUp className="h-4 w-4" />
+      case 'OPEN': 
+      case 'TRIGGER PENDING': return <Activity className="h-4 w-4" />
+      case 'CANCELLED': 
+      case 'REJECTED': return <TrendingDown className="h-4 w-4" />
+      default: return <FileText className="h-4 w-4" />
+    }
   }
 
   if (status === 'loading') {
@@ -147,8 +253,8 @@ export default function Trades() {
             <h1 className="text-3xl font-bold text-gray-900">Trading Overview</h1>
             <p className="text-gray-600">Review your positions and trade history</p>
           </div>
-          <Button onClick={refreshAll} disabled={loading || positionsLoading} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${(loading || positionsLoading) ? 'animate-spin' : ''}`} />
+          <Button onClick={refreshAll} disabled={loading || positionsLoading || ordersLoading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${(loading || positionsLoading || ordersLoading) ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
@@ -168,6 +274,17 @@ export default function Trades() {
             >
               <Activity className="h-4 w-4 inline mr-2" />
               Open Positions ({positions.net.length + positions.day.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'orders'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <FileText className="h-4 w-4 inline mr-2" />
+              Orders ({orderSummary.total})
             </button>
             <button
               onClick={() => setActiveTab('trades')}
@@ -370,6 +487,257 @@ export default function Trades() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {activeTab === 'orders' && (
+        <>
+          {/* Order Filters */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Order Filters
+              </CardTitle>
+              <CardDescription>
+                Filter orders by date range and status
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+                <div>
+                  <Label htmlFor="startDate">Start Date</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={orderFilters.startDate}
+                    onChange={(e) => setOrderFilters(prev => ({
+                      ...prev,
+                      startDate: e.target.value
+                    }))}
+                    max={orderFilters.endDate}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="endDate">End Date</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={orderFilters.endDate}
+                    onChange={(e) => setOrderFilters(prev => ({
+                      ...prev,
+                      endDate: e.target.value
+                    }))}
+                    min={orderFilters.startDate}
+                    max={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="orderStatus">Order Status</Label>
+                  <select
+                    id="orderStatus"
+                    value={orderFilters.orderStatus}
+                    onChange={(e) => setOrderFilters(prev => ({
+                      ...prev,
+                      orderStatus: e.target.value as 'all' | 'complete' | 'open' | 'cancelled'
+                    }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="all">All Orders</option>
+                    <option value="complete">Completed</option>
+                    <option value="open">Open/Pending</option>
+                    <option value="cancelled">Cancelled/Rejected</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <Button
+                    onClick={() => setOrderFilters({
+                      startDate: new Date().toISOString().split('T')[0],
+                      endDate: new Date().toISOString().split('T')[0],
+                      orderStatus: 'all'
+                    })}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Today
+                  </Button>
+                </div>
+                
+                <div>
+                  <Button
+                    onClick={fetchOrders}
+                    disabled={ordersLoading}
+                    className="w-full"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Apply Filters
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Order Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-4 border-t">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{orderSummary.total}</div>
+                  <div className="text-sm text-gray-600">Total Orders</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{orderSummary.complete}</div>
+                  <div className="text-sm text-gray-600">Completed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{orderSummary.open}</div>
+                  <div className="text-sm text-gray-600">Open</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{orderSummary.cancelled}</div>
+                  <div className="text-sm text-gray-600">Cancelled</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">{formatCurrency(orderSummary.totalValue)}</div>
+                  <div className="text-sm text-gray-600">Total Value</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Orders Error State */}
+          {ordersError && (
+            <Card className="mb-6 border-red-200 bg-red-50">
+              <CardContent className="pt-6">
+                <p className="text-red-800">{ordersError}</p>
+                <Button onClick={fetchOrders} className="mt-4" variant="outline">
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Orders Loading State */}
+          {ordersLoading && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex justify-center items-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading orders...</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Orders List */}
+          {!ordersLoading && !ordersError && (
+            <>
+              {orders.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+                      <p className="text-gray-600">No orders match your current filter criteria.</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600">
+                      Showing {orders.length} order{orders.length !== 1 ? 's' : ''} 
+                      {orderFilters.startDate && orderFilters.endDate && (
+                        <span> from {formatDate(orderFilters.startDate)} to {formatDate(orderFilters.endDate)}</span>
+                      )}
+                    </p>
+                  </div>
+                  
+                  {orders.map((order) => (
+                    <Card key={order.order_id}>
+                      <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className={`p-2 rounded-full ${getOrderStatusColor(order.status)}`}>
+                              {getOrderStatusIcon(order.status)}
+                            </div>
+                            
+                            <div>
+                              <h3 className="font-medium text-gray-900">
+                                {order.tradingsymbol}
+                              </h3>
+                              <p className="text-sm text-gray-600">
+                                {order.exchange} • {formatDate(order.order_timestamp)} • {order.order_type}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right">
+                            <div className="flex items-center space-x-4">
+                              <Badge className={getOrderStatusColor(order.status)}>
+                                {order.status}
+                              </Badge>
+                              <Badge variant={order.transaction_type === 'BUY' ? 'default' : 'secondary'}>
+                                {order.transaction_type}
+                              </Badge>
+                              
+                              <div className="text-right">
+                                <p className="font-medium">
+                                  {order.filled_quantity > 0 && order.status === 'COMPLETE' 
+                                    ? `${order.filled_quantity} @ ${formatCurrency(order.average_price)}` 
+                                    : `${order.quantity} @ ${formatCurrency(order.price)}`}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  {order.status === 'COMPLETE' && order.filled_quantity > 0 
+                                    ? `Total: ${formatCurrency(order.filled_quantity * order.average_price)}`
+                                    : `Target: ${formatCurrency(order.quantity * order.price)}`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-gray-100">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">Order ID:</span>
+                              <p className="font-mono">{order.order_id}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Product:</span>
+                              <p>{order.product}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Quantity:</span>
+                              <p>
+                                {order.filled_quantity > 0 
+                                  ? `${order.filled_quantity}/${order.quantity}`
+                                  : order.quantity}
+                                {order.pending_quantity > 0 && (
+                                  <span className="text-orange-600"> ({order.pending_quantity} pending)</span>
+                                )}
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Validity:</span>
+                              <p>{order.validity}</p>
+                            </div>
+                          </div>
+                          
+                          {order.status_message && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                              <span className="text-gray-500 text-sm">Status Message:</span>
+                              <p className="text-sm text-gray-700 mt-1">{order.status_message}</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
             </>
