@@ -77,10 +77,8 @@ export default function Trades() {
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<any>(null)
   
-  // Order filtering states
+  // Order filtering states (no date filters - Zerodha API limitation)
   const [orderFilters, setOrderFilters] = useState({
-    startDate: new Date().toISOString().split('T')[0], // Today (Zerodha API limitation)
-    endDate: new Date().toISOString().split('T')[0], // Today
     orderStatus: 'all' as 'all' | 'complete' | 'open' | 'cancelled'
   })
   const [orderSummary, setOrderSummary] = useState({
@@ -155,8 +153,6 @@ export default function Trades() {
       setOrdersError('')
       
       const queryParams = new URLSearchParams({
-        startDate: orderFilters.startDate,
-        endDate: orderFilters.endDate,
         status: orderFilters.orderStatus
       })
       
@@ -578,40 +574,11 @@ export default function Trades() {
                 Order Filters
               </CardTitle>
               <CardDescription>
-                Filter orders by date range and status. Note: Zerodha API only provides current day orders.
+                Filter orders by status. Note: Zerodha API only provides current day orders.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
-                <div>
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={orderFilters.startDate}
-                    onChange={(e) => setOrderFilters(prev => ({
-                      ...prev,
-                      startDate: e.target.value
-                    }))}
-                    max={orderFilters.endDate}
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="endDate">End Date</Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={orderFilters.endDate}
-                    onChange={(e) => setOrderFilters(prev => ({
-                      ...prev,
-                      endDate: e.target.value
-                    }))}
-                    min={orderFilters.startDate}
-                    max={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-                
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div>
                   <Label htmlFor="orderStatus">Order Status</Label>
                   <select
@@ -633,15 +600,13 @@ export default function Trades() {
                 <div>
                   <Button
                     onClick={() => setOrderFilters({
-                      startDate: new Date().toISOString().split('T')[0],
-                      endDate: new Date().toISOString().split('T')[0],
                       orderStatus: 'all'
                     })}
                     variant="outline"
                     className="w-full"
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
-                    Today
+                    Clear Filter
                   </Button>
                 </div>
                 
@@ -651,8 +616,8 @@ export default function Trades() {
                     disabled={ordersLoading}
                     className="w-full"
                   >
-                    <Filter className="h-4 w-4 mr-2" />
-                    Apply Filters
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Orders
                   </Button>
                 </div>
               </div>
@@ -730,9 +695,9 @@ export default function Trades() {
                 <div className="space-y-4">
                   <div className="mb-4">
                     <p className="text-sm text-gray-600">
-                      Showing {orders.length} order{orders.length !== 1 ? 's' : ''} 
-                      {orderFilters.startDate && orderFilters.endDate && (
-                        <span> from {formatDate(orderFilters.startDate)} to {formatDate(orderFilters.endDate)}</span>
+                      Showing {orders.length} order{orders.length !== 1 ? 's' : ''} for today
+                      {orderFilters.orderStatus !== 'all' && (
+                        <span> • Status: {orderFilters.orderStatus}</span>
                       )}
                     </p>
                   </div>

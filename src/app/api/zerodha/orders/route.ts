@@ -28,10 +28,8 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get query parameters for filtering
+    // Get query parameters for filtering (only status - no date filtering due to API limitation)
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
     const orderStatus = searchParams.get('status') // 'all', 'complete', 'open', 'cancelled'
 
     try {
@@ -46,27 +44,12 @@ export async function GET(request: NextRequest) {
       const ordersResponse = await zerodhaAPI.getOrders()
       console.log('Orders API response (current day only):', {
         total: ordersResponse.data?.length || 0,
-        filters: { startDate, endDate, orderStatus }
+        filters: { orderStatus }
       })
 
       let orders = ordersResponse.data || []
 
-      // Filter orders by date if provided
-      if (startDate || endDate) {
-        const start = startDate ? new Date(startDate) : null
-        const end = endDate ? new Date(endDate + 'T23:59:59') : null // Include entire end day
-        
-        orders = orders.filter((order: any) => {
-          const orderDate = new Date(order.order_timestamp || order.exchange_timestamp)
-          
-          if (start && orderDate < start) return false
-          if (end && orderDate > end) return false
-          
-          return true
-        })
-      }
-
-      // Filter by order status if specified
+      // Filter by order status if specified (no date filtering - API limitation)
       if (orderStatus && orderStatus !== 'all') {
         switch (orderStatus) {
           case 'complete':
@@ -108,8 +91,6 @@ export async function GET(request: NextRequest) {
         orders: orders,
         summary: summary,
         filters: {
-          startDate,
-          endDate,
           orderStatus
         }
       })
