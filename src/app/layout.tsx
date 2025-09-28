@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TradeBot Portal - Automated Trading Platform",
-  description: "Professional trading automation platform with Zerodha integration",
+  title: "Nivesha Wealth Ltd - Automated Trading Platform",
+  description: "Professional trading automation platform with Zerodha integration by Nivesha Wealth Ltd",
 };
 
 export default function RootLayout({

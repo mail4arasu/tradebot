@@ -19,15 +19,18 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-3">
-              <Image
-                src="/logo.png"
-                alt="TradeBot Portal"
-                width={40}
-                height={40}
-                className="object-contain"
-              />
+              <div className="relative p-1 bg-gradient-to-br from-yellow-100 to-yellow-50 rounded-full shadow-md border border-yellow-200">
+                <Image
+                  src="/logo.png"
+                  alt="Nivesha Wealth Ltd"
+                  width={44}
+                  height={44}
+                  className="object-contain rounded-full"
+                  priority
+                />
+              </div>
               <span className="text-2xl font-bold text-blue-600">
-                TradeBot Portal
+                Nivesha Wealth Ltd
               </span>
             </Link>
           </div>
