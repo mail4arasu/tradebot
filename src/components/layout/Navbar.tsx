@@ -2,6 +2,7 @@
 
 import { useSession, signIn, signOut } from 'next-auth/react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Settings, History, Bot, TrendingUp, LogOut, Shield } from 'lucide-react'
 import { useAdmin } from '@/hooks/useAdmin'
@@ -17,8 +18,17 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <Link href="/" className="text-2xl font-bold text-blue-600">
-              TradeBot Portal
+            <Link href="/" className="flex items-center space-x-3">
+              <Image
+                src="/logo.png"
+                alt="TradeBot Portal"
+                width={40}
+                height={40}
+                className="object-contain"
+              />
+              <span className="text-2xl font-bold text-blue-600">
+                TradeBot Portal
+              </span>
             </Link>
           </div>
 
