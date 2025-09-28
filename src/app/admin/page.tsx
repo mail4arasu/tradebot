@@ -53,7 +53,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (status === 'loading') return
     if (!session) {
-      router.push('/api/auth/signin')
+      router.push('/signin')
       return
     }
     

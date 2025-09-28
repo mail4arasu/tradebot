@@ -73,7 +73,9 @@ export default function Navbar() {
             </div>
           ) : (
             <div className="flex items-center space-x-2">
-              <Button onClick={() => signIn()}>Sign In</Button>
+              <Link href="/signin">
+                <Button>Sign In</Button>
+              </Link>
             </div>
           )}
         </div>
