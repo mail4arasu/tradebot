@@ -1,13 +1,10 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
-import EmailProvider from 'next-auth/providers/email'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { MongoDBAdapter } from '@next-auth/mongodb-adapter'
 import clientPromise from './mongodb'
 import bcrypt from 'bcryptjs'
 
 export const authOptions: NextAuthOptions = {
-  adapter: MongoDBAdapter(clientPromise),
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -63,10 +60,19 @@ export const authOptions: NextAuthOptions = {
           if (dbUser) {
             token.id = dbUser._id.toString()
             token.role = dbUser.role || 'user'
+            token.email = dbUser.email
+            token.name = dbUser.name
+          } else {
+            // If user not found in our collection, use the provided user data
+            token.id = user.id
+            token.email = user.email
+            token.name = user.name
           }
         } catch (error) {
           console.error('Error fetching user in JWT callback:', error)
           token.id = user.id
+          token.email = user.email
+          token.name = user.name
         }
       }
       return token
@@ -74,6 +80,10 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string
+        session.user.email = token.email as string
+        session.user.name = token.name as string
+        // Add role to session for admin checks
+        session.user.role = token.role as string
       }
       return session
     },
@@ -86,7 +96,7 @@ export const authOptions: NextAuthOptions = {
           
           const existingUser = await usersCollection.findOne({ email: user.email })
           if (!existingUser) {
-            await usersCollection.insertOne({
+            const result = await usersCollection.insertOne({
               name: user.name,
               email: user.email,
               image: user.image,
@@ -97,9 +107,18 @@ export const authOptions: NextAuthOptions = {
               createdAt: new Date(),
               updatedAt: new Date()
             })
+            console.log('Created new Google OAuth user:', result.insertedId)
+          } else {
+            // Update last login for existing user
+            await usersCollection.updateOne(
+              { email: user.email },
+              { $set: { lastLoginAt: new Date(), updatedAt: new Date() } }
+            )
+            console.log('Updated existing Google OAuth user login:', existingUser._id)
           }
         } catch (error) {
           console.error('Error saving Google OAuth user:', error)
+          return false
         }
       }
       return true
