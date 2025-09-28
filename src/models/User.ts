@@ -15,7 +15,12 @@ const UserSchema = new mongoose.Schema({
   image: { type: String },
   emailVerified: { type: Date },
   phoneVerified: { type: Date },
-  zerodhaConfig: ZerodhaConfigSchema
+  zerodhaConfig: ZerodhaConfigSchema,
+  // Admin and user management fields
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  status: { type: String, enum: ['active', 'suspended', 'restricted'], default: 'active' },
+  lastLoginAt: { type: Date },
+  password: { type: String }
 }, {
   timestamps: true
 })

@@ -3,10 +3,12 @@
 import { useSession, signIn, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Settings, History, Bot, TrendingUp, LogOut } from 'lucide-react'
+import { LayoutDashboard, Settings, History, Bot, TrendingUp, LogOut, Shield } from 'lucide-react'
+import { useAdmin } from '@/hooks/useAdmin'
 
 export default function Navbar() {
   const { data: session, status } = useSession()
+  const { isAdmin } = useAdmin()
 
   if (status === 'loading') return <div>Loading...</div>
 
@@ -46,6 +48,13 @@ export default function Navbar() {
                 <Settings size={20} />
                 <span>Settings</span>
               </Link>
+
+              {isAdmin && (
+                <Link href="/admin" className="flex items-center space-x-1 text-gray-700 hover:text-red-600">
+                  <Shield size={20} />
+                  <span>Admin</span>
+                </Link>
+              )}
 
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-600">

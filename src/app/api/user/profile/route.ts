@@ -28,6 +28,8 @@ export async function GET(_request: NextRequest) {
       image: user.image,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,
+      role: user.role || 'user',
+      status: user.status || 'active',
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       zerodhaConfig: user.zerodhaConfig ? {
