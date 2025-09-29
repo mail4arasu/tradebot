@@ -242,7 +242,7 @@ export default function Settings() {
                 <Button 
                   type="submit" 
                   disabled={loading || (apiKey.includes('•') && apiSecret.includes('•'))}
-                  className="flex items-center space-x-2"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
                   <Key className="h-4 w-4" />
                   <span>{loading ? 'Saving...' : 'Save Credentials'}</span>
@@ -254,7 +254,7 @@ export default function Settings() {
                     variant="outline"
                     onClick={handleAuthorizeOAuth}
                     disabled={authorizingOAuth || isConnected}
-                    className="flex items-center space-x-2"
+                    className="border-2 border-green-600 text-green-600 hover:bg-green-600 hover:text-white font-semibold px-6 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >
                     <LinkIcon className="h-4 w-4" />
                     <span>{authorizingOAuth ? 'Redirecting...' : 'Authorize Connection'}</span>
@@ -267,6 +267,7 @@ export default function Settings() {
                     variant="secondary"
                     onClick={handleTestConnection}
                     disabled={testingConnection}
+                    className="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {testingConnection ? 'Testing...' : 'Test Connection'}
                   </Button>
