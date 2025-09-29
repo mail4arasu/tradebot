@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { IndianRupee, TrendingUp, Bot, Activity, Settings, AlertCircle, RefreshCw } from 'lucide-react'
+import { IndianRupee, TrendingUp, Bot, Activity, Settings, AlertCircle, RefreshCw, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -16,6 +16,9 @@ export default function Dashboard() {
   const [pnlPercentage, setPnlPercentage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [lastSync, setLastSync] = useState<Date | null>(null)
+  const [needsDailyLogin, setNeedsDailyLogin] = useState(false)
+  const [refreshingToken, setRefreshingToken] = useState(false)
 
   const fetchUserData = useCallback(async () => {
     try {
@@ -25,6 +28,18 @@ export default function Dashboard() {
         const data = await response.json()
         setZerodhaConnected(data.zerodhaConfig?.isConnected || false)
         setBalance(data.zerodhaConfig?.balance || 0)
+        
+        // Check last sync time to determine if daily login is needed
+        const lastSyncDate = data.zerodhaConfig?.lastSync ? new Date(data.zerodhaConfig.lastSync) : null
+        setLastSync(lastSyncDate)
+        
+        // Check if last sync was more than 24 hours ago
+        if (data.zerodhaConfig?.isConnected && lastSyncDate) {
+          const hoursAgo = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60)
+          setNeedsDailyLogin(hoursAgo > 24)
+        } else {
+          setNeedsDailyLogin(data.zerodhaConfig?.isConnected || false)
+        }
         
         // If connected, fetch trading data for P&L
         if (data.zerodhaConfig?.isConnected) {
@@ -87,6 +102,33 @@ export default function Dashboard() {
     }
   }
 
+  const handleQuickTokenRefresh = async () => {
+    try {
+      setRefreshingToken(true)
+      const response = await fetch('/api/zerodha/quick-refresh', {
+        method: 'POST'
+      })
+      
+      const result = await response.json()
+      
+      if (response.ok) {
+        // Redirect to Zerodha for fresh token
+        window.location.href = result.loginUrl
+      } else {
+        if (result.needsCredentials) {
+          alert('Please configure your Zerodha credentials in Settings first.')
+        } else {
+          alert(result.error || 'Failed to refresh token')
+        }
+        setRefreshingToken(false)
+      }
+    } catch (error) {
+      console.error('Error refreshing token:', error)
+      alert('Error refreshing token')
+      setRefreshingToken(false)
+    }
+  }
+
   if (status === 'loading') {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>
   }
@@ -136,6 +178,45 @@ export default function Dashboard() {
                 Connect Zerodha
               </Button>
             </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Daily Token Refresh Notification */}
+      {zerodhaConnected && needsDailyLogin && (
+        <Card className="mb-8 border-orange-200 dark:border-orange-800" 
+              style={{ 
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)'
+              }}>
+          <CardHeader>
+            <div className="flex items-center space-x-2">
+              <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              <CardTitle className="text-orange-800 dark:text-orange-300">Daily Token Refresh Required</CardTitle>
+            </div>
+            <CardDescription className="text-orange-700 dark:text-orange-400">
+              Zerodha requires daily authentication for security. Your token {lastSync ? 
+                `was last refreshed ${Math.round((Date.now() - lastSync.getTime()) / (1000 * 60 * 60))} hours ago` : 
+                'needs to be refreshed'} to continue automated trading.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex space-x-4">
+              <Button 
+                onClick={handleQuickTokenRefresh}
+                disabled={refreshingToken}
+                className="bg-orange-600 hover:bg-orange-700 dark:bg-orange-700 dark:hover:bg-orange-600 text-white transition-colors duration-200"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshingToken ? 'animate-spin' : ''}`} />
+                {refreshingToken ? 'Redirecting...' : 'Quick Token Refresh'}
+              </Button>
+              <Link href="/settings">
+                <Button variant="outline" className="border-orange-600 text-orange-600 hover:bg-orange-50">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Manage Settings
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       )}

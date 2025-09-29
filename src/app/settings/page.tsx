@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { AlertCircle, CheckCircle, ExternalLink, Key, Shield, Link as LinkIcon } from 'lucide-react'
+import { AlertCircle, CheckCircle, ExternalLink, Key, Shield, Link as LinkIcon, Clock, RefreshCw } from 'lucide-react'
 
 export default function Settings() {
   const { data: session, status } = useSession()
@@ -19,6 +19,9 @@ export default function Settings() {
   const [loading, setLoading] = useState(false)
   const [testingConnection, setTestingConnection] = useState(false)
   const [authorizingOAuth, setAuthorizingOAuth] = useState(false)
+  const [lastSync, setLastSync] = useState<Date | null>(null)
+  const [needsDailyLogin, setNeedsDailyLogin] = useState(false)
+  const [refreshingToken, setRefreshingToken] = useState(false)
 
   useEffect(() => {
     if (session) {
@@ -53,6 +56,19 @@ export default function Settings() {
         setIsConnected(data.zerodhaConfig?.isConnected || false)
         setBalance(data.zerodhaConfig?.balance || 0)
         setHasCredentials(!!(data.zerodhaConfig?.apiKey && data.zerodhaConfig?.apiSecret))
+        
+        // Check last sync time to determine if daily login is needed
+        const lastSyncDate = data.zerodhaConfig?.lastSync ? new Date(data.zerodhaConfig.lastSync) : null
+        setLastSync(lastSyncDate)
+        
+        // Check if last sync was more than 24 hours ago
+        if (data.zerodhaConfig?.isConnected && lastSyncDate) {
+          const hoursAgo = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60)
+          setNeedsDailyLogin(hoursAgo > 24)
+        } else {
+          setNeedsDailyLogin(data.zerodhaConfig?.isConnected || false)
+        }
+        
         if (data.zerodhaConfig?.apiKey) {
           setApiKey('••••••••••••••••') // Masked for security
           setApiSecret('••••••••••••••••••••••••••••') // Masked for security
@@ -153,6 +169,33 @@ export default function Settings() {
     }
   }
 
+  const handleQuickTokenRefresh = async () => {
+    try {
+      setRefreshingToken(true)
+      const response = await fetch('/api/zerodha/quick-refresh', {
+        method: 'POST'
+      })
+      
+      const result = await response.json()
+      
+      if (response.ok) {
+        // Redirect to Zerodha for fresh token
+        window.location.href = result.loginUrl
+      } else {
+        if (result.needsCredentials) {
+          alert('Please configure your Zerodha credentials first.')
+        } else {
+          alert(result.error || 'Failed to refresh token')
+        }
+        setRefreshingToken(false)
+      }
+    } catch (error) {
+      console.error('Error refreshing token:', error)
+      alert('Error refreshing token')
+      setRefreshingToken(false)
+    }
+  }
+
   if (status === 'loading') {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>
   }
@@ -211,6 +254,32 @@ export default function Settings() {
                 </>
               )}
             </div>
+
+            {/* Daily Token Refresh Notification */}
+            {isConnected && needsDailyLogin && (
+              <div className="flex items-start space-x-3 p-4 rounded-lg bg-orange-50 border border-orange-200">
+                <Clock className="h-5 w-5 text-orange-600 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-medium text-orange-800">Daily Token Refresh Required</p>
+                  <p className="text-sm text-orange-600 mt-1">
+                    Zerodha requires daily authentication for security. Your token {lastSync ? 
+                      `was last refreshed ${Math.round((Date.now() - lastSync.getTime()) / (1000 * 60 * 60))} hours ago` : 
+                      'needs to be refreshed'} to continue automated trading.
+                  </p>
+                  <div className="mt-3">
+                    <Button 
+                      onClick={handleQuickTokenRefresh}
+                      disabled={refreshingToken}
+                      size="sm"
+                      className="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${refreshingToken ? 'animate-spin' : ''}`} />
+                      {refreshingToken ? 'Redirecting...' : 'Quick Token Refresh'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* API Credentials Form */}
             <form onSubmit={handleSaveCredentials} className="space-y-4">
