@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import clientPromise from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
+import { getEffectiveUserEmail } from '@/lib/impersonation-utils'
 
 // GET - Fetch user's bot allocations
 export async function GET(request: NextRequest) {
@@ -15,8 +16,12 @@ export async function GET(request: NextRequest) {
     const client = await clientPromise
     const db = client.db('tradebot')
     
-    // Find user
-    const user = await db.collection('users').findOne({ email: session.user.email })
+    // Find effective user (handles impersonation)
+    const effectiveEmail = await getEffectiveUserEmail()
+    if (!effectiveEmail) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+    const user = await db.collection('users').findOne({ email: effectiveEmail })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -85,8 +90,12 @@ export async function POST(request: NextRequest) {
     const client = await clientPromise
     const db = client.db('tradebot')
     
-    // Find user
-    const user = await db.collection('users').findOne({ email: session.user.email })
+    // Find effective user (handles impersonation)
+    const effectiveEmail = await getEffectiveUserEmail()
+    if (!effectiveEmail) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+    const user = await db.collection('users').findOne({ email: effectiveEmail })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -170,8 +179,12 @@ export async function PUT(request: NextRequest) {
     const client = await clientPromise
     const db = client.db('tradebot')
     
-    // Find user
-    const user = await db.collection('users').findOne({ email: session.user.email })
+    // Find effective user (handles impersonation)
+    const effectiveEmail = await getEffectiveUserEmail()
+    if (!effectiveEmail) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+    const user = await db.collection('users').findOne({ email: effectiveEmail })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -225,8 +238,12 @@ export async function DELETE(request: NextRequest) {
     const client = await clientPromise
     const db = client.db('tradebot')
     
-    // Find user
-    const user = await db.collection('users').findOne({ email: session.user.email })
+    // Find effective user (handles impersonation)
+    const effectiveEmail = await getEffectiveUserEmail()
+    if (!effectiveEmail) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+    const user = await db.collection('users').findOne({ email: effectiveEmail })
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }

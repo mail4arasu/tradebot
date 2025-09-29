@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import { ZerodhaAPI } from '@/lib/zerodha'
+import { getEffectiveUser } from '@/lib/impersonation-utils'
 
 export async function GET(_request: NextRequest) {
   try {
@@ -13,9 +14,8 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await dbConnect()
-    
-    const user = await User.findOne({ email: session.user.email })
+    // Get effective user (handles impersonation)
+    const { user, isImpersonating } = await getEffectiveUser()
     
     if (!user?.zerodhaConfig?.apiKey || !user?.zerodhaConfig?.apiSecret || !user?.zerodhaConfig?.accessToken) {
       return NextResponse.json({ 

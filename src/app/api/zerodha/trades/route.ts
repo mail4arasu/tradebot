@@ -5,6 +5,7 @@ import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import Trade from '@/models/Trade'
 import { ZerodhaAPI } from '@/lib/zerodha'
+import { getEffectiveUser } from '@/lib/impersonation-utils'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,9 +15,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await dbConnect()
-    
-    const user = await User.findOne({ email: session.user.email })
+    // Get effective user (handles impersonation)
+    const { user, isImpersonating } = await getEffectiveUser()
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
