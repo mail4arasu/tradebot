@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Users, UserCheck, UserX, Shield, Activity, Calendar, Bot, TrendingUp, LogIn } from 'lucide-react'
 import Link from 'next/link'
 
 interface UserStats {
@@ -167,22 +171,22 @@ export default function AdminDashboard() {
   }
 
   const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      active: 'bg-green-100 text-green-800',
-      suspended: 'bg-red-100 text-red-800',
-      restricted: 'bg-yellow-100 text-yellow-800'
+    switch (status) {
+      case 'active':
+        return <Badge className="bg-green-100 text-green-800">Active</Badge>
+      case 'suspended':
+        return <Badge className="bg-red-100 text-red-800">Suspended</Badge>
+      case 'restricted':
+        return <Badge className="bg-yellow-100 text-yellow-800">Restricted</Badge>
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>
     }
-    return (
-      <span className={`px-2 py-1 text-xs rounded ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    )
   }
 
   const getRoleBadge = (role: string) => {
     return role === 'admin' ? 
-      <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Admin</span> :
-      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">User</span>
+      <Badge className="bg-blue-100 text-blue-800">Admin</Badge> :
+      <Badge className="bg-gray-100 text-gray-800">User</Badge>
   }
 
   if (loading) {
@@ -194,21 +198,18 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
+    <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>Admin Dashboard</h1>
-            <p style={{ color: 'var(--muted-foreground)' }}>Manage users and monitor platform statistics</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+            <p className="text-gray-600">Manage users and monitor platform statistics</p>
           </div>
           <Link href="/admin/trading">
-            <button className="px-4 py-2 rounded transition-colors duration-200"
-                    style={{
-                      backgroundColor: 'var(--primary)',
-                      color: 'var(--primary-foreground)'
-                    }}>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Bot className="h-4 w-4 mr-2" />
               Trading Control
-            </button>
+            </Button>
           </Link>
         </div>
       </div>
@@ -216,99 +217,87 @@ export default function AdminDashboard() {
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Total Users</div>
-            </div>
-            <div className="text-2xl font-bold mt-2" style={{ color: 'var(--foreground)' }}>{stats.totalUsers}</div>
-          </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalUsers}</div>
+            </CardContent>
+          </Card>
 
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Active Users</div>
-            </div>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{stats.activeUsers}</div>
-          </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+              <UserCheck className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats.activeUsers}</div>
+            </CardContent>
+          </Card>
 
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Suspended/Restricted</div>
-            </div>
-            <div className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-              {stats.suspendedUsers + stats.restrictedUsers}
-            </div>
-          </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Suspended/Restricted</CardTitle>
+              <UserX className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                {stats.suspendedUsers + stats.restrictedUsers}
+              </div>
+            </CardContent>
+          </Card>
 
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Zerodha Connected</div>
-            </div>
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">{stats.zerodhaConnectedUsers}</div>
-          </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Zerodha Connected</CardTitle>
+              <Activity className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{stats.zerodhaConnectedUsers}</div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {/* User Management Table */}
-      <div className="card rounded-lg shadow transition-all duration-300"
-           style={{ 
-             backgroundColor: 'var(--card)', 
-             borderColor: 'var(--border)',
-             color: 'var(--card-foreground)'
-           }}>
-        <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-xl font-semibold" style={{ color: 'var(--foreground)' }}>User Management</h2>
-          <p className="mt-1" style={{ color: 'var(--muted-foreground)' }}>View and manage all registered users</p>
-        </div>
-        <div className="p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>User Management</CardTitle>
+          <CardDescription>
+            View and manage all registered users
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>User</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Role</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Status</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Zerodha</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Active Bots</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Joined</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Actions</th>
+                <tr className="border-b">
+                  <th className="text-left p-2">User</th>
+                  <th className="text-left p-2">Role</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Zerodha</th>
+                  <th className="text-left p-2">Active Bots</th>
+                  <th className="text-left p-2">Joined</th>
+                  <th className="text-left p-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user._id} className="border-b transition-colors duration-200" 
-                      style={{ borderColor: 'var(--border)' }}>
+                  <tr key={user._id} className="border-b hover:bg-gray-50">
                     <td className="p-2">
                       <div>
-                        <div className="font-medium" style={{ color: 'var(--foreground)' }}>{user.name}</div>
-                        <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{user.email}</div>
+                        <div className="font-medium">{user.name}</div>
+                        <div className="text-gray-500 text-xs">{user.email}</div>
                       </div>
                     </td>
                     <td className="p-2">{getRoleBadge(user.role)}</td>
                     <td className="p-2">{getStatusBadge(user.status)}</td>
                     <td className="p-2">
                       {user.zerodhaConfig?.isConnected ? 
-                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Connected</span> :
-                        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Not Connected</span>
+                        <Badge className="bg-green-100 text-green-800">Connected</Badge> :
+                        <Badge className="bg-gray-100 text-gray-800">Not Connected</Badge>
                       }
                     </td>
                     <td className="p-2">
@@ -318,20 +307,20 @@ export default function AdminDashboard() {
                             .filter(bot => bot.isActive)
                             .map((bot, index) => (
                             <div key={index} className="text-xs">
-                              <span className={bot.isActive ? "px-2 py-1 rounded bg-blue-100 text-blue-800" : "px-2 py-1 rounded bg-gray-100 text-gray-800"}>
+                              <Badge className={bot.isActive ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-800"}>
                                 {bot.botName}
-                              </span>
+                              </Badge>
                               <div className="text-gray-500">
                                 ₹{bot.allocatedAmount.toLocaleString()} • {bot.strategy}
                               </div>
                             </div>
                           ))}
                           {user.botAllocations.filter(bot => bot.isActive).length === 0 && (
-                            <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Active Bots</span>
+                            <Badge className="bg-gray-100 text-gray-800">No Active Bots</Badge>
                           )}
                         </div>
                       ) : (
-                        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Bots</span>
+                        <Badge className="bg-gray-100 text-gray-800">No Bots</Badge>
                       )}
                     </td>
                     <td className="p-2">
@@ -339,46 +328,45 @@ export default function AdminDashboard() {
                     </td>
                     <td className="p-2">
                       <div className="flex space-x-2">
-                        <button
-                          className="px-3 py-1 text-xs border rounded transition-colors duration-200 text-blue-600 border-blue-300 hover:bg-blue-50"
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs text-blue-600 border-blue-300 hover:bg-blue-50"
                           onClick={() => impersonateUser(user._id, user.email)}
                           disabled={impersonating === user._id || user.role === 'admin'}
                           title={user.role === 'admin' ? 'Cannot impersonate other admins' : 'Login as this user for troubleshooting'}
                         >
+                          <LogIn className="h-3 w-3 mr-1" />
                           {impersonating === user._id ? 'Starting...' : 'Login as User'}
-                        </button>
+                        </Button>
                         
                         {user.status === 'active' ? (
-                          <button
-                            className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                            style={{
-                              borderColor: 'var(--border)',
-                              color: 'var(--foreground)',
-                              backgroundColor: 'transparent'
-                            }}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs"
                             onClick={() => updateUserStatus(user._id, 'suspended')}
                           >
                             Suspend
-                          </button>
+                          </Button>
                         ) : (
-                          <button
-                            className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                            style={{
-                              borderColor: 'var(--border)',
-                              color: 'var(--foreground)',
-                              backgroundColor: 'transparent'
-                            }}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs"
                             onClick={() => updateUserStatus(user._id, 'active')}
                           >
                             Activate
-                          </button>
+                          </Button>
                         )}
-                        <button
-                          className="px-3 py-1 text-xs border rounded transition-colors duration-200 border-red-300 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs text-red-600 border-red-300 hover:bg-red-50"
                           onClick={() => deleteUser(user._id)}
                         >
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -389,38 +377,30 @@ export default function AdminDashboard() {
 
           {/* Pagination */}
           <div className="flex justify-between items-center mt-4">
-            <div className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+            <div className="text-sm text-gray-600">
               Page {currentPage} of {totalPages}
             </div>
             <div className="flex space-x-2">
-              <button
-                className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                style={{
-                  borderColor: 'var(--border)',
-                  color: 'var(--foreground)',
-                  backgroundColor: 'transparent'
-                }}
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
               >
                 Previous
-              </button>
-              <button
-                className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                style={{
-                  borderColor: 'var(--border)',
-                  color: 'var(--foreground)',
-                  backgroundColor: 'transparent'
-                }}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
               >
                 Next
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
