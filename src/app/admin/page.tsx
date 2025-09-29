@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Users, UserCheck, UserX, Shield, Activity, Calendar, Bot, TrendingUp } from 'lucide-react'
+import { Users, UserCheck, UserX, Shield, Activity, Calendar, Bot, TrendingUp, LogIn } from 'lucide-react'
 import Link from 'next/link'
 
 interface UserStats {
@@ -59,6 +59,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [impersonating, setImpersonating] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === 'loading') return
@@ -136,6 +137,36 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error deleting user:', error)
       alert('Error deleting user')
+    }
+  }
+
+  const impersonateUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Are you sure you want to login as ${userEmail}? This action will be logged for audit purposes.`)) {
+      return
+    }
+
+    try {
+      setImpersonating(userId)
+      const response = await fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: userId })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(result.message + '\n\nRedirecting to dashboard...')
+        // Redirect to dashboard to see the user's view
+        window.location.href = '/dashboard'
+      } else {
+        alert(`Error: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error impersonating user:', error)
+      alert('Error starting impersonation')
+    } finally {
+      setImpersonating(null)
     }
   }
 
@@ -297,6 +328,18 @@ export default function AdminDashboard() {
                     </td>
                     <td className="p-2">
                       <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs text-blue-600 border-blue-300 hover:bg-blue-50"
+                          onClick={() => impersonateUser(user._id, user.email)}
+                          disabled={impersonating === user._id || user.role === 'admin'}
+                          title={user.role === 'admin' ? 'Cannot impersonate other admins' : 'Login as this user for troubleshooting'}
+                        >
+                          <LogIn className="h-3 w-3 mr-1" />
+                          {impersonating === user._id ? 'Starting...' : 'Login as User'}
+                        </Button>
+                        
                         {user.status === 'active' ? (
                           <Button
                             size="sm"

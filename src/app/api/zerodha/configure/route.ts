@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import { encrypt } from '@/utils/encryption'
+import { checkImpersonationRestrictions, createImpersonationMessage } from '@/lib/impersonation'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,12 @@ export async function POST(request: NextRequest) {
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Check impersonation restrictions
+    const impersonationCheck = await checkImpersonationRestrictions(['read_only'])
+    if (impersonationCheck.isImpersonating && impersonationCheck.isRestricted) {
+      return NextResponse.json(createImpersonationMessage(), { status: 403 })
     }
 
     const { apiKey, apiSecret } = await request.json()

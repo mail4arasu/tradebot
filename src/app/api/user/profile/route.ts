@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
+import clientPromise from '@/lib/mongodb'
+import { ObjectId } from 'mongodb'
 
 export async function GET(_request: NextRequest) {
   try {
@@ -14,7 +16,32 @@ export async function GET(_request: NextRequest) {
 
     await dbConnect()
     
-    const user = await User.findOne({ email: session.user.email })
+    // Check for active impersonation session
+    const client = await clientPromise
+    const db = client.db('tradebot')
+    
+    const activeImpersonation = await db.collection('impersonation_sessions').findOne({
+      adminEmail: session.user.email,
+      expiresAt: { $gt: new Date() }
+    })
+
+    let targetEmail = session.user.email
+    let isImpersonating = false
+    let impersonationDetails = null
+
+    if (activeImpersonation) {
+      targetEmail = activeImpersonation.targetUserEmail
+      isImpersonating = true
+      impersonationDetails = {
+        targetUserId: activeImpersonation.targetUserId,
+        targetUserEmail: activeImpersonation.targetUserEmail,
+        adminEmail: activeImpersonation.adminEmail,
+        startTime: activeImpersonation.startTime,
+        expiresAt: activeImpersonation.expiresAt
+      }
+    }
+    
+    const user = await User.findOne({ email: targetEmail })
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
@@ -37,7 +64,12 @@ export async function GET(_request: NextRequest) {
         balance: user.zerodhaConfig.balance,
         lastSync: user.zerodhaConfig.lastSync,
         apiKey: user.zerodhaConfig.apiKey ? '••••••••••••••••' : undefined
-      } : undefined
+      } : undefined,
+      // Include impersonation information if active
+      impersonation: isImpersonating ? {
+        isImpersonating: true,
+        details: impersonationDetails
+      } : { isImpersonating: false }
     }
 
     return NextResponse.json(userProfile)
