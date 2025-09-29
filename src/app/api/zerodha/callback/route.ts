@@ -50,12 +50,34 @@ export async function GET(request: NextRequest) {
     const accessToken = await ZerodhaAPI.getAccessToken(apiKey, apiSecret, requestToken)
     const encryptedAccessToken = encrypt(accessToken)
     
-    console.log('Token exchange successful, updating user')
+    console.log('Token exchange successful, fetching user profile and balance')
     
-    // Update user with access token
+    // Initialize Zerodha API client and fetch balance
+    const zerodhaAPI = new ZerodhaAPI(apiKey, apiSecret, accessToken)
+    let balance = 0
+    
+    try {
+      const profile = await zerodhaAPI.getProfile()
+      console.log('Fetched Zerodha profile:', profile)
+      
+      // Get available cash balance
+      const margins = await zerodhaAPI.getMargins()
+      console.log('Fetched margins:', margins)
+      
+      if (margins && margins.equity && margins.equity.available) {
+        balance = margins.equity.available.cash || 0
+        console.log('Available balance:', balance)
+      }
+    } catch (profileError) {
+      console.error('Error fetching balance during connection:', profileError)
+      // Continue with connection even if balance fetch fails
+    }
+    
+    // Update user with access token and balance
     await User.findByIdAndUpdate(user._id, {
       'zerodhaConfig.accessToken': encryptedAccessToken,
       'zerodhaConfig.isConnected': true,
+      'zerodhaConfig.balance': balance,
       'zerodhaConfig.lastSync': new Date()
     })
     
