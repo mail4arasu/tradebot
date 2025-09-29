@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, User, Clock, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 interface ImpersonationDetails {
   targetUserId: string
@@ -71,20 +69,20 @@ export default function ImpersonationBanner({
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <AlertTriangle className="h-5 w-5 animate-pulse" />
+            <span className="text-lg animate-pulse">⚠️</span>
             <span className="font-semibold text-lg">ADMIN IMPERSONATION MODE</span>
           </div>
           
           <div className="hidden md:flex items-center space-x-6 text-sm">
             <div className="flex items-center space-x-2">
-              <User className="h-4 w-4" />
+              <span>👤</span>
               <span>
                 Viewing as: <strong>{impersonationDetails.targetUserEmail}</strong>
               </span>
             </div>
             
             <div className="flex items-center space-x-2">
-              <Clock className="h-4 w-4" />
+              <span>🕐</span>
               <span>Started {formatDuration()}</span>
             </div>
 
@@ -94,16 +92,14 @@ export default function ImpersonationBanner({
           </div>
         </div>
 
-        <Button
+        <button
           onClick={handleExitImpersonation}
           disabled={isExiting}
-          variant="outline"
-          size="sm"
-          className="bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white transition-colors duration-200"
+          className="bg-white/10 border border-white/30 text-white hover:bg-white/20 px-4 py-2 rounded transition-colors duration-200 text-sm"
         >
-          <X className="h-4 w-4 mr-2" />
+          <span className="mr-2">✕</span>
           {isExiting ? 'Exiting...' : 'Exit Impersonation'}
-        </Button>
+        </button>
       </div>
 
       {/* Mobile view */}
