@@ -1,4 +1,4 @@
-import { decrypt } from '@/utils/encryption'
+// Removed encryption import - using plain text credentials
 import crypto from 'crypto'
 
 export class ZerodhaAPI {
@@ -7,10 +7,10 @@ export class ZerodhaAPI {
   private accessToken?: string
   private baseUrl = 'https://api.kite.trade'
 
-  constructor(encryptedApiKey: string, encryptedApiSecret: string, accessToken?: string) {
-    this.apiKey = decrypt(encryptedApiKey)
-    this.apiSecret = decrypt(encryptedApiSecret)
-    this.accessToken = accessToken ? decrypt(accessToken) : undefined
+  constructor(apiKey: string, apiSecret: string, accessToken?: string) {
+    this.apiKey = apiKey
+    this.apiSecret = apiSecret
+    this.accessToken = accessToken
   }
 
   async getProfile() {

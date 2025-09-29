@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import { ZerodhaAPI } from '@/lib/zerodha'
-import { decrypt } from '@/utils/encryption'
+// Removed encryption import - using plain text credentials
 
 export async function POST(_request: NextRequest) {
   try {
@@ -22,7 +22,8 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: 'API Key not found. Please save your credentials first.' }, { status: 400 })
     }
 
-    const apiKey = decrypt(user.zerodhaConfig.apiKey)
+    // Use plain text API key - no decryption needed
+    const apiKey = user.zerodhaConfig.apiKey
     const redirectUrl = process.env.NEXTAUTH_URL + '/api/zerodha/callback'
     const loginUrl = ZerodhaAPI.getLoginUrl(apiKey, redirectUrl)
 

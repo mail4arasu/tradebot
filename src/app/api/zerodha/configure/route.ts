@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
-import { encrypt } from '@/utils/encryption'
+// Removed encryption import - storing plain text for simplicity
 import { checkImpersonationRestrictions, createImpersonationMessage } from '@/lib/impersonation'
 
 export async function POST(request: NextRequest) {
@@ -28,15 +28,13 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const encryptedApiKey = encrypt(apiKey)
-    const encryptedApiSecret = encrypt(apiSecret)
-
+    // Store credentials as plain text - no encryption needed for private dashboard
     await User.findOneAndUpdate(
       { email: session.user.email },
       {
         $set: {
-          'zerodhaConfig.apiKey': encryptedApiKey,
-          'zerodhaConfig.apiSecret': encryptedApiSecret,
+          'zerodhaConfig.apiKey': apiKey,
+          'zerodhaConfig.apiSecret': apiSecret,
           'zerodhaConfig.isConnected': false, // Will be set to true after successful test
         }
       },

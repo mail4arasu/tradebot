@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import { ZerodhaAPI } from '@/lib/zerodha'
-import { decrypt, encrypt } from '@/utils/encryption'
+// Removed encryption imports - using plain text credentials
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,8 +35,10 @@ export async function GET(request: NextRequest) {
       console.log('User not found or missing API key')
       return NextResponse.redirect(new URL('/settings?error=no_api_key', 'https://niveshawealth.in'))
     }
-    const apiKey = decrypt(user.zerodhaConfig.apiKey)
-    const apiSecret = decrypt(user.zerodhaConfig.apiSecret)
+    
+    // Use plain text credentials - no decryption needed
+    const apiKey = user.zerodhaConfig.apiKey
+    const apiSecret = user.zerodhaConfig.apiSecret
     
     console.log('Attempting token exchange for user:', session.user.email)
     console.log('Decrypted credentials:', {
@@ -48,7 +50,7 @@ export async function GET(request: NextRequest) {
     
     // Exchange request token for access token
     const accessToken = await ZerodhaAPI.getAccessToken(apiKey, apiSecret, requestToken)
-    const encryptedAccessToken = encrypt(accessToken)
+    // Store access token as plain text
     
     console.log('Token exchange successful, fetching user profile and balance')
     
@@ -73,9 +75,9 @@ export async function GET(request: NextRequest) {
       // Continue with connection even if balance fetch fails
     }
     
-    // Update user with access token and balance
+    // Update user with access token and balance - plain text storage
     await User.findByIdAndUpdate(user._id, {
-      'zerodhaConfig.accessToken': encryptedAccessToken,
+      'zerodhaConfig.accessToken': accessToken,
       'zerodhaConfig.isConnected': true,
       'zerodhaConfig.balance': balance,
       'zerodhaConfig.lastSync': new Date()
