@@ -59,6 +59,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin user not found' }, { status: 404 })
     }
 
+    // Clear any existing impersonation sessions for this admin
+    await db.collection('impersonation_sessions').deleteMany({
+      adminEmail: adminUser.email
+    })
+
     // Create impersonation session (expires in 1 hour)
     const impersonationData: ImpersonationSession = {
       adminId: adminUser._id.toString(),

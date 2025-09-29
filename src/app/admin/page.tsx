@@ -152,7 +152,7 @@ export default function AdminDashboard() {
       const result = await response.json()
 
       if (response.ok) {
-        alert(result.message + '\n\nRedirecting to dashboard...')
+        alert(result.message + '\n\nRedirecting to dashboard to view as the impersonated user...')
         // Redirect to dashboard to see the user's view
         window.location.href = '/dashboard'
       } else {

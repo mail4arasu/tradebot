@@ -2,6 +2,7 @@
 
 import { SessionProvider } from 'next-auth/react'
 import { ReactNode } from 'react'
+import ImpersonationProvider from '@/components/ImpersonationProvider'
 
 interface ProvidersProps {
   children: ReactNode
@@ -10,7 +11,9 @@ interface ProvidersProps {
 export default function Providers({ children }: ProvidersProps) {
   return (
     <SessionProvider>
-      {children}
+      <ImpersonationProvider>
+        {children}
+      </ImpersonationProvider>
     </SessionProvider>
   )
 }

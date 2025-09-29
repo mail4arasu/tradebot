@@ -124,6 +124,39 @@ export const authOptions: NextAuthOptions = {
       return true
     },
   },
+  events: {
+    async signOut({ session, token }) {
+      // Clear impersonation sessions when admin signs out
+      try {
+        const email = session?.user?.email || token?.email
+        if (email) {
+          const client = await clientPromise
+          const db = client.db('tradebot')
+          
+          const result = await db.collection('impersonation_sessions').deleteMany({
+            adminEmail: email
+          })
+
+          if (result.deletedCount > 0) {
+            console.log(`Cleared ${result.deletedCount} impersonation session(s) for ${email} on signout`)
+            
+            // Log the forced session end
+            await db.collection('audit_logs').insertOne({
+              adminEmail: email,
+              action: 'impersonation_force_end',
+              reason: 'admin_signout',
+              timestamp: new Date(),
+              metadata: {
+                deletedSessions: result.deletedCount
+              }
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error clearing impersonation sessions on signout:', error)
+      }
+    }
+  },
   pages: {
     signIn: '/signin',
   },

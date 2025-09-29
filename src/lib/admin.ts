@@ -4,6 +4,7 @@ import clientPromise from '@/lib/mongodb'
 
 /**
  * Server-side utility to check if the current user is an admin
+ * NOTE: This checks the ORIGINAL admin user, not the impersonated user
  * @returns Promise<boolean> - true if user is admin, false otherwise
  */
 export async function isAdminUser(): Promise<boolean> {
@@ -16,6 +17,8 @@ export async function isAdminUser(): Promise<boolean> {
     const client = await clientPromise
     const db = client.db('tradebot')
     
+    // Always check the original session user for admin status,
+    // not the impersonated user
     const user = await db.collection('users').findOne({ 
       email: session.user.email 
     })
