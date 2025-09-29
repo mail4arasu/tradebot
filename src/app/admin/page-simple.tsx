@@ -225,7 +225,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Total Users</div>
             </div>
-            <div className="text-2xl font-bold mt-2" style={{ color: 'var(--foreground)' }}>{stats.totalUsers}</div>
+            <div className="text-2xl font-bold mt-2" style={{ color: 'var(--foreground)' }}>{stats.totalUsers || 0}</div>
           </div>
 
           <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
@@ -237,7 +237,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Active Users</div>
             </div>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{stats.activeUsers}</div>
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{stats.activeUsers || 0}</div>
           </div>
 
           <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
@@ -250,7 +250,7 @@ export default function AdminDashboard() {
               <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Suspended/Restricted</div>
             </div>
             <div className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-              {stats.suspendedUsers + stats.restrictedUsers}
+              {(stats.suspendedUsers || 0) + (stats.restrictedUsers || 0)}
             </div>
           </div>
 
@@ -263,7 +263,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Zerodha Connected</div>
             </div>
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">{stats.zerodhaConnectedUsers}</div>
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">{stats.zerodhaConnectedUsers || 0}</div>
           </div>
         </div>
       )}
@@ -322,7 +322,7 @@ export default function AdminDashboard() {
                                 {bot.botName}
                               </span>
                               <div className="text-gray-500">
-                                ₹{bot.allocatedAmount.toLocaleString()} • {bot.strategy}
+                                ₹{(bot.allocatedAmount || 0).toLocaleString()} • {bot.strategy || 'Unknown'}
                               </div>
                             </div>
                           ))}
