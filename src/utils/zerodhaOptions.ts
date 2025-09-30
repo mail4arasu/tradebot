@@ -141,6 +141,21 @@ export async function findNiftyOptionsContracts(
     // Get all NFO instruments
     const instruments = await fetchNFOInstruments(apiKey, accessToken)
     
+    // First, let's see what NIFTY expiry dates are actually available
+    const allNiftyExpiries = [...new Set(
+      instruments
+        .filter(inst => inst.name === 'NIFTY' && (inst.instrument_type === 'CE' || inst.instrument_type === 'PE'))
+        .map(inst => inst.expiry)
+    )].sort()
+    
+    console.log(`📅 Available NIFTY expiry dates:`)
+    allNiftyExpiries.slice(0, 10).forEach((expiry, index) => {
+      console.log(`   ${index + 1}. ${expiry}`)
+    })
+    console.log(`   ... and ${Math.max(0, allNiftyExpiries.length - 10)} more`)
+    
+    console.log(`🎯 Looking for exact match with expiry: ${expiryDate.toISOString()} (${expiryDate.toISOString().split('T')[0]})`)
+    
     // Filter for NIFTY options with matching expiry
     const niftyOptions = instruments.filter(inst => {
       if (inst.name !== 'NIFTY') return false
@@ -148,10 +163,34 @@ export async function findNiftyOptionsContracts(
       
       // Check expiry date match
       const instExpiry = new Date(inst.expiry)
-      return instExpiry.getTime() === expiryDate.getTime()
+      const matches = instExpiry.getTime() === expiryDate.getTime()
+      
+      if (matches) {
+        console.log(`✅ Expiry match found: ${inst.expiry} for instrument ${inst.tradingsymbol}`)
+      }
+      
+      return matches
     })
     
     console.log(`📊 Found ${niftyOptions.length} NIFTY ${optionType} options for target expiry`)
+    
+    if (niftyOptions.length === 0) {
+      // Show closest available expiry dates
+      const targetTime = expiryDate.getTime()
+      const closestExpiries = allNiftyExpiries
+        .map(expiry => ({
+          expiry,
+          diff: Math.abs(new Date(expiry).getTime() - targetTime)
+        }))
+        .sort((a, b) => a.diff - b.diff)
+        .slice(0, 5)
+        
+      console.log(`❌ No exact expiry match. Closest available expiry dates:`)
+      closestExpiries.forEach((item, index) => {
+        const days = Math.round(item.diff / (1000 * 60 * 60 * 24))
+        console.log(`   ${index + 1}. ${item.expiry} (${days} days difference)`)
+      })
+    }
     
     // Find instruments for each requested strike
     const foundContracts: OptionsContract[] = []
