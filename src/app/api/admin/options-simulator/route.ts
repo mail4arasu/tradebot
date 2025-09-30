@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
     console.log(`📅 Selected expiry: ${selectedExpiry.date} (${selectedExpiry.daysToExpiry} days)`)
+    console.log(`🔢 Formatted expiry for symbols: ${selectedExpiry.formatted}`)
 
     // Step 5: Determine option type based on action
     const optionType = getOptionType(action)

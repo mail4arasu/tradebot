@@ -96,9 +96,10 @@ export async function fetchNiftyExpiryDates(apiKey: string, accessToken: string)
         const expiryDate = new Date(dateStr)
         const daysToExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         
+        const formatted = formatExpiryForSymbol(expiryDate)
         return {
           date: dateStr,
-          formatted: formatExpiryForSymbol(expiryDate),
+          formatted: formatted,
           daysToExpiry
         }
       })
@@ -114,12 +115,12 @@ export async function fetchNiftyExpiryDates(apiKey: string, accessToken: string)
 }
 
 /**
- * Format expiry date for Zerodha symbol format
+ * Format expiry date for Zerodha symbol format (no leading zero for day)
  */
 function formatExpiryForSymbol(date: Date): string {
   const year = date.getFullYear().toString().slice(-2)
   const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-  const day = date.getDate().toString().padStart(2, '0')
+  const day = date.getDate().toString() // No padding for Zerodha format
   
   return `${year}${month}${day}`
 }
