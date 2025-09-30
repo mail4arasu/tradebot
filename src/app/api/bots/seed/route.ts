@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
         parameters: {
           marketHours: '9:15-15:30',
           maxPositions: 1,
-          tradeTimeout: 300 // 5 minutes
+          tradeTimeout: 300, // 5 minutes
+          positionType: 'QUANTITY'
         },
         // New automated trading fields
         webhookUrl: 'https://niveshawealth.in/api/webhook/tradingview',
@@ -52,50 +53,29 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date()
       },
       {
-        name: 'Bank Nifty Options Bot',
-        description: 'Intraday options trading strategy for Bank Nifty with risk management',
-        strategy: 'Options Straddle',
+        name: 'Nifty50 Options Bot',
+        description: 'Advanced options trading bot with dynamic strike selection and delta analysis',
+        strategy: 'Options Delta Strategy',
         riskLevel: 'HIGH',
-        minInvestment: 200000, // 2 Lakhs
+        minInvestment: 50000, // 50k minimum for options
         maxInvestment: 2000000, // 20 Lakhs
-        expectedReturn: 25.0, // 25% annual
-        isActive: false, // Not active yet
+        expectedReturn: 30.0, // 30% annual
+        isActive: true,
         parameters: {
           marketHours: '9:15-15:30',
-          maxPositions: 2,
-          stopLoss: 20,
-          target: 40
+          maxPositions: 1,
+          tradeTimeout: 300, // 5 minutes
+          positionType: 'RISK_PERCENTAGE',
+          deltaThreshold: 0.6,
+          expiryPreference: 'NEAREST'
         },
-        // New automated trading fields
+        // Automated trading fields
         webhookUrl: 'https://niveshawealth.in/api/webhook/tradingview',
         emergencyStop: false,
-        symbol: 'BANKNIFTY',
+        symbol: 'NIFTY',
         exchange: 'NFO',
         instrumentType: 'OPTIONS',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      },
-      {
-        name: 'Momentum Scanner Bot',
-        description: 'Multi-stock momentum scanning and trading bot for equity markets',
-        strategy: 'Momentum Breakout',
-        riskLevel: 'MEDIUM',
-        minInvestment: 150000, // 1.5 Lakhs
-        maxInvestment: 3000000, // 30 Lakhs
-        expectedReturn: 20.0, // 20% annual
-        isActive: false, // Development
-        parameters: {
-          marketHours: '9:15-15:30',
-          maxPositions: 5,
-          scanInterval: 60,
-          minimumVolume: 1000000
-        },
-        // New automated trading fields
-        webhookUrl: 'https://niveshawealth.in/api/webhook/tradingview',
-        emergencyStop: false,
-        symbol: 'MULTIPLE',
-        exchange: 'NSE',
-        instrumentType: 'EQUITY',
+        botId: Math.random().toString(36).substring(2, 10).toUpperCase(),
         createdAt: new Date(),
         updatedAt: new Date()
       }

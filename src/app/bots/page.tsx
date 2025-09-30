@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useAdmin } from '@/hooks/useAdmin'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Bot, Plus, Settings, TrendingUp, Webhook, Monitor, Users } from 'lucide-react'
+import { ArrowLeft, Bot, Plus, Settings, TrendingUp, Webhook, Monitor, Users, Target, Percent } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Bots() {
@@ -170,11 +170,77 @@ export default function Bots() {
                   <span className="text-gray-700">Nifty50 Futures</span>
                 </div>
                 <div className="flex justify-between text-sm">
+                  <span>Position Type:</span>
+                  <span className="text-gray-700">Fixed Quantity</span>
+                </div>
+                <div className="flex justify-between text-sm">
                   <span>Trade Method:</span>
                   <span className="text-gray-700">TradingView Webhook</span>
                 </div>
                 <Link href="/bots/manage">
                   <Button className="w-full">
+                    <Users className="h-4 w-4 mr-2" />
+                    Enable/Configure
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Nifty50 Options Bot - NEW */}
+          <Card className="border-purple-200 bg-purple-50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-purple-600" />
+                Nifty50 Options Bot
+                <span className="ml-auto">
+                  <span className="bg-purple-600 text-white text-xs px-2 py-1 rounded-full">NEW</span>
+                </span>
+              </CardTitle>
+              <CardDescription>
+                Advanced options trading with dynamic strike selection
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span>Status:</span>
+                  <span className="text-purple-600 font-medium">Available</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Strategy:</span>
+                  <span className="text-gray-700">Options Delta Strategy</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Risk Level:</span>
+                  <span className="text-gray-700">High</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Market:</span>
+                  <span className="text-gray-700">Nifty Options</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Position Type:</span>
+                  <span className="text-gray-700 flex items-center">
+                    <Percent className="h-3 w-3 mr-1" />
+                    Risk % Based
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Trade Method:</span>
+                  <span className="text-gray-700">TradingView Webhook</span>
+                </div>
+                <div className="bg-purple-100 border border-purple-200 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-purple-700 font-medium mb-1">Advanced Features:</p>
+                  <ul className="text-xs text-purple-600 space-y-1">
+                    <li>• Dynamic strike selection</li>
+                    <li>• Delta & OI analysis</li>
+                    <li>• Smart expiry selection</li>
+                    <li>• Risk % position sizing</li>
+                  </ul>
+                </div>
+                <Link href="/bots/manage">
+                  <Button className="w-full bg-purple-600 hover:bg-purple-700">
                     <Users className="h-4 w-4 mr-2" />
                     Enable/Configure
                   </Button>
