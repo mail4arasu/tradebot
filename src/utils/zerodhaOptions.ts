@@ -585,9 +585,9 @@ function calculateDelta(quote: ZerodhaQuoteData, contract: OptionsContract, spot
   const strike = contract.strike
   const timeToExpiry = getTimeToExpiry(contract.expiry)
   
-  // Estimate implied volatility from option premium using reverse engineering
+  // Calculate implied volatility from market premium using Newton-Raphson method
   const impliedVol = estimateImpliedVolatility(quote.last_price, spotPrice, strike, timeToExpiry, contract.optionType)
-  const riskFreeRate = 0.07 // Indian 10-year G-Sec rate approximation (~7%)
+  const riskFreeRate = 0.065 // More accurate Indian 10-year G-Sec rate (~6.5%)
   
   console.log(`📊 Black-Scholes Delta calc:`)
   console.log(`   Spot=${spotPrice}, Strike=${strike}, TTM=${timeToExpiry.toFixed(4)} years`)
@@ -666,8 +666,8 @@ function getTimeToExpiry(expiryString: string): number {
 }
 
 /**
- * Estimate implied volatility from option premium
- * Uses Newton-Raphson method for IV calculation
+ * Calculate implied volatility using Newton-Raphson method
+ * This should give us IV closer to what Zerodha uses
  */
 function estimateImpliedVolatility(
   optionPrice: number, 
@@ -676,31 +676,78 @@ function estimateImpliedVolatility(
   timeToExpiry: number, 
   optionType: 'CE' | 'PE'
 ): number {
-  // For NIFTY, typical IV ranges from 10% to 40%
-  let volatility = 0.20 // Start with 20% as initial guess
+  const riskFreeRate = 0.065 // More accurate Indian 10-year G-Sec rate
+  let volatility = 0.20 // Initial guess: 20%
   
-  // Quick estimation based on moneyness and option price
-  const moneyness = spot / strike
-  const intrinsicValue = optionType === 'CE' 
-    ? Math.max(0, spot - strike) 
-    : Math.max(0, strike - spot)
-  
-  const timeValue = Math.max(0, optionPrice - intrinsicValue)
-  
-  // Simple heuristic: higher time value suggests higher volatility
-  if (timeValue > 0) {
-    const timeValueRatio = timeValue / spot
-    volatility = Math.max(0.10, Math.min(0.50, timeValueRatio * 100)) // 10% to 50%
+  // Newton-Raphson method to find IV
+  for (let i = 0; i < 20; i++) {
+    const theoreticalPrice = blackScholesPrice(spot, strike, timeToExpiry, riskFreeRate, volatility, optionType)
+    const vega = blackScholesVega(spot, strike, timeToExpiry, riskFreeRate, volatility)
+    
+    const priceDiff = theoreticalPrice - optionPrice
+    
+    if (Math.abs(priceDiff) < 0.01 || vega < 0.001) {
+      break // Converged or vega too small
+    }
+    
+    volatility = volatility - (priceDiff / vega)
+    volatility = Math.max(0.01, Math.min(2.0, volatility)) // Keep within reasonable bounds
   }
   
-  // ATM options typically have higher volatility
-  if (Math.abs(moneyness - 1) < 0.05) {
-    volatility = Math.max(volatility, 0.18)
-  }
-  
-  console.log(`   💡 Estimated IV: ${(volatility*100).toFixed(1)}% (based on premium=${optionPrice}, timeValue=${timeValue.toFixed(2)})`)
+  console.log(`   💡 Newton-Raphson IV: ${(volatility*100).toFixed(1)}% (market premium=${optionPrice})`)
   
   return volatility
+}
+
+/**
+ * Black-Scholes option price calculation
+ */
+function blackScholesPrice(
+  spot: number, 
+  strike: number, 
+  timeToExpiry: number, 
+  riskFreeRate: number, 
+  volatility: number, 
+  optionType: 'CE' | 'PE'
+): number {
+  if (timeToExpiry <= 0) {
+    return optionType === 'CE' ? Math.max(0, spot - strike) : Math.max(0, strike - spot)
+  }
+  
+  const d1 = (Math.log(spot / strike) + (riskFreeRate + 0.5 * volatility * volatility) * timeToExpiry) / 
+             (volatility * Math.sqrt(timeToExpiry))
+  const d2 = d1 - volatility * Math.sqrt(timeToExpiry)
+  
+  if (optionType === 'CE') {
+    return spot * normalCDF(d1) - strike * Math.exp(-riskFreeRate * timeToExpiry) * normalCDF(d2)
+  } else {
+    return strike * Math.exp(-riskFreeRate * timeToExpiry) * normalCDF(-d2) - spot * normalCDF(-d1)
+  }
+}
+
+/**
+ * Black-Scholes Vega calculation (sensitivity to volatility)
+ */
+function blackScholesVega(
+  spot: number, 
+  strike: number, 
+  timeToExpiry: number, 
+  riskFreeRate: number, 
+  volatility: number
+): number {
+  if (timeToExpiry <= 0) return 0
+  
+  const d1 = (Math.log(spot / strike) + (riskFreeRate + 0.5 * volatility * volatility) * timeToExpiry) / 
+             (volatility * Math.sqrt(timeToExpiry))
+  
+  return spot * Math.sqrt(timeToExpiry) * normalPDF(d1)
+}
+
+/**
+ * Standard normal probability density function (PDF)
+ */
+function normalPDF(x: number): number {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI)
 }
 
 /**
