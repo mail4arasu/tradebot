@@ -323,7 +323,7 @@ async function fetchNFOInstruments(apiKey: string, accessToken: string): Promise
       instrument_token: parseInt(data[0]),
       exchange_token: parseInt(data[1]),
       tradingsymbol: data[2],
-      name: data[3],
+      name: data[3].replace(/"/g, ''), // Remove quotes from name field
       last_price: parseFloat(data[4]) || 0,
       expiry: data[5],
       strike: parseFloat(data[6]) || 0,
@@ -349,6 +349,17 @@ async function fetchNFOInstruments(apiKey: string, accessToken: string): Promise
     niftyInstruments.slice(0, 5).forEach((inst, index) => {
       console.log(`   ${index + 1}. ${inst.tradingsymbol} | Name: "${inst.name}" | Type: ${inst.instrument_type} | Expiry: ${inst.expiry}`)
     })
+    
+    // Show NIFTY options specifically
+    const niftyOptions = niftyInstruments.filter(inst => inst.instrument_type === 'CE' || inst.instrument_type === 'PE')
+    console.log(`📋 Found ${niftyOptions.length} NIFTY options (CE/PE) out of ${niftyInstruments.length} total NIFTY instruments`)
+    
+    if (niftyOptions.length > 0) {
+      console.log(`✅ Sample NIFTY options:`)
+      niftyOptions.slice(0, 10).forEach((inst, index) => {
+        console.log(`   ${index + 1}. ${inst.tradingsymbol} | Type: ${inst.instrument_type} | Strike: ${inst.strike} | Expiry: ${inst.expiry}`)
+      })
+    }
   } else {
     console.log(`❌ No NIFTY instruments found. Checking raw CSV parsing...`)
     // Show first 3 instruments to debug CSV parsing
