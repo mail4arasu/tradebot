@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import clientPromise from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
+import { executeOptionsBotTrade, validateOptionsBotConfig } from '@/utils/optionsBotExecution'
 
 // TradingView Alert Interface
 interface TradingViewAlert {
@@ -269,6 +270,17 @@ async function executeTradeForUser(allocation: any, bot: any, payload: TradingVi
   try {
     console.log(`💼 Executing trade for user: ${allocation.userId}`)
 
+    // Check if this is a Nifty50 Options Bot
+    const isOptionsBot = bot.instrumentType === 'OPTIONS' && 
+                        (bot.symbol === 'NIFTY' || bot.symbol === 'NIFTY50') &&
+                        bot.name && bot.name.toLowerCase().includes('options')
+
+    if (isOptionsBot) {
+      console.log(`🎯 Detected Nifty50 Options Bot: ${bot.name}`)
+      return await executeOptionsBot(allocation, bot, payload, signalId, db)
+    }
+
+    // Standard futures/equity execution
     // Create trade execution record
     const tradeExecution = {
       userId: allocation.userId,
@@ -344,6 +356,150 @@ async function executeTradeForUser(allocation: any, bot: any, payload: TradingVi
       executionId: null,
       orderId: null,
       error: error.message
+    }
+  }
+}
+
+async function executeOptionsBot(allocation: any, bot: any, payload: TradingViewAlert, signalId: ObjectId, db: any) {
+  try {
+    console.log(`🤖 Executing Nifty50 Options Bot for user: ${allocation.userId}`)
+
+    // Get user's Zerodha configuration
+    const user = await db.collection('users').findOne({ _id: new ObjectId(allocation.userId) })
+    if (!user?.zerodhaConfig?.accessToken) {
+      throw new Error('User Zerodha configuration not found')
+    }
+
+    // Prepare options bot configuration
+    const optionsConfig = {
+      capital: allocation.capital || 100000, // Default to 1 lakh if not specified
+      riskPercentage: allocation.riskPercentage || 5, // Default 5% risk
+      deltaThreshold: bot.parameters?.deltaThreshold || 0.6, // From bot configuration
+      lotSize: 75 // Correct NIFTY options lot size
+    }
+
+    // Validate options bot configuration
+    const configValidation = validateOptionsBotConfig(optionsConfig)
+    if (!configValidation.valid) {
+      throw new Error(`Invalid options bot config: ${configValidation.error}`)
+    }
+
+    // Prepare signal for options bot
+    const optionsSignal = {
+      action: payload.action as 'BUY' | 'SELL',
+      price: payload.price || 19500, // Default NIFTY price if not provided
+      symbol: 'NIFTY',
+      timestamp: new Date()
+    }
+
+    // Execute sophisticated options analysis
+    console.log(`📊 Running sophisticated options analysis...`)
+    const optionsResult = await executeOptionsBotTrade(
+      optionsSignal,
+      optionsConfig,
+      {
+        apiKey: user.zerodhaConfig.apiKey,
+        accessToken: user.zerodhaConfig.accessToken
+      }
+    )
+
+    // Create detailed trade execution record for options
+    const optionsTradeExecution = {
+      userId: allocation.userId,
+      botId: bot._id,
+      signalId: signalId,
+      allocationId: allocation._id,
+      
+      // Original signal data
+      originalSymbol: payload.symbol,
+      originalAction: payload.action,
+      originalPrice: payload.price,
+      
+      // Options-specific data
+      selectedContract: optionsResult.selectedContract,
+      positionSize: optionsResult.positionSize,
+      
+      // Standard execution fields
+      symbol: optionsResult.selectedContract?.symbol || 'NIFTY_OPTIONS',
+      exchange: 'NFO',
+      instrumentType: 'OPTIONS',
+      quantity: optionsResult.positionSize?.quantity || 0,
+      orderType: payload.action,
+      requestedPrice: optionsResult.selectedContract?.premium || 0,
+      executedPrice: null,
+      executedQuantity: null,
+      zerodhaOrderId: null,
+      zerodhaTradeId: null,
+      status: optionsResult.success ? 'EXECUTED' : 'FAILED',
+      submittedAt: new Date(),
+      executedAt: optionsResult.success ? new Date() : null,
+      error: optionsResult.error || null,
+      retryCount: 0,
+      zerodhaResponse: optionsResult.executionDetails || null,
+      pnl: null,
+      fees: null,
+      isEmergencyExit: false,
+      riskCheckPassed: true,
+      
+      // Options analysis details
+      optionsAnalysis: {
+        atmStrike: optionsResult.selectedContract?.strike,
+        delta: optionsResult.selectedContract?.delta,
+        openInterest: optionsResult.selectedContract?.openInterest,
+        premium: optionsResult.selectedContract?.premium,
+        expiryDate: optionsResult.selectedContract?.expiry,
+        optionType: optionsResult.selectedContract?.optionType,
+        lots: optionsResult.positionSize?.lots,
+        totalInvestment: optionsResult.positionSize?.totalInvestment,
+        riskAmount: optionsResult.positionSize?.riskAmount
+      },
+      
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    const executionResult = await db.collection('tradeexecutions').insertOne(optionsTradeExecution)
+    console.log('📋 Options trade execution record created:', executionResult.insertedId)
+
+    // Create trade history record if successful
+    if (optionsResult.success && optionsResult.selectedContract) {
+      await createTradeHistoryRecord({
+        ...optionsTradeExecution,
+        symbol: optionsResult.selectedContract.symbol,
+        quantity: optionsResult.positionSize?.quantity || 0,
+        price: optionsResult.selectedContract.premium
+      }, {
+        success: true,
+        orderId: `OPT_${Date.now()}`,
+        tradeId: `OPTTRD_${Date.now()}`,
+        executedPrice: optionsResult.selectedContract.premium,
+        executedQuantity: optionsResult.positionSize?.quantity || 0,
+        response: { 
+          status: 'COMPLETE',
+          options_analysis: optionsResult,
+          order_timestamp: new Date().toISOString()
+        }
+      }, executionResult.insertedId, db)
+    }
+
+    return {
+      success: optionsResult.success,
+      executionId: executionResult.insertedId,
+      orderId: optionsResult.success ? `OPT_${Date.now()}` : null,
+      error: optionsResult.error,
+      optionsDetails: {
+        selectedContract: optionsResult.selectedContract,
+        positionSize: optionsResult.positionSize
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Options bot execution error:', error)
+    return {
+      success: false,
+      executionId: null,
+      orderId: null,
+      error: error.message || 'Unknown error in options bot execution'
     }
   }
 }

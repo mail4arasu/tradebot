@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       tradingConfig: {
         symbol: payload.tradingConfig?.symbol || 'NIFTY',
         exchange: payload.tradingConfig?.exchange || 'NFO',
-        lotSize: payload.tradingConfig?.lotSize || 25,
+        lotSize: payload.tradingConfig?.lotSize || 75, // Correct NIFTY options lot size
         maxPositionSize: payload.tradingConfig?.maxPositionSize || 100
       },
       createdAt: new Date(),
