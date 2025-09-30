@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
     console.log(`🏆 Selected best contract: ${bestContract.symbol}`)
 
     // Step 9: Calculate position size based on risk percentage
-    const lotSize = 50 // NIFTY lot size
+    const lotSize = 75 // NIFTY lot size (correct value)
     const premiumPerLot = (bestContract.premium || 0) * lotSize
     const riskAmount = (capital * riskPercentage) / 100
     

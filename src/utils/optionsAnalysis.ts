@@ -156,7 +156,7 @@ export function calculatePositionSize(
   availableMargin: number,
   riskPercentage: number,
   premiumPerLot: number,
-  lotSize: number = 50 // NIFTY lot size
+  lotSize: number = 75 // NIFTY lot size (correct value)
 ): { lots: number, amount: number, canTrade: boolean } {
   // Calculate risk amount
   const riskAmount = (availableMargin * riskPercentage) / 100
