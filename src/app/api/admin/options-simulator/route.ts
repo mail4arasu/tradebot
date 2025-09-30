@@ -15,6 +15,7 @@ import {
 } from '@/utils/optionsAnalysis'
 import { 
   fetchNiftyExpiryDates,
+  findNiftyOptionsContracts,
   fetchOptionsQuotes
 } from '@/utils/zerodhaOptions'
 
@@ -89,12 +90,28 @@ export async function POST(request: NextRequest) {
     const optionType = getOptionType(action)
     console.log(`🎛️ Option type: ${optionType} (action: ${action})`)
 
-    // Step 6: Generate options contracts for all strikes
-    const contracts = generateOptionsContracts(strikes, selectedExpiry.formatted, optionType)
-    console.log(`💼 Generated ${contracts.length} contracts:`)
-    contracts.forEach((contract, index) => {
-      console.log(`   ${index + 1}. ${contract.symbol} (Strike: ${contract.strike}, Expiry: ${contract.expiry})`)
-    })
+    // Step 6: Find actual NIFTY options contracts from Zerodha instruments
+    let contracts: OptionsContract[]
+    try {
+      const expiryDate = new Date(selectedExpiry.date)
+      contracts = await findNiftyOptionsContracts(strikes, expiryDate, optionType, apiKey, accessToken)
+      
+      if (contracts.length === 0) {
+        return NextResponse.json({ 
+          error: `No NIFTY ${optionType} options found for the selected strikes on expiry ${selectedExpiry.date}. Market may be closed or expiry may not be available.` 
+        }, { status: 400 })
+      }
+      
+      console.log(`💼 Found ${contracts.length} contracts from Zerodha instruments`)
+    } catch (error: any) {
+      if (error.message.includes('Incorrect `api_key` or `access_token`') || 
+          error.message.includes('TokenException')) {
+        return NextResponse.json({ 
+          error: 'Zerodha access token has expired. Please go to Settings → Zerodha Integration → "Connect Zerodha Account" to refresh your daily token.' 
+        }, { status: 401 })
+      }
+      throw error // Re-throw other errors
+    }
 
     // Step 7: Fetch real-time quotes from Zerodha API
     let contractsWithData
@@ -107,11 +124,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ 
           error: 'Zerodha access token has expired. Please go to Settings → Zerodha Integration → "Connect Zerodha Account" to refresh your daily token.' 
         }, { status: 401 })
-      }
-      if (error.message.includes('No instrument tokens found')) {
-        return NextResponse.json({ 
-          error: 'Options contracts not found in Zerodha instruments. This may indicate expired token or invalid symbols. Please refresh your Zerodha token in Settings.' 
-        }, { status: 400 })
       }
       throw error // Re-throw other errors
     }
