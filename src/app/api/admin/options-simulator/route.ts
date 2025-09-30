@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     
     if (!user?.zerodhaConfig?.accessToken) {
       return NextResponse.json({ 
-        error: 'Zerodha access token not configured. Please connect your Zerodha account.' 
+        error: 'Zerodha access token not configured. Please go to Settings → Zerodha Integration and connect your Zerodha account.' 
       }, { status: 400 })
     }
 
@@ -61,8 +61,19 @@ export async function POST(request: NextRequest) {
     console.log(`📊 Generated strikes: ${strikes.join(', ')}`)
 
     // Step 3: Fetch NIFTY expiry dates from Zerodha
-    const expiryDates = await fetchNiftyExpiryDates(apiKey, accessToken)
-    console.log(`📅 Fetched ${expiryDates.length} expiry dates`)
+    let expiryDates
+    try {
+      expiryDates = await fetchNiftyExpiryDates(apiKey, accessToken)
+      console.log(`📅 Fetched ${expiryDates.length} expiry dates`)
+    } catch (error: any) {
+      if (error.message.includes('Incorrect `api_key` or `access_token`') || 
+          error.message.includes('TokenException')) {
+        return NextResponse.json({ 
+          error: 'Zerodha access token has expired. Please go to Settings → Zerodha Integration → "Connect Zerodha Account" to refresh your daily token.' 
+        }, { status: 401 })
+      }
+      throw error // Re-throw other errors
+    }
 
     // Step 4: Select appropriate expiry based on date input
     const selectedExpiry = selectExpiry(expiryDates)
@@ -82,8 +93,24 @@ export async function POST(request: NextRequest) {
     console.log(`💼 Generated ${contracts.length} contracts`)
 
     // Step 7: Fetch real-time quotes from Zerodha API
-    const contractsWithData = await fetchOptionsQuotes(contracts, apiKey, accessToken)
-    console.log(`📈 Fetched quotes for ${contractsWithData.length} contracts`)
+    let contractsWithData
+    try {
+      contractsWithData = await fetchOptionsQuotes(contracts, apiKey, accessToken)
+      console.log(`📈 Fetched quotes for ${contractsWithData.length} contracts`)
+    } catch (error: any) {
+      if (error.message.includes('Incorrect `api_key` or `access_token`') || 
+          error.message.includes('TokenException')) {
+        return NextResponse.json({ 
+          error: 'Zerodha access token has expired. Please go to Settings → Zerodha Integration → "Connect Zerodha Account" to refresh your daily token.' 
+        }, { status: 401 })
+      }
+      if (error.message.includes('No instrument tokens found')) {
+        return NextResponse.json({ 
+          error: 'Options contracts not found in Zerodha instruments. This may indicate expired token or invalid symbols. Please refresh your Zerodha token in Settings.' 
+        }, { status: 400 })
+      }
+      throw error // Re-throw other errors
+    }
 
     // Step 8: Select best contract based on delta and OI
     const bestContract = selectBestContract(contractsWithData)

@@ -213,7 +213,14 @@ export default function TradingAdminDashboard() {
       if (result.success) {
         setSimulationResult(result.data)
       } else {
-        alert(`Simulation failed: ${result.error}`)
+        // Show user-friendly error messages
+        if (result.error.includes('access token has expired') || result.error.includes('TokenException')) {
+          alert(`🔑 Token Expired!\n\n${result.error}\n\nZerodha tokens expire daily and need to be refreshed each day.`)
+        } else if (result.error.includes('not configured')) {
+          alert(`⚙️ Setup Required!\n\n${result.error}`)
+        } else {
+          alert(`❌ Simulation Failed!\n\n${result.error}`)
+        }
       }
     } catch (error) {
       console.error('Simulation error:', error)
@@ -424,6 +431,8 @@ export default function TradingAdminDashboard() {
           </CardTitle>
           <CardDescription>
             Test the Options Analysis Engine with real Zerodha API data to validate strike selection, premium, delta, and position sizing
+            <br />
+            <span className="text-orange-600 font-medium">⚠️ Requires active Zerodha connection. Tokens expire daily.</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
