@@ -141,13 +141,18 @@ export default function Trades() {
         const data = await response.json()
         let filteredTrades = data.trades || []
         
-        // Apply bot type filter
+        // Apply bot type filter with error handling
         if (tradeFilters.botType !== 'all') {
           filteredTrades = filteredTrades.filter((trade: Trade) => {
-            if (tradeFilters.botType === 'bot') {
-              return trade.trade_source === 'BOT' || trade.bot_id
-            } else {
-              return trade.trade_source !== 'BOT' && !trade.bot_id
+            try {
+              if (tradeFilters.botType === 'bot') {
+                return trade.trade_source === 'BOT' || trade.bot_id
+              } else {
+                return trade.trade_source !== 'BOT' && !trade.bot_id
+              }
+            } catch {
+              // If there's an error filtering, include the trade
+              return true
             }
           })
         }
@@ -261,55 +266,102 @@ export default function Trades() {
   }
 
   const calculateEquityCurve = (tradesData: Trade[]) => {
-    // Sort trades by date
-    const sortedTrades = [...tradesData].sort((a, b) => 
-      new Date(a.trade_date).getTime() - new Date(b.trade_date).getTime()
-    )
+    try {
+      // Validate input data
+      if (!tradesData || !Array.isArray(tradesData) || tradesData.length === 0) {
+        setEquityData([])
+        setTotalPnl(0)
+        return
+      }
 
-    let runningPnl = 0
-    const equityPoints: {date: string, value: number, pnl: number}[] = []
-    const initialCapital = 100000 // Default starting capital
+      // Sort trades by date with error handling
+      const sortedTrades = tradesData
+        .filter(trade => trade && trade.trade_date && trade.quantity && trade.price && trade.transaction_type)
+        .sort((a, b) => {
+          try {
+            return new Date(a.trade_date).getTime() - new Date(b.trade_date).getTime()
+          } catch {
+            return 0
+          }
+        })
 
-    // Group trades by date and calculate daily P&L
-    const tradesByDate = sortedTrades.reduce((acc, trade) => {
-      const date = new Date(trade.trade_date).toISOString().split('T')[0]
-      if (!acc[date]) acc[date] = []
-      acc[date].push(trade)
-      return acc
-    }, {} as Record<string, Trade[]>)
+      let runningPnl = 0
+      const equityPoints: {date: string, value: number, pnl: number}[] = []
+      const initialCapital = 100000 // Default starting capital
 
-    // Calculate cumulative P&L
-    Object.entries(tradesByDate).forEach(([date, dayTrades]) => {
-      const dayPnl = dayTrades.reduce((sum, trade) => {
-        // Simplified P&L calculation - in real scenario this would need entry/exit matching
-        const value = trade.quantity * trade.price
-        return sum + (trade.transaction_type === 'SELL' ? value : -value)
-      }, 0)
-      
-      runningPnl += dayPnl
-      equityPoints.push({
-        date,
-        value: initialCapital + runningPnl,
-        pnl: dayPnl
+      // Group trades by date and calculate daily P&L
+      const tradesByDate = sortedTrades.reduce((acc, trade) => {
+        try {
+          const date = new Date(trade.trade_date).toISOString().split('T')[0]
+          if (!acc[date]) acc[date] = []
+          acc[date].push(trade)
+          return acc
+        } catch {
+          return acc
+        }
+      }, {} as Record<string, Trade[]>)
+
+      // Calculate cumulative P&L
+      Object.entries(tradesByDate).forEach(([date, dayTrades]) => {
+        try {
+          const dayPnl = dayTrades.reduce((sum, trade) => {
+            try {
+              // Simplified P&L calculation - in real scenario this would need entry/exit matching
+              const quantity = Number(trade.quantity) || 0
+              const price = Number(trade.price) || 0
+              const value = quantity * price
+              return sum + (trade.transaction_type === 'SELL' ? value : -value)
+            } catch {
+              return sum
+            }
+          }, 0)
+          
+          runningPnl += dayPnl
+          equityPoints.push({
+            date,
+            value: initialCapital + runningPnl,
+            pnl: dayPnl
+          })
+        } catch {
+          // Skip this date if there's an error
+        }
       })
-    })
 
-    setEquityData(equityPoints)
-    setTotalPnl(runningPnl)
+      setEquityData(equityPoints)
+      setTotalPnl(runningPnl)
+    } catch (error) {
+      console.error('Error calculating equity curve:', error)
+      setEquityData([])
+      setTotalPnl(0)
+    }
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    try {
+      if (!dateString) return 'Unknown Date'
+      return new Date(dateString).toLocaleDateString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString)
+      return 'Invalid Date'
+    }
   }
 
-  const formatCurrency = (amount: number) => {
-    return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  const formatCurrency = (amount: number | undefined | null) => {
+    try {
+      if (amount === undefined || amount === null || isNaN(Number(amount))) {
+        return '₹0.00'
+      }
+      return `₹${Number(amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+    } catch (error) {
+      console.error('Error formatting currency:', error, amount)
+      return '₹0.00'
+    }
   }
 
   const getOrderStatusColor = (status: string) => {
@@ -350,6 +402,9 @@ export default function Trades() {
       </div>
     )
   }
+
+  // Add error boundary for the entire component
+  try {
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -1022,7 +1077,7 @@ export default function Trades() {
                                 {trade.tradingsymbol}
                               </h3>
                               <p className="text-sm text-gray-600">
-                                {trade.exchange} • {formatDate(trade.trade_date)}
+                                {trade.exchange || 'Unknown Exchange'} • {trade.trade_date ? formatDate(trade.trade_date) : 'Unknown Date'}
                               </p>
                               {trade.bot_name && (
                                 <p className="text-xs text-blue-600 mt-1">
@@ -1040,10 +1095,10 @@ export default function Trades() {
                               
                               <div className="text-right">
                                 <p className="font-medium">
-                                  {trade.quantity} @ {formatCurrency(trade.price)}
+                                  {trade.quantity || 0} @ {formatCurrency(trade.price)}
                                 </p>
                                 <p className="text-sm text-gray-600">
-                                  Total: {formatCurrency(trade.quantity * trade.price)}
+                                  Total: {formatCurrency((trade.quantity || 0) * (trade.price || 0))}
                                 </p>
                               </div>
                             </div>
@@ -1067,7 +1122,7 @@ export default function Trades() {
                             <div>
                               <span className="text-gray-500">Trade Source:</span>
                               <p className={trade.trade_source === 'BOT' ? 'text-blue-600 font-medium' : ''}>
-                                {trade.trade_source === 'BOT' ? '🤖 Bot Trade' : '👤 Manual Trade'}
+                                {trade.trade_source === 'BOT' ? '🤖 Bot Trade' : (trade.trade_source ? `👤 ${trade.trade_source} Trade` : '👤 Manual Trade')}
                               </p>
                             </div>
                           </div>
@@ -1202,4 +1257,24 @@ export default function Trades() {
       )}
     </div>
   )
+  } catch (error) {
+    console.error('Error rendering trades page:', error)
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4 text-red-600">Error Loading Trades</h1>
+          <p className="text-gray-600 mb-4">
+            There was an error loading the trades page. Please try refreshing the page.
+          </p>
+          <Button onClick={() => window.location.reload()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh Page
+          </Button>
+          <p className="text-sm text-gray-500 mt-4">
+            If the problem persists, please contact support.
+          </p>
+        </div>
+      </div>
+    )
+  }
 }
