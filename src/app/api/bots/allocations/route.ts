@@ -55,7 +55,8 @@ export async function GET(request: NextRequest) {
       totalTrades: allocation.totalTrades,
       successfulTrades: allocation.successfulTrades,
       totalPnl: allocation.totalPnl,
-      allocatedAmount: allocation.allocatedAmount
+      allocatedAmount: allocation.allocatedAmount,
+      riskPercentage: allocation.riskPercentage
     }))
 
     return NextResponse.json({ allocations: formattedAllocations })
@@ -78,11 +79,19 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = await request.json()
-    const { botId, quantity, maxTradesPerDay, allocatedAmount } = payload
+    const { botId, quantity, maxTradesPerDay, allocatedAmount, riskPercentage } = payload
 
-    if (!botId || !quantity || !maxTradesPerDay || !allocatedAmount) {
+    if (!botId || !quantity || !maxTradesPerDay || !allocatedAmount || !riskPercentage) {
       return NextResponse.json(
-        { error: 'Missing required fields: botId, quantity, maxTradesPerDay, allocatedAmount' },
+        { error: 'Missing required fields: botId, quantity, maxTradesPerDay, allocatedAmount, riskPercentage' },
+        { status: 400 }
+      )
+    }
+
+    // Validate risk percentage
+    if (riskPercentage <= 0 || riskPercentage > 50) {
+      return NextResponse.json(
+        { error: 'Risk percentage must be between 0.1% and 50%' },
         { status: 400 }
       )
     }
@@ -126,6 +135,7 @@ export async function POST(request: NextRequest) {
       allocatedAmount,
       quantity,
       maxTradesPerDay,
+      riskPercentage, // User-specific risk percentage
       isActive: true,
       startDate: new Date(),
       currentValue: allocatedAmount,

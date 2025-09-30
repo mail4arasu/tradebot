@@ -370,13 +370,15 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
       throw new Error('User Zerodha configuration not found')
     }
 
-    // Prepare options bot configuration
+    // Prepare options bot configuration using user's specific settings
     const optionsConfig = {
-      capital: allocation.capital || 100000, // Default to 1 lakh if not specified
-      riskPercentage: allocation.riskPercentage || 5, // Default 5% risk
+      capital: allocation.allocatedAmount, // User's allocated capital for this bot
+      riskPercentage: allocation.riskPercentage, // User's configured risk percentage
       deltaThreshold: bot.parameters?.deltaThreshold || 0.6, // From bot configuration
       lotSize: 75 // Correct NIFTY options lot size
     }
+
+    console.log(`👤 User-specific config: Capital=₹${optionsConfig.capital.toLocaleString()}, Risk=${optionsConfig.riskPercentage}%`)
 
     // Validate options bot configuration
     const configValidation = validateOptionsBotConfig(optionsConfig)
