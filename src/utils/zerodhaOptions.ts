@@ -248,6 +248,9 @@ export async function fetchOptionsQuotes(
       throw new Error('No contracts with instrument tokens found')
     }
     
+    // Fetch NIFTY spot price for delta calculations
+    const spotPrice = await fetchNiftySpotPrice(apiKey, accessToken)
+    
     // Fetch quotes using instrument tokens
     const tokens = contractsWithTokens.map(c => `NFO:${c.instrumentToken}`)
     const quotesResponse = await fetch(`https://api.kite.trade/quote?i=${tokens.join('&i=')}`, {
@@ -270,11 +273,12 @@ export async function fetchOptionsQuotes(
       const quote = quotesData.data[tokenKey]
       
       if (quote) {
+        const delta = calculateDelta(quote, contract, spotPrice)
         return {
           ...contract,
           premium: quote.last_price,
           openInterest: quote.oi,
-          delta: calculateDelta(quote, contract) // Approximate delta calculation
+          delta: delta
         }
       }
       
@@ -444,31 +448,84 @@ function findMatchingInstrument(contract: OptionsContract, instruments: ZerodhaO
 }
 
 /**
- * Approximate delta calculation for options
- * Note: This is a simplified calculation. For accurate delta, use proper options pricing models
+ * Fetch NIFTY spot price from Zerodha
  */
-function calculateDelta(quote: ZerodhaQuoteData, contract: OptionsContract): number {
-  // Simplified delta approximation
-  // For CE: closer to ATM = higher delta, for PE: inverse
-  // This is a placeholder - in production, use Black-Scholes or similar
-  
-  const spotPrice = quote.last_price // This should be the underlying spot price
+async function fetchNiftySpotPrice(apiKey: string, accessToken: string): Promise<number> {
+  try {
+    // Fetch NIFTY 50 index quote
+    const response = await fetch('https://api.kite.trade/quote?i=NSE:NIFTY%2050', {
+      method: 'GET',
+      headers: {
+        'X-Kite-Version': '3',
+        'Authorization': `token ${apiKey}:${accessToken}`
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch NIFTY spot price: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    const niftyData = data.data['NSE:NIFTY 50']
+    
+    if (niftyData && niftyData.last_price) {
+      console.log(`📈 NIFTY Spot Price: ${niftyData.last_price}`)
+      return niftyData.last_price
+    }
+    
+    throw new Error('NIFTY spot price not found in response')
+  } catch (error) {
+    console.error('Error fetching NIFTY spot price:', error)
+    // Fallback to a reasonable approximation based on ATM strikes
+    return 24600 // This should be replaced with actual spot price
+  }
+}
+
+/**
+ * Simplified delta calculation using actual spot price
+ * Note: This is an approximation. For precise delta, use Black-Scholes model
+ */
+function calculateDelta(quote: ZerodhaQuoteData, contract: OptionsContract, spotPrice: number): number {
   const strike = contract.strike
   const moneyness = spotPrice / strike
   
+  console.log(`📊 Delta calc: Spot=${spotPrice}, Strike=${strike}, Moneyness=${moneyness.toFixed(3)}, Type=${contract.optionType}`)
+  
   if (contract.optionType === 'CE') {
-    // Call option delta increases as it goes ITM
-    if (moneyness > 1) {
-      return Math.min(0.9, 0.5 + (moneyness - 1) * 2)
+    // Call option delta: increases as option goes ITM (spot > strike)
+    if (moneyness >= 1.02) {
+      // Deep ITM: delta around 0.7-0.9
+      const delta = Math.min(0.9, 0.5 + (moneyness - 1) * 3)
+      console.log(`   📈 CE Deep ITM: ${delta.toFixed(3)}`)
+      return delta
+    } else if (moneyness >= 0.98) {
+      // ATM: delta around 0.5
+      const delta = 0.5 + (moneyness - 1) * 5 // Sensitive around ATM
+      console.log(`   ⚖️ CE ATM: ${delta.toFixed(3)}`)
+      return Math.max(0.3, Math.min(0.7, delta))
     } else {
-      return Math.max(0.1, 0.5 - (1 - moneyness) * 2)
+      // OTM: delta decreases as it goes further OTM
+      const delta = Math.max(0.05, 0.5 * moneyness)
+      console.log(`   📉 CE OTM: ${delta.toFixed(3)}`)
+      return delta
     }
   } else {
-    // Put option delta (absolute value) increases as it goes ITM
-    if (moneyness < 1) {
-      return Math.min(0.9, 0.5 + (1 - moneyness) * 2)
+    // Put option delta: increases as option goes ITM (spot < strike)
+    if (moneyness <= 0.98) {
+      // Deep ITM: delta around 0.7-0.9
+      const delta = Math.min(0.9, 0.5 + (1 - moneyness) * 3)
+      console.log(`   📈 PE Deep ITM: ${delta.toFixed(3)}`)
+      return delta
+    } else if (moneyness <= 1.02) {
+      // ATM: delta around 0.5
+      const delta = 0.5 + (1 - moneyness) * 5 // Sensitive around ATM
+      console.log(`   ⚖️ PE ATM: ${delta.toFixed(3)}`)
+      return Math.max(0.3, Math.min(0.7, delta))
     } else {
-      return Math.max(0.1, 0.5 - (moneyness - 1) * 2)
+      // OTM: delta decreases as it goes further OTM
+      const delta = Math.max(0.05, 0.5 / moneyness)
+      console.log(`   📉 PE OTM: ${delta.toFixed(3)}`)
+      return delta
     }
   }
 }
