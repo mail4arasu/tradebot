@@ -260,19 +260,13 @@ export async function fetchOptionsQuotes(
     // Fetch NIFTY spot price for delta calculations
     const spotPrice = await fetchNiftySpotPrice(apiKey, accessToken)
     
-    // Fetch quotes using instrument tokens
-    const tokens = contractsWithTokens.map(c => `NFO:${c.instrumentToken}`)
-    console.log(`🔗 Quote API URL tokens: ${tokens.join(', ')}`)
+    // Fetch quotes using exchange:tradingsymbol format (NOT tokens)
+    const symbols = contractsWithTokens.map(c => `NFO:${c.zerodhaSymbol || c.symbol}`)
+    console.log(`🔗 Quote API symbols: ${symbols.join(', ')}`)
     
-    // Build correct URL format for multiple instruments
-    const quoteUrl = `https://api.kite.trade/quote?${tokens.map(token => `i=${encodeURIComponent(token)}`).join('&')}`
+    // Build correct URL format for multiple instruments using exchange:tradingsymbol
+    const quoteUrl = `https://api.kite.trade/quote?${symbols.map(symbol => `i=${encodeURIComponent(symbol)}`).join('&')}`
     console.log(`🌐 Quote API URL: ${quoteUrl}`)
-    
-    // Debug: Test with just the first token to see if that works
-    if (tokens.length > 0) {
-      const singleTokenUrl = `https://api.kite.trade/quote?i=${encodeURIComponent(tokens[0])}`
-      console.log(`🧪 Testing single token URL: ${singleTokenUrl}`)
-    }
     
     let quotesResponse
     try {
@@ -315,7 +309,7 @@ export async function fetchOptionsQuotes(
     }
     
     console.log(`📊 Quote response keys: ${Object.keys(quotesData.data || {}).join(', ')}`)
-    console.log(`📊 Expected tokens: ${contractsWithTokens.map(c => `NFO:${c.instrumentToken}`).join(', ')}`)
+    console.log(`📊 Expected symbols: ${symbols.join(', ')}`)
     
     // Debug: Check if we have any data at all
     const dataKeys = Object.keys(quotesData.data || {})
@@ -325,21 +319,38 @@ export async function fetchOptionsQuotes(
       console.log(`🔍 Full response:`, JSON.stringify(quotesData, null, 2))
     } else {
       console.log(`✅ Sample quote keys: ${dataKeys.slice(0, 5).join(', ')}`)
+      
+      // Debug: Show structure of first quote
+      const firstKey = dataKeys[0]
+      const firstQuote = quotesData.data[firstKey]
+      console.log(`🔍 First quote structure for ${firstKey}:`)
+      console.log(`   last_price: ${firstQuote?.last_price}`)
+      console.log(`   oi: ${firstQuote?.oi}`)
+      console.log(`   ohlc: ${JSON.stringify(firstQuote?.ohlc)}`)
+      console.log(`   volume: ${firstQuote?.volume}`)
     }
     
-    // Map quote data back to contracts
-    const updatedContracts = contractsWithTokens.map(contract => {
-      const tokenKey = `NFO:${contract.instrumentToken}`
-      const quote = quotesData.data[tokenKey]
+    // Map quote data back to contracts using exchange:tradingsymbol
+    const updatedContracts = contractsWithTokens.map((contract, index) => {
+      const symbolKey = symbols[index] // Use the symbol we built for the API call
+      const quote = quotesData.data[symbolKey]
       
       console.log(`🔍 Processing ${contract.symbol || contract.zerodhaSymbol}:`)
-      console.log(`   Token key: ${tokenKey}`)
+      console.log(`   Symbol key: ${symbolKey}`)
       console.log(`   Quote found: ${quote ? 'YES' : 'NO'}`)
+      
+      if (!quote) {
+        // Debug: Show what keys are actually available vs what we're looking for
+        const availableKeys = Object.keys(quotesData.data || {})
+        const similarKeys = availableKeys.filter(key => key.includes(contract.zerodhaSymbol || contract.symbol || ''))
+        console.log(`   🔍 Available similar keys: ${similarKeys.join(', ')}`)
+        console.log(`   🔍 First 3 available keys: ${availableKeys.slice(0, 3).join(', ')}`)
+      }
       
       if (quote) {
         console.log(`   Quote data: Premium=${quote.last_price}, OI=${quote.oi}`)
         
-        // Calculate delta using Black-Scholes model
+        // Calculate delta using Black-Scholes model with real data
         const delta = calculateDelta(quote, contract, spotPrice)
         
         console.log(`📊 Calculated Delta for ${contract.symbol}: ${delta.toFixed(3)}`)
@@ -352,47 +363,22 @@ export async function fetchOptionsQuotes(
         }
       } else {
         console.log(`❌ No quote data found for ${contract.symbol || contract.zerodhaSymbol}`)
-        console.log(`🔍 Attempting fallback delta calculation with estimated premium...`)
-        
-        // Fallback: Calculate delta with estimated premium for debugging
-        try {
-          const estimatedPremium = estimateOptionPremium(spotPrice, contract.strike, contract.optionType)
-          const fallbackQuote = {
-            last_price: estimatedPremium,
-            oi: 0,
-            volume: 0,
-            buy_quantity: 0,
-            sell_quantity: 0,
-            ohlc: { open: 0, high: 0, low: 0, close: 0 },
-            net_change: 0,
-            oi_day_high: 0,
-            oi_day_low: 0,
-            depth: { buy: [], sell: [] },
-            instrument_token: contract.instrumentToken || 0
-          }
-          
-          const delta = calculateDelta(fallbackQuote, contract, spotPrice)
-          console.log(`📊 Fallback Delta for ${contract.symbol}: ${delta.toFixed(3)} (estimated premium: ${estimatedPremium})`)
-          
-          return {
-            ...contract,
-            premium: estimatedPremium,
-            openInterest: 0,
-            delta: delta
-          }
-        } catch (error) {
-          console.error(`❌ Fallback delta calculation failed:`, error)
-        }
+        console.log(`❌ Skipping contract - no real market data available`)
       }
       
       return contract
     })
     
-    const contractsWithPremium = updatedContracts.filter(c => c.premium)
-    console.log(`📈 Successfully fetched quotes for ${contractsWithPremium.length} contracts`)
-    console.log(`📈 Contracts processed: ${updatedContracts.length}, with premium data: ${contractsWithPremium.length}`)
+    // Only return contracts with real market data (premium and OI)
+    const contractsWithRealData = updatedContracts.filter(c => c.premium !== undefined && c.openInterest !== undefined)
+    console.log(`📈 Successfully fetched quotes for ${contractsWithRealData.length} contracts`)
+    console.log(`📈 Contracts processed: ${updatedContracts.length}, with real market data: ${contractsWithRealData.length}`)
     
-    return updatedContracts
+    if (contractsWithRealData.length === 0) {
+      throw new Error('No real market data available from Zerodha API for any contracts')
+    }
+    
+    return contractsWithRealData
     
   } catch (error) {
     console.error('❌ Error fetching options quotes:', error)
@@ -677,28 +663,6 @@ function getTimeToExpiry(expiryString: string): number {
   
   // Convert to years and ensure minimum time
   return Math.max(1 / 365, daysToExpiry / 365) // Minimum 1 day
-}
-
-/**
- * Quick estimate of option premium for fallback scenarios
- */
-function estimateOptionPremium(spotPrice: number, strike: number, optionType: 'CE' | 'PE'): number {
-  const moneyness = spotPrice / strike
-  const intrinsic = optionType === 'CE' 
-    ? Math.max(0, spotPrice - strike)
-    : Math.max(0, strike - spotPrice)
-  
-  // Simple time value estimation based on moneyness
-  let timeValue = 0
-  if (Math.abs(moneyness - 1) < 0.02) { // ATM
-    timeValue = spotPrice * 0.01 // 1% of spot
-  } else if (Math.abs(moneyness - 1) < 0.05) { // Near ATM
-    timeValue = spotPrice * 0.005 // 0.5% of spot
-  } else {
-    timeValue = spotPrice * 0.002 // 0.2% of spot
-  }
-  
-  return Math.max(1, intrinsic + timeValue) // Minimum ₹1 premium
 }
 
 /**
