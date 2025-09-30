@@ -261,7 +261,32 @@ function findMatchingInstrument(contract: OptionsContract, instruments: ZerodhaO
   // Parse expiry date from contract
   const contractExpiryDate = new Date(contract.expiry)
   
-  // Find instrument that matches: name=NIFTY, strike, expiry, and instrument_type
+  console.log(`🔍 Looking for contract: ${contract.symbol}`)
+  console.log(`   Strike: ${contract.strike}, Option Type: ${contract.optionType}, Expiry: ${contract.expiry}`)
+  
+  // First, find all NIFTY options for this expiry to see what's available
+  const niftyOptionsForExpiry = instruments.filter(inst => 
+    inst.name === 'NIFTY' && 
+    (inst.instrument_type === 'CE' || inst.instrument_type === 'PE') &&
+    new Date(inst.expiry).getTime() === contractExpiryDate.getTime()
+  )
+  
+  console.log(`📊 Found ${niftyOptionsForExpiry.length} NIFTY options for expiry ${contract.expiry}`)
+  
+  // Show sample of available strikes for this expiry and option type
+  const sampleStrikes = niftyOptionsForExpiry
+    .filter(inst => inst.instrument_type === contract.optionType)
+    .slice(0, 10)
+    .map(inst => `${inst.tradingsymbol} (Strike: ${inst.strike})`)
+  
+  if (sampleStrikes.length > 0) {
+    console.log(`   Sample ${contract.optionType} strikes available:`)
+    sampleStrikes.forEach((strike, index) => {
+      console.log(`      ${index + 1}. ${strike}`)
+    })
+  }
+  
+  // Find exact match
   const match = instruments.find(instrument => {
     // Must be NIFTY options
     if (instrument.name !== 'NIFTY') return false
@@ -278,6 +303,25 @@ function findMatchingInstrument(contract: OptionsContract, instruments: ZerodhaO
     
     return true
   })
+  
+  if (match) {
+    console.log(`✅ MATCH FOUND: ${match.tradingsymbol} (Token: ${match.instrument_token})`)
+  } else {
+    console.log(`❌ NO MATCH: No instrument found for Strike ${contract.strike} ${contract.optionType} expiry ${contract.expiry}`)
+    
+    // Show the closest strikes available
+    const closestStrikes = niftyOptionsForExpiry
+      .filter(inst => inst.instrument_type === contract.optionType)
+      .sort((a, b) => Math.abs(a.strike - contract.strike) - Math.abs(b.strike - contract.strike))
+      .slice(0, 3)
+    
+    if (closestStrikes.length > 0) {
+      console.log(`   Closest available strikes:`)
+      closestStrikes.forEach((inst, index) => {
+        console.log(`      ${index + 1}. ${inst.tradingsymbol} (Strike: ${inst.strike})`)
+      })
+    }
+  }
   
   return match || null
 }
