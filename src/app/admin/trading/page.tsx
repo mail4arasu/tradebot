@@ -22,7 +22,10 @@ import {
   Send,
   Eye,
   Clock,
-  Settings
+  Settings,
+  Target,
+  Calculator,
+  Percent
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -55,6 +58,34 @@ interface EmergencyStatus {
   stoppedBots: number
 }
 
+interface OptionsSimulatorData {
+  action: 'BUY' | 'SELL'
+  date: string
+  price: number
+  capital: number
+  riskPercentage: number
+}
+
+interface SimulationResult {
+  selectedContract: {
+    symbol: string
+    strike: number
+    expiry: string
+    optionType: 'CE' | 'PE'
+  }
+  marketData: {
+    premium: number
+    delta: number
+    openInterest: number
+    lotSize: number
+  }
+  calculation: {
+    positionSize: number
+    totalInvestment: number
+    riskAmount: number
+  }
+}
+
 export default function TradingAdminDashboard() {
   const { data: session, status } = useSession()
   const { isAdmin, loading: adminLoading } = useAdmin()
@@ -70,6 +101,17 @@ export default function TradingAdminDashboard() {
     instrumentType: 'FUTURES'
   })
   const [testLoading, setTestLoading] = useState(false)
+  
+  // Options Simulator State
+  const [simulatorData, setSimulatorData] = useState<OptionsSimulatorData>({
+    action: 'BUY',
+    date: new Date().toISOString().split('T')[0],
+    price: 19500,
+    capital: 100000,
+    riskPercentage: 5
+  })
+  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null)
+  const [simulatorLoading, setSimulatorLoading] = useState(false)
 
   useEffect(() => {
     if (session) {
@@ -154,6 +196,30 @@ export default function TradingAdminDashboard() {
       alert('Failed to send test signal')
     } finally {
       setTestLoading(false)
+    }
+  }
+
+  const runOptionsSimulation = async () => {
+    try {
+      setSimulatorLoading(true)
+      const response = await fetch('/api/admin/options-simulator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(simulatorData)
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setSimulationResult(result.data)
+      } else {
+        alert(`Simulation failed: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Simulation error:', error)
+      alert('Failed to run simulation')
+    } finally {
+      setSimulatorLoading(false)
     }
   }
 
@@ -346,6 +412,205 @@ export default function TradingAdminDashboard() {
             <Send className="h-4 w-4 mr-2" />
             {testLoading ? 'Sending...' : 'Send Test Signal'}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Options Trading Simulator */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Options Trading Simulator
+          </CardTitle>
+          <CardDescription>
+            Test the Options Analysis Engine with real Zerodha API data to validate strike selection, premium, delta, and position sizing
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Input Parameters */}
+            <div className="space-y-4">
+              <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                <Calculator className="h-4 w-4" />
+                Simulation Parameters
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="sim-action">Action</Label>
+                  <select
+                    id="sim-action"
+                    className="w-full p-2 border rounded"
+                    value={simulatorData.action}
+                    onChange={(e) => setSimulatorData(prev => ({ 
+                      ...prev, 
+                      action: e.target.value as 'BUY' | 'SELL' 
+                    }))}
+                  >
+                    <option value="BUY">BUY (Call Options)</option>
+                    <option value="SELL">SELL (Put Options)</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="sim-date">Date (for expiry selection)</Label>
+                  <Input
+                    id="sim-date"
+                    type="date"
+                    value={simulatorData.date}
+                    onChange={(e) => setSimulatorData(prev => ({ ...prev, date: e.target.value }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="sim-price">Current Price (₹)</Label>
+                  <Input
+                    id="sim-price"
+                    type="number"
+                    step="0.5"
+                    value={simulatorData.price}
+                    onChange={(e) => setSimulatorData(prev => ({ 
+                      ...prev, 
+                      price: parseFloat(e.target.value) || 0 
+                    }))}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Used for ATM strike calculation</p>
+                </div>
+                
+                <div>
+                  <Label htmlFor="sim-capital">Capital Amount (₹)</Label>
+                  <Input
+                    id="sim-capital"
+                    type="number"
+                    step="1000"
+                    value={simulatorData.capital}
+                    onChange={(e) => setSimulatorData(prev => ({ 
+                      ...prev, 
+                      capital: parseFloat(e.target.value) || 0 
+                    }))}
+                  />
+                </div>
+                
+                <div className="md:col-span-2">
+                  <Label htmlFor="sim-risk" className="flex items-center gap-2">
+                    <Percent className="h-3 w-3" />
+                    Risk Percentage (%)
+                  </Label>
+                  <Input
+                    id="sim-risk"
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="50"
+                    value={simulatorData.riskPercentage}
+                    onChange={(e) => setSimulatorData(prev => ({ 
+                      ...prev, 
+                      riskPercentage: parseFloat(e.target.value) || 0 
+                    }))}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Percentage of capital to risk (Risk Amount: ₹{(simulatorData.capital * simulatorData.riskPercentage / 100).toLocaleString()})
+                  </p>
+                </div>
+              </div>
+              
+              <Button 
+                onClick={runOptionsSimulation} 
+                disabled={simulatorLoading}
+                className="w-full bg-purple-600 hover:bg-purple-700"
+              >
+                <Target className="h-4 w-4 mr-2" />
+                {simulatorLoading ? 'Running Simulation...' : 'Run Options Simulation'}
+              </Button>
+            </div>
+
+            {/* Simulation Results */}
+            <div className="space-y-4">
+              <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4" />
+                Simulation Results
+              </h4>
+              
+              {simulationResult ? (
+                <div className="space-y-4">
+                  {/* Selected Contract */}
+                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <h5 className="font-medium text-purple-900 mb-2">Selected Options Contract</h5>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">Symbol:</span>
+                        <span className="ml-2 font-mono font-medium">{simulationResult.selectedContract.symbol}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Strike:</span>
+                        <span className="ml-2 font-medium">₹{simulationResult.selectedContract.strike}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Expiry:</span>
+                        <span className="ml-2 font-medium">{simulationResult.selectedContract.expiry}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Type:</span>
+                        <span className="ml-2 font-medium">{simulationResult.selectedContract.optionType}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Market Data */}
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h5 className="font-medium text-blue-900 mb-2">Live Market Data (Zerodha API)</h5>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">Premium:</span>
+                        <span className="ml-2 font-medium">₹{simulationResult.marketData.premium.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Delta:</span>
+                        <span className="ml-2 font-medium">{simulationResult.marketData.delta.toFixed(3)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Open Interest:</span>
+                        <span className="ml-2 font-medium">{simulationResult.marketData.openInterest.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Lot Size:</span>
+                        <span className="ml-2 font-medium">{simulationResult.marketData.lotSize}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Position Calculation */}
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <h5 className="font-medium text-green-900 mb-2">Position Size Calculation</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Position Size:</span>
+                        <span className="font-medium">{simulationResult.calculation.positionSize} lots</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Total Investment:</span>
+                        <span className="font-medium">₹{simulationResult.calculation.totalInvestment.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Risk Amount:</span>
+                        <span className="font-medium">₹{simulationResult.calculation.riskAmount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between border-t pt-2">
+                        <span className="text-gray-500">Quantity:</span>
+                        <span className="font-medium">{simulationResult.calculation.positionSize * simulationResult.marketData.lotSize}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">
+                  <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Run a simulation to see results</p>
+                  <p className="text-sm">This will test the complete Options Analysis Engine with real Zerodha API data</p>
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
