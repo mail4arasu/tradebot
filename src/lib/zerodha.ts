@@ -113,6 +113,74 @@ export class ZerodhaAPI {
     }
   }
 
+  // New method to fetch historical trades using orders endpoint
+  async getHistoricalTrades(fromDate?: string, toDate?: string) {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      // Zerodha's /trades endpoint only gives current day trades
+      // For historical data, we need to use /orders endpoint and filter completed orders
+      const response = await fetch(`${this.baseUrl}/orders`, {
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.accessToken}`,
+          'X-Kite-Version': '3'
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to fetch orders: ${error}`)
+      }
+      
+      const ordersData = await response.json()
+      const orders = ordersData.data || []
+      
+      // Filter completed orders and convert to trade-like format
+      const historicalTrades = orders
+        .filter((order: any) => order.status === 'COMPLETE' && order.filled_quantity > 0)
+        .map((order: any) => ({
+          trade_id: `${order.order_id}_${order.order_timestamp}`, // Generate unique trade ID
+          order_id: order.order_id,
+          tradingsymbol: order.tradingsymbol,
+          exchange: order.exchange,
+          instrument_token: order.instrument_token,
+          transaction_type: order.transaction_type,
+          quantity: order.filled_quantity,
+          price: order.average_price || order.price,
+          product: order.product,
+          order_type: order.order_type,
+          trade_date: order.order_timestamp,
+          fill_timestamp: order.order_timestamp,
+          // Mark as historical data
+          _source: 'historical_orders'
+        }))
+      
+      // Apply date filtering if provided
+      let filteredTrades = historicalTrades
+      if (fromDate || toDate) {
+        filteredTrades = historicalTrades.filter((trade: any) => {
+          const tradeDate = new Date(trade.trade_date)
+          const from = fromDate ? new Date(fromDate) : null
+          const to = toDate ? new Date(toDate + 'T23:59:59') : null
+          
+          if (from && tradeDate < from) return false
+          if (to && tradeDate > to) return false
+          return true
+        })
+      }
+      
+      return {
+        status: 'success',
+        data: filteredTrades
+      }
+    } catch (error) {
+      console.error('Error fetching historical trades:', error)
+      throw error
+    }
+  }
+
   async getPositions() {
     if (!this.accessToken) {
       throw new Error('Access token required. Please complete OAuth flow first.')

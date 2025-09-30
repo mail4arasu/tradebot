@@ -36,11 +36,36 @@ export async function POST(request: NextRequest) {
         user.zerodhaConfig.accessToken
       )
 
-      // Fetch current day trades from Zerodha
-      const tradesResponse = await zerodhaAPI.getTrades()
-      const zerodhaTradesData = tradesResponse.data || []
+      // Fetch both current day trades and recent historical trades
+      console.log(`Starting trade sync for user ${user.email}`)
       
-      console.log(`Syncing ${zerodhaTradesData.length} trades for user ${user.email}`)
+      // Get current day trades
+      const currentTradesResponse = await zerodhaAPI.getTrades()
+      const currentTrades = currentTradesResponse.data || []
+      
+      // Get historical trades from last 30 days
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const fromDate = thirtyDaysAgo.toISOString().split('T')[0]
+      const toDate = new Date().toISOString().split('T')[0]
+      
+      console.log(`Fetching historical trades from ${fromDate} to ${toDate}`)
+      const historicalTradesResponse = await zerodhaAPI.getHistoricalTrades(fromDate, toDate)
+      const historicalTrades = historicalTradesResponse.data || []
+      
+      // Combine both current and historical trades, removing duplicates
+      const allTrades = [...currentTrades]
+      
+      // Add historical trades that don't exist in current trades
+      for (const historicalTrade of historicalTrades) {
+        const existsInCurrent = currentTrades.find(ct => ct.order_id === historicalTrade.order_id)
+        if (!existsInCurrent) {
+          allTrades.push(historicalTrade)
+        }
+      }
+      
+      const zerodhaTradesData = allTrades
+      console.log(`Syncing ${zerodhaTradesData.length} trades (${currentTrades.length} current + ${historicalTrades.length} historical) for user ${user.email}`)
 
       let syncedCount = 0
       let skippedCount = 0
