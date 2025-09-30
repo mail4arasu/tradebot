@@ -125,7 +125,7 @@ function formatExpiryForSymbol(date: Date): string {
 }
 
 /**
- * Fetch quote data for multiple options contracts
+ * Fetch quote data for multiple options contracts using proper Zerodha approach
  */
 export async function fetchOptionsQuotes(
   contracts: OptionsContract[],
@@ -133,19 +133,36 @@ export async function fetchOptionsQuotes(
   accessToken: string
 ): Promise<OptionsContract[]> {
   try {
-    // Get instrument tokens for the symbols
-    const instrumentTokens = await getInstrumentTokens(
-      contracts.map(c => c.symbol),
-      apiKey,
-      accessToken
-    )
+    console.log(`🔍 Looking for ${contracts.length} options contracts in Zerodha instruments`)
     
-    if (instrumentTokens.length === 0) {
-      throw new Error('No instrument tokens found for the symbols')
+    // Get all NFO instruments
+    const instruments = await fetchNFOInstruments(apiKey, accessToken)
+    
+    // Find matching instruments for each contract
+    const contractsWithTokens = contracts.map(contract => {
+      const matchingInstrument = findMatchingInstrument(contract, instruments)
+      if (matchingInstrument) {
+        console.log(`✅ Found: ${contract.symbol} → ${matchingInstrument.tradingsymbol} (Token: ${matchingInstrument.instrument_token})`)
+        return {
+          ...contract,
+          instrumentToken: matchingInstrument.instrument_token,
+          zerodhaSymbol: matchingInstrument.tradingsymbol
+        }
+      } else {
+        console.log(`❌ Not found: ${contract.symbol}`)
+        return contract
+      }
+    })
+    
+    // Get tokens for found instruments
+    const foundContracts = contractsWithTokens.filter(c => c.instrumentToken)
+    if (foundContracts.length === 0) {
+      throw new Error('No matching instruments found in Zerodha NFO list')
     }
     
-    // Fetch quotes for all tokens
-    const quotesResponse = await fetch(`https://api.kite.trade/quote?i=${instrumentTokens.join('&i=')}`, {
+    // Fetch quotes using instrument tokens
+    const tokens = foundContracts.map(c => `NFO:${c.instrumentToken}`)
+    const quotesResponse = await fetch(`https://api.kite.trade/quote?i=${tokens.join('&i=')}`, {
       method: 'GET',
       headers: {
         'X-Kite-Version': '3',
@@ -160,14 +177,13 @@ export async function fetchOptionsQuotes(
     const quotesData = await quotesResponse.json()
     
     // Map quote data back to contracts
-    const updatedContracts = contracts.map(contract => {
-      const tokenKey = Object.keys(quotesData.data).find(key => {
-        const quote = quotesData.data[key]
-        return quote.tradingsymbol === contract.symbol
-      })
+    const updatedContracts = contractsWithTokens.map(contract => {
+      if (!contract.instrumentToken) return contract
       
-      if (tokenKey) {
-        const quote: ZerodhaQuoteData = quotesData.data[tokenKey]
+      const tokenKey = `NFO:${contract.instrumentToken}`
+      const quote = quotesData.data[tokenKey]
+      
+      if (quote) {
         return {
           ...contract,
           premium: quote.last_price,
@@ -179,6 +195,7 @@ export async function fetchOptionsQuotes(
       return contract
     })
     
+    console.log(`📈 Successfully fetched quotes for ${updatedContracts.filter(c => c.premium).length} contracts`)
     return updatedContracts
     
   } catch (error) {
@@ -188,68 +205,80 @@ export async function fetchOptionsQuotes(
 }
 
 /**
- * Get instrument tokens for given trading symbols
+ * Fetch all NFO instruments from Zerodha
  */
-async function getInstrumentTokens(
-  symbols: string[],
-  apiKey: string,
-  accessToken: string
-): Promise<string[]> {
-  try {
-    console.log(`🔍 Searching for symbols: ${symbols.join(', ')}`)
-    
-    const response = await fetch('https://api.kite.trade/instruments/NFO', {
-      method: 'GET',
-      headers: {
-        'X-Kite-Version': '3',
-        'Authorization': `token ${apiKey}:${accessToken}`
-      }
-    })
+async function fetchNFOInstruments(apiKey: string, accessToken: string): Promise<ZerodhaOptionsData[]> {
+  const response = await fetch('https://api.kite.trade/instruments/NFO', {
+    method: 'GET',
+    headers: {
+      'X-Kite-Version': '3',
+      'Authorization': `token ${apiKey}:${accessToken}`
+    }
+  })
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch instruments: ${response.statusText}`)
-    }
-
-    const csvData = await response.text()
-    const lines = csvData.split('\n')
-    const tokens: string[] = []
-    const availableNiftyOptions: string[] = []
-    
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (!line) continue
-      
-      const data = line.split(',')
-      const instrumentToken = data[0] // instrument_token
-      const tradingSymbol = data[2] // tradingsymbol
-      const instrumentType = data[9] // instrument_type
-      
-      // Collect sample NIFTY options for comparison
-      if (tradingSymbol && tradingSymbol.startsWith('NIFTY') && 
-          (instrumentType === 'CE' || instrumentType === 'PE') && 
-          availableNiftyOptions.length < 10) {
-        availableNiftyOptions.push(tradingSymbol)
-      }
-      
-      if (symbols.includes(tradingSymbol)) {
-        tokens.push(`NFO:${instrumentToken}`)
-        console.log(`✅ Found matching symbol: ${tradingSymbol} → ${instrumentToken}`)
-      }
-    }
-    
-    if (tokens.length === 0) {
-      console.log(`❌ No matching symbols found. Sample NIFTY options available:`)
-      availableNiftyOptions.forEach((symbol, index) => {
-        console.log(`   ${index + 1}. ${symbol}`)
-      })
-    }
-    
-    return tokens
-    
-  } catch (error) {
-    console.error('Error getting instrument tokens:', error)
-    return []
+  if (!response.ok) {
+    throw new Error(`Failed to fetch instruments: ${response.statusText}`)
   }
+
+  const csvData = await response.text()
+  const lines = csvData.split('\n')
+  const instruments: ZerodhaOptionsData[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+    
+    const data = line.split(',')
+    
+    // Skip if not enough columns
+    if (data.length < 12) continue
+    
+    instruments.push({
+      instrument_token: parseInt(data[0]),
+      exchange_token: parseInt(data[1]),
+      tradingsymbol: data[2],
+      name: data[3],
+      last_price: parseFloat(data[4]) || 0,
+      expiry: data[5],
+      strike: parseFloat(data[6]) || 0,
+      tick_size: parseFloat(data[7]) || 0,
+      lot_size: parseInt(data[8]) || 0,
+      instrument_type: data[9],
+      segment: data[10],
+      exchange: data[11]
+    })
+  }
+  
+  console.log(`📊 Loaded ${instruments.length} NFO instruments`)
+  return instruments
+}
+
+/**
+ * Find matching Zerodha instrument for our contract
+ */
+function findMatchingInstrument(contract: OptionsContract, instruments: ZerodhaOptionsData[]): ZerodhaOptionsData | null {
+  // Parse expiry date from contract
+  const contractExpiryDate = new Date(contract.expiry)
+  
+  // Find instrument that matches: name=NIFTY, strike, expiry, and instrument_type
+  const match = instruments.find(instrument => {
+    // Must be NIFTY options
+    if (instrument.name !== 'NIFTY') return false
+    
+    // Must match strike price
+    if (instrument.strike !== contract.strike) return false
+    
+    // Must match option type (CE/PE)
+    if (instrument.instrument_type !== contract.optionType) return false
+    
+    // Must match expiry date
+    const instrumentExpiryDate = new Date(instrument.expiry)
+    if (instrumentExpiryDate.getTime() !== contractExpiryDate.getTime()) return false
+    
+    return true
+  })
+  
+  return match || null
 }
 
 /**

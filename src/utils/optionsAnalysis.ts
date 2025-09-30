@@ -11,6 +11,8 @@ export interface OptionsContract {
   delta?: number
   openInterest?: number
   premium?: number
+  instrumentToken?: number
+  zerodhaSymbol?: string
 }
 
 export interface ExpiryDate {
@@ -49,12 +51,12 @@ export function generateStrikePrices(atmStrike: number): number[] {
 }
 
 /**
- * Format expiry date to NIFTY symbol format (YYMMDD)
+ * Format expiry date to Zerodha symbol format (YYMMMD - no leading zero for day)
  */
 export function formatExpiryForSymbol(expiryDate: Date): string {
   const year = expiryDate.getFullYear().toString().slice(-2)
   const month = expiryDate.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-  const day = expiryDate.getDate().toString().padStart(2, '0')
+  const day = expiryDate.getDate().toString() // No padding for Zerodha format
   
   return `${year}${month}${day}`
 }
