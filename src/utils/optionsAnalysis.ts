@@ -95,12 +95,38 @@ export function generateOptionsContracts(
  * Priority: Highest delta (minimum 0.6) with good open interest
  */
 export function selectBestContract(contracts: OptionsContract[]): OptionsContract | null {
+  console.log(`\n🔍 CONTRACT SELECTION ANALYSIS:`)
+  console.log(`📊 Total contracts received: ${contracts.length}`)
+  
+  // Log all contracts with their delta values for manual comparison
+  console.log(`\n📋 ALL CONTRACTS WITH DELTA VALUES:`)
+  contracts.forEach((contract, index) => {
+    const delta = contract.delta !== undefined ? contract.delta.toFixed(3) : 'undefined'
+    const premium = contract.premium !== undefined ? `₹${contract.premium.toFixed(2)}` : 'N/A'
+    const oi = contract.openInterest !== undefined ? contract.openInterest.toLocaleString() : 'N/A'
+    
+    console.log(`   ${index + 1}. ${contract.symbol || contract.zerodhaSymbol}`)
+    console.log(`      Strike: ${contract.strike} | Delta: ${delta} | Premium: ${premium} | OI: ${oi}`)
+  })
+  
   // Filter contracts with delta >= 0.6
   const validContracts = contracts.filter(contract => 
     contract.delta !== undefined && contract.delta >= 0.6
   )
   
+  console.log(`\n✅ Contracts meeting delta ≥ 0.6 requirement: ${validContracts.length}`)
+  
   if (validContracts.length === 0) {
+    console.log(`❌ NO CONTRACTS MEET MINIMUM DELTA 0.6 REQUIREMENT`)
+    
+    // Show the highest delta we found
+    const contractsWithDelta = contracts.filter(c => c.delta !== undefined)
+    if (contractsWithDelta.length > 0) {
+      const highestDelta = Math.max(...contractsWithDelta.map(c => c.delta!))
+      const bestContract = contractsWithDelta.find(c => c.delta === highestDelta)
+      console.log(`📈 Highest delta found: ${highestDelta.toFixed(3)} (${bestContract?.symbol || bestContract?.zerodhaSymbol})`)
+    }
+    
     return null // No contract meets minimum delta requirement
   }
   
@@ -116,6 +142,9 @@ export function selectBestContract(contracts: OptionsContract[]): OptionsContrac
     const bOI = b.openInterest || 0
     return bOI - aOI
   })
+  
+  console.log(`🏆 SELECTED CONTRACT: ${validContracts[0].symbol || validContracts[0].zerodhaSymbol}`)
+  console.log(`   Delta: ${validContracts[0].delta!.toFixed(3)} | Premium: ₹${validContracts[0].premium!.toFixed(2)} | OI: ${validContracts[0].openInterest!.toLocaleString()}`)
   
   return validContracts[0]
 }

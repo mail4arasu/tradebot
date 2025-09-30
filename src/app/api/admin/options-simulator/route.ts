@@ -103,6 +103,12 @@ export async function POST(request: NextRequest) {
       }
       
       console.log(`💼 Found ${contracts.length} contracts from Zerodha instruments`)
+      
+      // Log each contract details for debugging
+      contracts.forEach((contract, index) => {
+        console.log(`   ${index + 1}. ${contract.symbol || contract.zerodhaSymbol}`)
+        console.log(`      Strike: ${contract.strike}, Token: ${contract.instrumentToken}, Type: ${contract.optionType}`)
+      })
     } catch (error: any) {
       if (error.message.includes('Incorrect `api_key` or `access_token`') || 
           error.message.includes('TokenException')) {
@@ -114,11 +120,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 7: Fetch real-time quotes from Zerodha API
+    console.log(`\n🎯 STEP 7: QUOTE FETCHING`)
+    console.log(`📊 About to fetch quotes for ${contracts.length} contracts`)
+    console.log(`🔧 Using API Key: ${apiKey ? apiKey.substring(0, 8) + '...' : 'MISSING'}`)
+    console.log(`🔧 Using Access Token: ${accessToken ? accessToken.substring(0, 8) + '...' : 'MISSING'}`)
+    
     let contractsWithData
     try {
+      console.log(`🚀 Calling fetchOptionsQuotes function...`)
       contractsWithData = await fetchOptionsQuotes(contracts, apiKey, accessToken)
       console.log(`📈 Fetched quotes for ${contractsWithData.length} contracts`)
     } catch (error: any) {
+      console.error(`❌ Error in fetchOptionsQuotes:`, error)
       if (error.message.includes('Incorrect `api_key` or `access_token`') || 
           error.message.includes('TokenException')) {
         return NextResponse.json({ 
@@ -129,8 +142,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 8: Select best contract based on delta and OI
+    console.log(`\n🎯 STEP 8: CONTRACT SELECTION`)
+    console.log(`📊 Contracts with market data: ${contractsWithData.length}`)
+    
     const bestContract = selectBestContract(contractsWithData)
     if (!bestContract) {
+      console.log(`❌ SIMULATION FAILED: No contracts found with delta ≥ 0.6`)
+      
+      // For debugging: show what we actually got
+      const contractsWithDelta = contractsWithData.filter(c => c.delta !== undefined)
+      if (contractsWithDelta.length > 0) {
+        const deltas = contractsWithDelta.map(c => c.delta!.toFixed(3)).join(', ')
+        console.log(`📊 All calculated deltas: [${deltas}]`)
+        
+        const highestDelta = Math.max(...contractsWithDelta.map(c => c.delta!))
+        console.log(`📈 Highest delta: ${highestDelta.toFixed(3)}`)
+      }
+      
       return NextResponse.json({ 
         error: 'No suitable options contract found (minimum delta 0.6 required)' 
       }, { status: 400 })

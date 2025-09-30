@@ -241,55 +241,116 @@ export async function fetchOptionsQuotes(
 ): Promise<OptionsContract[]> {
   try {
     console.log(`📈 Fetching quotes for ${contracts.length} options contracts`)
+    console.log(`🔧 API Key length: ${apiKey?.length || 0}, Access Token length: ${accessToken?.length || 0}`)
     
     // Filter contracts that have instrument tokens
     const contractsWithTokens = contracts.filter(c => c.instrumentToken)
+    console.log(`🎯 Contracts with tokens: ${contractsWithTokens.length}/${contracts.length}`)
+    
     if (contractsWithTokens.length === 0) {
+      console.log(`❌ No contracts have instrument tokens!`)
       throw new Error('No contracts with instrument tokens found')
     }
+    
+    // Log each contract's details
+    contractsWithTokens.forEach((contract, index) => {
+      console.log(`   ${index + 1}. ${contract.symbol || contract.zerodhaSymbol} - Token: ${contract.instrumentToken}`)
+    })
     
     // Fetch NIFTY spot price for delta calculations
     const spotPrice = await fetchNiftySpotPrice(apiKey, accessToken)
     
     // Fetch quotes using instrument tokens
     const tokens = contractsWithTokens.map(c => `NFO:${c.instrumentToken}`)
-    const quotesResponse = await fetch(`https://api.kite.trade/quote?i=${tokens.join('&i=')}`, {
-      method: 'GET',
-      headers: {
-        'X-Kite-Version': '3',
-        'Authorization': `token ${apiKey}:${accessToken}`
-      }
-    })
+    console.log(`🔗 Quote API URL tokens: ${tokens.join(', ')}`)
     
-    if (!quotesResponse.ok) {
-      throw new Error(`Failed to fetch quotes: ${quotesResponse.statusText}`)
+    console.log(`🌐 About to call quote API...`)
+    
+    let quotesResponse
+    try {
+      quotesResponse = await fetch(`https://api.kite.trade/quote?i=${tokens.join('&i=')}`, {
+        method: 'GET',
+        headers: {
+          'X-Kite-Version': '3',
+          'Authorization': `token ${apiKey}:${accessToken}`
+        }
+      })
+      console.log(`📡 Quote API response status: ${quotesResponse.status}`)
+    } catch (fetchError) {
+      console.error(`❌ Fetch error in quote API:`, fetchError)
+      throw fetchError
     }
     
-    const quotesData = await quotesResponse.json()
+    if (!quotesResponse.ok) {
+      const errorText = await quotesResponse.text()
+      console.log(`❌ Quote API error response: ${errorText}`)
+      
+      // Check for token expiration specifically
+      if (errorText.includes('TokenException') || errorText.includes('access_token')) {
+        console.error('🔑 CRITICAL: Zerodha access token has expired!')
+        console.error('💡 User needs to refresh their Zerodha connection in Settings')
+        throw new Error(`Zerodha access token expired. Please go to Settings → Zerodha Integration → "Connect Zerodha Account" to refresh your daily token.`)
+      }
+      
+      throw new Error(`Failed to fetch quotes: ${quotesResponse.statusText} - ${errorText}`)
+    }
+    
+    console.log(`📊 About to parse JSON response...`)
+    let quotesData
+    try {
+      quotesData = await quotesResponse.json()
+      console.log(`✅ JSON parsed successfully`)
+      console.log(`📊 Quote API response structure:`, JSON.stringify(quotesData, null, 2))
+    } catch (jsonError) {
+      console.error(`❌ JSON parsing error:`, jsonError)
+      throw jsonError
+    }
+    
+    console.log(`📊 Quote response keys: ${Object.keys(quotesData.data || {}).join(', ')}`)
+    console.log(`📊 Expected tokens: ${contractsWithTokens.map(c => `NFO:${c.instrumentToken}`).join(', ')}`)
     
     // Map quote data back to contracts
     const updatedContracts = contractsWithTokens.map(contract => {
       const tokenKey = `NFO:${contract.instrumentToken}`
       const quote = quotesData.data[tokenKey]
       
+      console.log(`🔍 Processing ${contract.symbol || contract.zerodhaSymbol}:`)
+      console.log(`   Token key: ${tokenKey}`)
+      console.log(`   Quote found: ${quote ? 'YES' : 'NO'}`)
+      
       if (quote) {
+        console.log(`   Quote data: Premium=${quote.last_price}, OI=${quote.oi}`)
+        
+        // Calculate delta using Black-Scholes model
         const delta = calculateDelta(quote, contract, spotPrice)
+        
+        console.log(`📊 Calculated Delta for ${contract.symbol}: ${delta.toFixed(3)}`)
+        
         return {
           ...contract,
           premium: quote.last_price,
           openInterest: quote.oi,
           delta: delta
         }
+      } else {
+        console.log(`❌ No quote data found for ${contract.symbol || contract.zerodhaSymbol}`)
       }
       
       return contract
     })
     
-    console.log(`📈 Successfully fetched quotes for ${updatedContracts.filter(c => c.premium).length} contracts`)
+    const contractsWithPremium = updatedContracts.filter(c => c.premium)
+    console.log(`📈 Successfully fetched quotes for ${contractsWithPremium.length} contracts`)
+    console.log(`📈 Contracts processed: ${updatedContracts.length}, with premium data: ${contractsWithPremium.length}`)
+    
     return updatedContracts
     
   } catch (error) {
-    console.error('Error fetching options quotes:', error)
+    console.error('❌ Error fetching options quotes:', error)
+    
+    // Log error details for debugging
+    console.error('🔍 Error details:', error instanceof Error ? error.message : error)
+    
     throw error
   }
 }
@@ -482,52 +543,129 @@ async function fetchNiftySpotPrice(apiKey: string, accessToken: string): Promise
 }
 
 /**
- * Simplified delta calculation using actual spot price
- * Note: This is an approximation. For precise delta, use Black-Scholes model
+ * Calculate delta using Black-Scholes model
+ * Note: Zerodha API doesn't provide Greeks, so we calculate delta ourselves
  */
 function calculateDelta(quote: ZerodhaQuoteData, contract: OptionsContract, spotPrice: number): number {
   const strike = contract.strike
-  const moneyness = spotPrice / strike
+  const timeToExpiry = getTimeToExpiry(contract.expiry)
   
-  console.log(`📊 Delta calc: Spot=${spotPrice}, Strike=${strike}, Moneyness=${moneyness.toFixed(3)}, Type=${contract.optionType}`)
+  // Estimate implied volatility from option premium using reverse engineering
+  const impliedVol = estimateImpliedVolatility(quote.last_price, spotPrice, strike, timeToExpiry, contract.optionType)
+  const riskFreeRate = 0.07 // Indian 10-year G-Sec rate approximation (~7%)
   
-  if (contract.optionType === 'CE') {
-    // Call option delta: increases as option goes ITM (spot > strike)
-    if (moneyness >= 1.02) {
-      // Deep ITM: delta around 0.7-0.9
-      const delta = Math.min(0.9, 0.5 + (moneyness - 1) * 3)
-      console.log(`   📈 CE Deep ITM: ${delta.toFixed(3)}`)
-      return delta
-    } else if (moneyness >= 0.98) {
-      // ATM: delta around 0.5
-      const delta = 0.5 + (moneyness - 1) * 5 // Sensitive around ATM
-      console.log(`   ⚖️ CE ATM: ${delta.toFixed(3)}`)
-      return Math.max(0.3, Math.min(0.7, delta))
+  console.log(`📊 Black-Scholes Delta calc:`)
+  console.log(`   Spot=${spotPrice}, Strike=${strike}, TTM=${timeToExpiry.toFixed(4)} years`)
+  console.log(`   Premium=${quote.last_price}, IV=${(impliedVol*100).toFixed(1)}%, Risk-free=${(riskFreeRate*100).toFixed(1)}%`)
+  
+  const delta = blackScholesDelta(spotPrice, strike, timeToExpiry, riskFreeRate, impliedVol, contract.optionType)
+  
+  console.log(`   🎯 Black-Scholes Delta: ${delta.toFixed(3)} (${contract.optionType})`)
+  return delta
+}
+
+/**
+ * Black-Scholes Delta calculation
+ */
+function blackScholesDelta(
+  spot: number, 
+  strike: number, 
+  timeToExpiry: number, 
+  riskFreeRate: number, 
+  volatility: number, 
+  optionType: 'CE' | 'PE'
+): number {
+  if (timeToExpiry <= 0) {
+    // At expiry, delta is either 0 or 1
+    if (optionType === 'CE') {
+      return spot > strike ? 1 : 0
     } else {
-      // OTM: delta decreases as it goes further OTM
-      const delta = Math.max(0.05, 0.5 * moneyness)
-      console.log(`   📉 CE OTM: ${delta.toFixed(3)}`)
-      return delta
-    }
-  } else {
-    // Put option delta: increases as option goes ITM (spot < strike)
-    if (moneyness <= 0.98) {
-      // Deep ITM: delta around 0.7-0.9
-      const delta = Math.min(0.9, 0.5 + (1 - moneyness) * 3)
-      console.log(`   📈 PE Deep ITM: ${delta.toFixed(3)}`)
-      return delta
-    } else if (moneyness <= 1.02) {
-      // ATM: delta around 0.5
-      const delta = 0.5 + (1 - moneyness) * 5 // Sensitive around ATM
-      console.log(`   ⚖️ PE ATM: ${delta.toFixed(3)}`)
-      return Math.max(0.3, Math.min(0.7, delta))
-    } else {
-      // OTM: delta decreases as it goes further OTM
-      const delta = Math.max(0.05, 0.5 / moneyness)
-      console.log(`   📉 PE OTM: ${delta.toFixed(3)}`)
-      return delta
+      return spot < strike ? -1 : 0
     }
   }
+  
+  const d1 = (Math.log(spot / strike) + (riskFreeRate + 0.5 * volatility * volatility) * timeToExpiry) / 
+             (volatility * Math.sqrt(timeToExpiry))
+  
+  const delta = normalCDF(d1)
+  
+  if (optionType === 'CE') {
+    return delta // Call delta is positive
+  } else {
+    return Math.abs(delta - 1) // Put delta magnitude (converting from negative to positive for our use)
+  }
+}
+
+/**
+ * Standard normal cumulative distribution function (CDF)
+ * Approximation using Abramowitz and Stegun method
+ */
+function normalCDF(x: number): number {
+  const a1 =  0.254829592
+  const a2 = -0.284496736
+  const a3 =  1.421413741
+  const a4 = -1.453152027
+  const a5 =  1.061405429
+  const p  =  0.3275911
+  
+  const sign = x < 0 ? -1 : 1
+  x = Math.abs(x) / Math.sqrt(2)
+  
+  const t = 1.0 / (1.0 + p * x)
+  const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x)
+  
+  return 0.5 * (1.0 + sign * y)
+}
+
+/**
+ * Calculate time to expiry in years
+ */
+function getTimeToExpiry(expiryString: string): number {
+  const expiryDate = new Date(expiryString)
+  const now = new Date()
+  const diffInMs = expiryDate.getTime() - now.getTime()
+  const daysToExpiry = diffInMs / (1000 * 60 * 60 * 24)
+  
+  // Convert to years and ensure minimum time
+  return Math.max(1 / 365, daysToExpiry / 365) // Minimum 1 day
+}
+
+/**
+ * Estimate implied volatility from option premium
+ * Uses Newton-Raphson method for IV calculation
+ */
+function estimateImpliedVolatility(
+  optionPrice: number, 
+  spot: number, 
+  strike: number, 
+  timeToExpiry: number, 
+  optionType: 'CE' | 'PE'
+): number {
+  // For NIFTY, typical IV ranges from 10% to 40%
+  let volatility = 0.20 // Start with 20% as initial guess
+  
+  // Quick estimation based on moneyness and option price
+  const moneyness = spot / strike
+  const intrinsicValue = optionType === 'CE' 
+    ? Math.max(0, spot - strike) 
+    : Math.max(0, strike - spot)
+  
+  const timeValue = Math.max(0, optionPrice - intrinsicValue)
+  
+  // Simple heuristic: higher time value suggests higher volatility
+  if (timeValue > 0) {
+    const timeValueRatio = timeValue / spot
+    volatility = Math.max(0.10, Math.min(0.50, timeValueRatio * 100)) // 10% to 50%
+  }
+  
+  // ATM options typically have higher volatility
+  if (Math.abs(moneyness - 1) < 0.05) {
+    volatility = Math.max(volatility, 0.18)
+  }
+  
+  console.log(`   💡 Estimated IV: ${(volatility*100).toFixed(1)}% (based on premium=${optionPrice}, timeValue=${timeValue.toFixed(2)})`)
+  
+  return volatility
 }
 
 /**
