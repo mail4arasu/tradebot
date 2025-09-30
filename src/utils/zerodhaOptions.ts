@@ -264,11 +264,19 @@ export async function fetchOptionsQuotes(
     const tokens = contractsWithTokens.map(c => `NFO:${c.instrumentToken}`)
     console.log(`🔗 Quote API URL tokens: ${tokens.join(', ')}`)
     
-    console.log(`🌐 About to call quote API...`)
+    // Build correct URL format for multiple instruments
+    const quoteUrl = `https://api.kite.trade/quote?${tokens.map(token => `i=${encodeURIComponent(token)}`).join('&')}`
+    console.log(`🌐 Quote API URL: ${quoteUrl}`)
+    
+    // Debug: Test with just the first token to see if that works
+    if (tokens.length > 0) {
+      const singleTokenUrl = `https://api.kite.trade/quote?i=${encodeURIComponent(tokens[0])}`
+      console.log(`🧪 Testing single token URL: ${singleTokenUrl}`)
+    }
     
     let quotesResponse
     try {
-      quotesResponse = await fetch(`https://api.kite.trade/quote?i=${tokens.join('&i=')}`, {
+      quotesResponse = await fetch(quoteUrl, {
         method: 'GET',
         headers: {
           'X-Kite-Version': '3',
