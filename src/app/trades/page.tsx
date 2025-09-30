@@ -141,6 +141,28 @@ export default function Trades() {
         const data = await response.json()
         let filteredTrades = data.trades || []
         
+        // Apply client-side date filtering (important for hybrid data that includes live trades)
+        if (tradeFilters.startDate || tradeFilters.endDate) {
+          filteredTrades = filteredTrades.filter((trade: Trade) => {
+            try {
+              if (!trade.trade_date) return true // Include trades without dates
+              
+              const tradeDate = new Date(trade.trade_date)
+              const startDate = tradeFilters.startDate ? new Date(tradeFilters.startDate) : null
+              const endDate = tradeFilters.endDate ? new Date(tradeFilters.endDate + 'T23:59:59') : null
+              
+              // Check if trade date is within the range
+              if (startDate && tradeDate < startDate) return false
+              if (endDate && tradeDate > endDate) return false
+              
+              return true
+            } catch (error) {
+              console.error('Error filtering trade by date:', error, trade)
+              return true // Include trades with date parsing errors
+            }
+          })
+        }
+        
         // Apply bot type filter with error handling
         if (tradeFilters.botType !== 'all') {
           filteredTrades = filteredTrades.filter((trade: Trade) => {
