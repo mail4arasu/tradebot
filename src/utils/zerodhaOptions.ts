@@ -196,6 +196,8 @@ async function getInstrumentTokens(
   accessToken: string
 ): Promise<string[]> {
   try {
+    console.log(`🔍 Searching for symbols: ${symbols.join(', ')}`)
+    
     const response = await fetch('https://api.kite.trade/instruments/NFO', {
       method: 'GET',
       headers: {
@@ -211,6 +213,7 @@ async function getInstrumentTokens(
     const csvData = await response.text()
     const lines = csvData.split('\n')
     const tokens: string[] = []
+    const availableNiftyOptions: string[] = []
     
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim()
@@ -219,10 +222,26 @@ async function getInstrumentTokens(
       const data = line.split(',')
       const instrumentToken = data[0] // instrument_token
       const tradingSymbol = data[2] // tradingsymbol
+      const instrumentType = data[9] // instrument_type
+      
+      // Collect sample NIFTY options for comparison
+      if (tradingSymbol && tradingSymbol.startsWith('NIFTY') && 
+          (instrumentType === 'CE' || instrumentType === 'PE') && 
+          availableNiftyOptions.length < 10) {
+        availableNiftyOptions.push(tradingSymbol)
+      }
       
       if (symbols.includes(tradingSymbol)) {
         tokens.push(`NFO:${instrumentToken}`)
+        console.log(`✅ Found matching symbol: ${tradingSymbol} → ${instrumentToken}`)
       }
+    }
+    
+    if (tokens.length === 0) {
+      console.log(`❌ No matching symbols found. Sample NIFTY options available:`)
+      availableNiftyOptions.forEach((symbol, index) => {
+        console.log(`   ${index + 1}. ${symbol}`)
+      })
     }
     
     return tokens

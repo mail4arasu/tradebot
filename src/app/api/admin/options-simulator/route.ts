@@ -90,7 +90,10 @@ export async function POST(request: NextRequest) {
 
     // Step 6: Generate options contracts for all strikes
     const contracts = generateOptionsContracts(strikes, selectedExpiry.formatted, optionType)
-    console.log(`💼 Generated ${contracts.length} contracts`)
+    console.log(`💼 Generated ${contracts.length} contracts:`)
+    contracts.forEach((contract, index) => {
+      console.log(`   ${index + 1}. ${contract.symbol} (Strike: ${contract.strike}, Expiry: ${contract.expiry})`)
+    })
 
     // Step 7: Fetch real-time quotes from Zerodha API
     let contractsWithData
