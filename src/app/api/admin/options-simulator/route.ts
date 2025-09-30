@@ -168,6 +168,16 @@ export async function POST(request: NextRequest) {
     // Step 9: Calculate position size based on risk percentage
     const lotSize = 50 // NIFTY lot size
     const premiumPerLot = (bestContract.premium || 0) * lotSize
+    const riskAmount = (capital * riskPercentage) / 100
+    
+    console.log(`💰 POSITION SIZING CALCULATION:`)
+    console.log(`   Capital: ₹${capital.toLocaleString()}`)
+    console.log(`   Risk %: ${riskPercentage}%`)
+    console.log(`   Risk Amount: ₹${riskAmount.toLocaleString()}`)
+    console.log(`   Option Premium: ₹${bestContract.premium}`)
+    console.log(`   Premium Per Lot (×${lotSize}): ₹${premiumPerLot.toLocaleString()}`)
+    console.log(`   Max Lots: ${Math.floor(riskAmount / premiumPerLot)}`)
+    
     const positionCalc = calculatePositionSize(
       capital, // Available margin (using capital as proxy)
       riskPercentage,
@@ -176,8 +186,14 @@ export async function POST(request: NextRequest) {
     )
 
     if (!positionCalc.canTrade) {
+      const minCapitalRequired = Math.ceil((premiumPerLot / riskPercentage) * 100)
+      console.log(`❌ INSUFFICIENT CAPITAL:`)
+      console.log(`   Minimum capital required: ₹${minCapitalRequired.toLocaleString()}`)
+      console.log(`   Current capital: ₹${capital.toLocaleString()}`)
+      console.log(`   Shortfall: ₹${(minCapitalRequired - capital).toLocaleString()}`)
+      
       return NextResponse.json({ 
-        error: 'Insufficient capital for minimum position size' 
+        error: `Insufficient capital for minimum position size. Required: ₹${minCapitalRequired.toLocaleString()} (at ${riskPercentage}% risk). Current: ₹${capital.toLocaleString()}. Premium per lot: ₹${premiumPerLot.toLocaleString()}` 
       }, { status: 400 })
     }
 
