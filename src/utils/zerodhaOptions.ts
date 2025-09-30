@@ -309,6 +309,16 @@ export async function fetchOptionsQuotes(
     console.log(`📊 Quote response keys: ${Object.keys(quotesData.data || {}).join(', ')}`)
     console.log(`📊 Expected tokens: ${contractsWithTokens.map(c => `NFO:${c.instrumentToken}`).join(', ')}`)
     
+    // Debug: Check if we have any data at all
+    const dataKeys = Object.keys(quotesData.data || {})
+    console.log(`🔍 Quote API returned ${dataKeys.length} instruments`)
+    if (dataKeys.length === 0) {
+      console.log(`❌ No quote data returned from API!`)
+      console.log(`🔍 Full response:`, JSON.stringify(quotesData, null, 2))
+    } else {
+      console.log(`✅ Sample quote keys: ${dataKeys.slice(0, 5).join(', ')}`)
+    }
+    
     // Map quote data back to contracts
     const updatedContracts = contractsWithTokens.map(contract => {
       const tokenKey = `NFO:${contract.instrumentToken}`
@@ -334,6 +344,37 @@ export async function fetchOptionsQuotes(
         }
       } else {
         console.log(`❌ No quote data found for ${contract.symbol || contract.zerodhaSymbol}`)
+        console.log(`🔍 Attempting fallback delta calculation with estimated premium...`)
+        
+        // Fallback: Calculate delta with estimated premium for debugging
+        try {
+          const estimatedPremium = estimateOptionPremium(spotPrice, contract.strike, contract.optionType)
+          const fallbackQuote = {
+            last_price: estimatedPremium,
+            oi: 0,
+            volume: 0,
+            buy_quantity: 0,
+            sell_quantity: 0,
+            ohlc: { open: 0, high: 0, low: 0, close: 0 },
+            net_change: 0,
+            oi_day_high: 0,
+            oi_day_low: 0,
+            depth: { buy: [], sell: [] },
+            instrument_token: contract.instrumentToken || 0
+          }
+          
+          const delta = calculateDelta(fallbackQuote, contract, spotPrice)
+          console.log(`📊 Fallback Delta for ${contract.symbol}: ${delta.toFixed(3)} (estimated premium: ${estimatedPremium})`)
+          
+          return {
+            ...contract,
+            premium: estimatedPremium,
+            openInterest: 0,
+            delta: delta
+          }
+        } catch (error) {
+          console.error(`❌ Fallback delta calculation failed:`, error)
+        }
       }
       
       return contract
@@ -628,6 +669,28 @@ function getTimeToExpiry(expiryString: string): number {
   
   // Convert to years and ensure minimum time
   return Math.max(1 / 365, daysToExpiry / 365) // Minimum 1 day
+}
+
+/**
+ * Quick estimate of option premium for fallback scenarios
+ */
+function estimateOptionPremium(spotPrice: number, strike: number, optionType: 'CE' | 'PE'): number {
+  const moneyness = spotPrice / strike
+  const intrinsic = optionType === 'CE' 
+    ? Math.max(0, spotPrice - strike)
+    : Math.max(0, strike - spotPrice)
+  
+  // Simple time value estimation based on moneyness
+  let timeValue = 0
+  if (Math.abs(moneyness - 1) < 0.02) { // ATM
+    timeValue = spotPrice * 0.01 // 1% of spot
+  } else if (Math.abs(moneyness - 1) < 0.05) { // Near ATM
+    timeValue = spotPrice * 0.005 // 0.5% of spot
+  } else {
+    timeValue = spotPrice * 0.002 // 0.2% of spot
+  }
+  
+  return Math.max(1, intrinsic + timeValue) // Minimum ₹1 premium
 }
 
 /**
