@@ -20,6 +20,9 @@ interface Trade {
   trade_date: string
   order_id: string
   product: string
+  bot_id?: string
+  bot_name?: string
+  trade_source?: string
 }
 
 interface Position {
@@ -73,7 +76,7 @@ export default function Trades() {
   const [error, setError] = useState('')
   const [positionsError, setPositionsError] = useState('')
   const [ordersError, setOrdersError] = useState('')
-  const [activeTab, setActiveTab] = useState<'trades' | 'positions' | 'orders'>('positions')
+  const [activeTab, setActiveTab] = useState<'trades' | 'positions' | 'orders' | 'equity'>('positions')
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<any>(null)
   
@@ -81,6 +84,15 @@ export default function Trades() {
   const [orderFilters, setOrderFilters] = useState({
     orderStatus: 'all' as 'all' | 'complete' | 'open' | 'cancelled'
   })
+  
+  // Trade filtering states
+  const [tradeFilters, setTradeFilters] = useState({
+    startDate: '',
+    endDate: '',
+    botType: 'all' as 'all' | 'bot' | 'manual'
+  })
+  const [equityData, setEquityData] = useState<{date: string, value: number, pnl: number}[]>([])
+  const [totalPnl, setTotalPnl] = useState(0)
   const [orderSummary, setOrderSummary] = useState({
     total: 0,
     complete: 0,
@@ -105,15 +117,43 @@ export default function Trades() {
     }
   }, [orderFilters, session])
 
+  // Refetch trades when filters change
+  useEffect(() => {
+    if (session) {
+      fetchTrades()
+    }
+  }, [tradeFilters, session])
+
   const fetchTrades = async () => {
     try {
       setLoading(true)
       setError('')
-      const response = await fetch('/api/zerodha/trades')
+      
+      // Build query parameters for date filtering
+      const queryParams = new URLSearchParams()
+      if (tradeFilters.startDate) queryParams.set('startDate', tradeFilters.startDate)
+      if (tradeFilters.endDate) queryParams.set('endDate', tradeFilters.endDate)
+      queryParams.set('source', 'hybrid') // Get both live and database data
+      
+      const response = await fetch(`/api/zerodha/trades?${queryParams}`)
       
       if (response.ok) {
         const data = await response.json()
-        setTrades(data.trades || [])
+        let filteredTrades = data.trades || []
+        
+        // Apply bot type filter
+        if (tradeFilters.botType !== 'all') {
+          filteredTrades = filteredTrades.filter((trade: Trade) => {
+            if (tradeFilters.botType === 'bot') {
+              return trade.trade_source === 'BOT' || trade.bot_id
+            } else {
+              return trade.trade_source !== 'BOT' && !trade.bot_id
+            }
+          })
+        }
+        
+        setTrades(filteredTrades)
+        calculateEquityCurve(filteredTrades)
       } else {
         const errorData = await response.json()
         setError(errorData.error || 'Failed to fetch trades')
@@ -218,6 +258,44 @@ export default function Trades() {
 
   const refreshAll = async () => {
     await Promise.all([fetchTrades(), fetchPositions(), fetchOrders()])
+  }
+
+  const calculateEquityCurve = (tradesData: Trade[]) => {
+    // Sort trades by date
+    const sortedTrades = [...tradesData].sort((a, b) => 
+      new Date(a.trade_date).getTime() - new Date(b.trade_date).getTime()
+    )
+
+    let runningPnl = 0
+    const equityPoints: {date: string, value: number, pnl: number}[] = []
+    const initialCapital = 100000 // Default starting capital
+
+    // Group trades by date and calculate daily P&L
+    const tradesByDate = sortedTrades.reduce((acc, trade) => {
+      const date = new Date(trade.trade_date).toISOString().split('T')[0]
+      if (!acc[date]) acc[date] = []
+      acc[date].push(trade)
+      return acc
+    }, {} as Record<string, Trade[]>)
+
+    // Calculate cumulative P&L
+    Object.entries(tradesByDate).forEach(([date, dayTrades]) => {
+      const dayPnl = dayTrades.reduce((sum, trade) => {
+        // Simplified P&L calculation - in real scenario this would need entry/exit matching
+        const value = trade.quantity * trade.price
+        return sum + (trade.transaction_type === 'SELL' ? value : -value)
+      }, 0)
+      
+      runningPnl += dayPnl
+      equityPoints.push({
+        date,
+        value: initialCapital + runningPnl,
+        pnl: dayPnl
+      })
+    })
+
+    setEquityData(equityPoints)
+    setTotalPnl(runningPnl)
   }
 
   const formatDate = (dateString: string) => {
@@ -366,6 +444,17 @@ export default function Trades() {
             >
               <BarChart3 className="h-4 w-4 inline mr-2" />
               Trade History ({trades.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('equity')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'equity'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <TrendingUp className="h-4 w-4 inline mr-2" />
+              Equity Curve
             </button>
           </nav>
         </div>
@@ -792,6 +881,80 @@ export default function Trades() {
 
       {activeTab === 'trades' && (
         <>
+          {/* Trade Filters */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Trade Filters
+              </CardTitle>
+              <CardDescription>
+                Filter trades by date range and bot type.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div>
+                  <Label htmlFor="startDate">Start Date</Label>
+                  <Input
+                    id="startDate"
+                    type="date"
+                    value={tradeFilters.startDate}
+                    onChange={(e) => setTradeFilters(prev => ({
+                      ...prev,
+                      startDate: e.target.value
+                    }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="endDate">End Date</Label>
+                  <Input
+                    id="endDate"
+                    type="date"
+                    value={tradeFilters.endDate}
+                    onChange={(e) => setTradeFilters(prev => ({
+                      ...prev,
+                      endDate: e.target.value
+                    }))}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="botType">Trade Type</Label>
+                  <select
+                    id="botType"
+                    value={tradeFilters.botType}
+                    onChange={(e) => setTradeFilters(prev => ({
+                      ...prev,
+                      botType: e.target.value as 'all' | 'bot' | 'manual'
+                    }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="all">All Trades</option>
+                    <option value="bot">Bot Trades</option>
+                    <option value="manual">Manual Trades</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <Button
+                    onClick={() => setTradeFilters({
+                      startDate: '',
+                      endDate: '',
+                      botType: 'all'
+                    })}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Clear Filters
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Trades Error State */}
           {error && (
             <Card className="mb-6 border-red-200 bg-red-50">
@@ -861,6 +1024,11 @@ export default function Trades() {
                               <p className="text-sm text-gray-600">
                                 {trade.exchange} • {formatDate(trade.trade_date)}
                               </p>
+                              {trade.bot_name && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                  🤖 {trade.bot_name}
+                                </p>
+                              )}
                             </div>
                           </div>
                           
@@ -897,10 +1065,19 @@ export default function Trades() {
                               <p>{trade.product}</p>
                             </div>
                             <div>
-                              <span className="text-gray-500">Exchange:</span>
-                              <p>{trade.exchange}</p>
+                              <span className="text-gray-500">Trade Source:</span>
+                              <p className={trade.trade_source === 'BOT' ? 'text-blue-600 font-medium' : ''}>
+                                {trade.trade_source === 'BOT' ? '🤖 Bot Trade' : '👤 Manual Trade'}
+                              </p>
                             </div>
                           </div>
+                          
+                          {trade.bot_name && trade.trade_source === 'BOT' && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                              <span className="text-gray-500 text-sm">Bot Used:</span>
+                              <p className="text-sm text-blue-700 mt-1 font-medium">{trade.bot_name}</p>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -909,6 +1086,118 @@ export default function Trades() {
               )}
             </>
           )}
+        </>
+      )}
+
+      {activeTab === 'equity' && (
+        <>
+          {/* Equity Curve */}
+          <div className="space-y-6">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Total P&L</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center">
+                    <span className={`text-2xl font-bold ${totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(totalPnl)}
+                    </span>
+                    {totalPnl >= 0 ? (
+                      <TrendingUp className="h-5 w-5 text-green-600 ml-2" />
+                    ) : (
+                      <TrendingDown className="h-5 w-5 text-red-600 ml-2" />
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Total Trades</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{trades.length}</div>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Win Rate</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {trades.length > 0 ? Math.round((equityData.filter(d => d.pnl > 0).length / equityData.length) * 100) : 0}%
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Equity Curve Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Portfolio Value Over Time</CardTitle>
+                <CardDescription>
+                  Track your portfolio value progression based on trade history
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {equityData.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Simple equity curve visualization */}
+                    <div className="h-64 bg-gray-50 rounded-lg p-4 flex items-end space-x-1">
+                      {equityData.map((point, index) => {
+                        const maxValue = Math.max(...equityData.map(d => d.value))
+                        const minValue = Math.min(...equityData.map(d => d.value))
+                        const height = ((point.value - minValue) / (maxValue - minValue)) * 200 + 20
+                        
+                        return (
+                          <div key={index} className="flex-1 flex flex-col items-center">
+                            <div
+                              className={`w-full rounded-t ${point.pnl >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                              style={{ height: `${height}px` }}
+                              title={`${point.date}: ${formatCurrency(point.value)} (${point.pnl >= 0 ? '+' : ''}${formatCurrency(point.pnl)})`}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Data Points */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Date</th>
+                            <th className="text-right py-2">Portfolio Value</th>
+                            <th className="text-right py-2">Daily P&L</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {equityData.slice(-10).reverse().map((point, index) => (
+                            <tr key={index} className="border-b">
+                              <td className="py-2">{new Date(point.date).toLocaleDateString()}</td>
+                              <td className="py-2 text-right font-medium">{formatCurrency(point.value)}</td>
+                              <td className={`py-2 text-right ${point.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {point.pnl >= 0 ? '+' : ''}{formatCurrency(point.pnl)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No equity data available</h3>
+                    <p className="text-gray-600">Your equity curve will appear here once you have trade history.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
     </div>

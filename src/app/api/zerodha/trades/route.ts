@@ -132,7 +132,7 @@ async function getStoredTrades(userId: string, startDate?: string | null, endDat
     .limit(limit)
     .lean()
 
-  // Convert database format to API format
+  // Convert database format to API format with bot information
   return dbTrades.map(trade => ({
     trade_id: trade.tradeId,
     tradingsymbol: trade.tradingSymbol,
@@ -143,6 +143,9 @@ async function getStoredTrades(userId: string, startDate?: string | null, endDat
     trade_date: trade.timestamp.toISOString(),
     order_id: trade.orderId,
     product: trade.product,
+    bot_id: trade.botId,
+    bot_name: trade.botName || (trade.tradeSource === 'BOT' ? 'Unknown Bot' : 'Manual Trade'),
+    trade_source: trade.tradeSource || 'Manual',
     dataSource: 'database'
   }))
 }
