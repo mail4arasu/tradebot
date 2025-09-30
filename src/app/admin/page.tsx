@@ -201,15 +201,27 @@ export default function AdminDashboard() {
             <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>Admin Dashboard</h1>
             <p style={{ color: 'var(--muted-foreground)' }}>Manage users and monitor platform statistics</p>
           </div>
-          <Link href="/admin/trading">
-            <button className="px-4 py-2 rounded transition-colors duration-200"
-                    style={{
-                      backgroundColor: 'var(--primary)',
-                      color: 'var(--primary-foreground)'
-                    }}>
-              Trading Control
-            </button>
-          </Link>
+          <div className="flex gap-4">
+            <Link href="/admin/trading">
+              <button className="px-4 py-2 rounded transition-colors duration-200"
+                      style={{
+                        backgroundColor: 'var(--primary)',
+                        color: 'var(--primary-foreground)'
+                      }}>
+                Trading Control
+              </button>
+            </Link>
+            <Link href="/admin/cleanup">
+              <button className="px-4 py-2 rounded transition-colors duration-200 border"
+                      style={{
+                        backgroundColor: 'var(--destructive)',
+                        color: 'var(--destructive-foreground)',
+                        borderColor: 'var(--border)'
+                      }}>
+                🧹 Database Cleanup
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
 
