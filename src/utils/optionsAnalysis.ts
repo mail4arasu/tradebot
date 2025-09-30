@@ -182,26 +182,68 @@ export function getOptionType(action: string): 'CE' | 'PE' {
 }
 
 /**
- * Select appropriate expiry date
- * If nearest expiry < 3 days, use next expiry, else use nearest
+ * Select appropriate expiry date using month-end logic
+ * New Logic:
+ * 1. Find last expiry date of current month
+ * 2. If last expiry of current month >= 5 days from today, use current month
+ * 3. Else use last expiry of next month
  */
 export function selectExpiry(expiryDates: ExpiryDate[]): ExpiryDate | null {
-  if (expiryDates.length < 2) {
-    return null // Need at least 2 expiry dates
+  if (expiryDates.length === 0) {
+    return null
   }
   
-  // Sort by days to expiry (ascending)
-  const sortedExpiries = [...expiryDates].sort((a, b) => a.daysToExpiry - b.daysToExpiry)
+  console.log(`📅 EXPIRY SELECTION - NEW MONTH-END LOGIC`)
+  console.log(`📊 Total expiry dates available: ${expiryDates.length}`)
   
-  const nearestExpiry = sortedExpiries[0]
-  const nextExpiry = sortedExpiries[1]
+  const today = new Date()
+  const currentMonth = today.getMonth()
+  const currentYear = today.getFullYear()
+  const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1
+  const nextYear = currentMonth === 11 ? currentYear + 1 : currentYear
   
-  // If nearest expiry is less than 3 days, use next expiry
-  if (nearestExpiry.daysToExpiry < 3) {
-    return nextExpiry
+  // Find last expiry of current month
+  const currentMonthExpiries = expiryDates.filter(expiry => {
+    const expiryDate = new Date(expiry.date)
+    return expiryDate.getMonth() === currentMonth && expiryDate.getFullYear() === currentYear
+  })
+  
+  // Find last expiry of next month
+  const nextMonthExpiries = expiryDates.filter(expiry => {
+    const expiryDate = new Date(expiry.date)
+    return expiryDate.getMonth() === nextMonth && expiryDate.getFullYear() === nextYear
+  })
+  
+  // Get last (month-end) expiry of current month
+  const lastExpiryCurrentMonth = currentMonthExpiries.length > 0 
+    ? currentMonthExpiries.reduce((latest, current) => 
+        new Date(current.date) > new Date(latest.date) ? current : latest
+      )
+    : null
+    
+  // Get last (month-end) expiry of next month  
+  const lastExpiryNextMonth = nextMonthExpiries.length > 0
+    ? nextMonthExpiries.reduce((latest, current) =>
+        new Date(current.date) > new Date(latest.date) ? current : latest
+      )
+    : null
+  
+  console.log(`📅 Current month (${currentMonth + 1}/${currentYear}) last expiry: ${lastExpiryCurrentMonth?.date || 'None'} (${lastExpiryCurrentMonth?.daysToExpiry || 0} days)`)
+  console.log(`📅 Next month (${nextMonth + 1}/${nextYear}) last expiry: ${lastExpiryNextMonth?.date || 'None'} (${lastExpiryNextMonth?.daysToExpiry || 0} days)`)
+  
+  // Apply 5-day rule
+  if (lastExpiryCurrentMonth && lastExpiryCurrentMonth.daysToExpiry >= 5) {
+    console.log(`✅ Using current month expiry (${lastExpiryCurrentMonth.daysToExpiry} days >= 5 days threshold)`)
+    return lastExpiryCurrentMonth
+  } else {
+    if (lastExpiryNextMonth) {
+      console.log(`✅ Using next month expiry (current month expiry ${lastExpiryCurrentMonth?.daysToExpiry || 0} days < 5 days threshold)`)
+      return lastExpiryNextMonth
+    } else {
+      console.log(`❌ No suitable expiry found - no next month expiry available`)
+      return lastExpiryCurrentMonth // Fallback to current month if next month not available
+    }
   }
-  
-  return nearestExpiry
 }
 
 /**
