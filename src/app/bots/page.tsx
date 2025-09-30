@@ -250,6 +250,62 @@ export default function Bots() {
           </Card>
         </div>
       </div>
+
+      {/* Quick Navigation */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Bot Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 mb-4">
+              Enable/disable bots and configure position sizes
+            </p>
+            <Link href="/bots/manage">
+              <Button className="w-full">Manage Bots</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Webhook className="h-5 w-5" />
+                Webhook Configuration
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-4">
+                Set up TradingView webhook integrations
+              </p>
+              <Link href="/bots/webhooks">
+                <Button className="w-full" variant="outline">Configure Webhooks</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Backtesting
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 mb-4">
+              Test bot strategies with historical data
+            </p>
+            <Link href="/backtest">
+              <Button className="w-full" variant="outline">Start Backtesting</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
