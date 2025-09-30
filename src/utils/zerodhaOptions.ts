@@ -46,6 +46,7 @@ export interface ZerodhaQuoteData {
     buy: Array<{ quantity: number; price: number; orders: number }>
     sell: Array<{ quantity: number; price: number; orders: number }>
   }
+  implied_volatility?: number // IV provided by Zerodha for options
 }
 
 /**
@@ -326,6 +327,7 @@ export async function fetchOptionsQuotes(
       console.log(`🔍 First quote structure for ${firstKey}:`)
       console.log(`   last_price: ${firstQuote?.last_price}`)
       console.log(`   oi: ${firstQuote?.oi}`)
+      console.log(`   implied_volatility: ${firstQuote?.implied_volatility}`)
       console.log(`   ohlc: ${JSON.stringify(firstQuote?.ohlc)}`)
       console.log(`   volume: ${firstQuote?.volume}`)
     }
@@ -348,9 +350,9 @@ export async function fetchOptionsQuotes(
       }
       
       if (quote) {
-        console.log(`   Quote data: Premium=${quote.last_price}, OI=${quote.oi}`)
+        console.log(`   Quote data: Premium=${quote.last_price}, OI=${quote.oi}, IV=${quote.implied_volatility || 'N/A'}%`)
         
-        // Calculate delta using Black-Scholes model with real data
+        // Calculate delta using Black-Scholes model with Zerodha's IV
         const delta = calculateDelta(quote, contract, spotPrice)
         
         console.log(`📊 Calculated Delta for ${contract.symbol}: ${delta.toFixed(3)}`)
@@ -578,16 +580,24 @@ async function fetchNiftySpotPrice(apiKey: string, accessToken: string): Promise
 }
 
 /**
- * Calculate delta using Black-Scholes model
- * Note: Zerodha API doesn't provide Greeks, so we calculate delta ourselves
+ * Calculate delta using Black-Scholes model with Zerodha's IV
+ * Note: Now using IV directly from Zerodha API instead of calculating it
  */
 function calculateDelta(quote: ZerodhaQuoteData, contract: OptionsContract, spotPrice: number): number {
   const strike = contract.strike
   const timeToExpiry = getTimeToExpiry(contract.expiry)
+  const riskFreeRate = 0.065 // Indian 10-year G-Sec rate (~6.5%)
   
-  // Calculate implied volatility from market premium using Newton-Raphson method
-  const impliedVol = estimateImpliedVolatility(quote.last_price, spotPrice, strike, timeToExpiry, contract.optionType)
-  const riskFreeRate = 0.065 // More accurate Indian 10-year G-Sec rate (~6.5%)
+  // Use Zerodha's implied volatility if available, otherwise fallback to estimation
+  let impliedVol: number
+  if (quote.implied_volatility !== undefined && quote.implied_volatility > 0) {
+    impliedVol = quote.implied_volatility / 100 // Convert from percentage to decimal
+    console.log(`📊 Using Zerodha IV: ${quote.implied_volatility.toFixed(1)}%`)
+  } else {
+    // Fallback to estimation if Zerodha doesn't provide IV
+    impliedVol = estimateImpliedVolatility(quote.last_price, spotPrice, strike, timeToExpiry, contract.optionType)
+    console.log(`📊 Using estimated IV: ${(impliedVol*100).toFixed(1)}% (Zerodha IV not available)`)
+  }
   
   console.log(`📊 Black-Scholes Delta calc:`)
   console.log(`   Spot=${spotPrice}, Strike=${strike}, TTM=${timeToExpiry.toFixed(4)} years`)
