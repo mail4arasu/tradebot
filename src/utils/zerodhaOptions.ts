@@ -336,6 +336,27 @@ async function fetchNFOInstruments(apiKey: string, accessToken: string): Promise
   }
   
   console.log(`📊 Loaded ${instruments.length} NFO instruments`)
+  
+  // Debug: Show sample instruments and check for NIFTY
+  const niftyInstruments = instruments.filter(inst => inst.name === 'NIFTY')
+  const allNames = [...new Set(instruments.map(inst => inst.name))].slice(0, 20)
+  
+  console.log(`🔍 Found ${niftyInstruments.length} NIFTY instruments`)
+  console.log(`📋 Sample instrument names found: ${allNames.join(', ')}`)
+  
+  if (niftyInstruments.length > 0) {
+    console.log(`✅ Sample NIFTY instruments:`)
+    niftyInstruments.slice(0, 5).forEach((inst, index) => {
+      console.log(`   ${index + 1}. ${inst.tradingsymbol} | Name: "${inst.name}" | Type: ${inst.instrument_type} | Expiry: ${inst.expiry}`)
+    })
+  } else {
+    console.log(`❌ No NIFTY instruments found. Checking raw CSV parsing...`)
+    // Show first 3 instruments to debug CSV parsing
+    instruments.slice(0, 3).forEach((inst, index) => {
+      console.log(`   ${index + 1}. Symbol: "${inst.tradingsymbol}" | Name: "${inst.name}" | Type: "${inst.instrument_type}"`)
+    })
+  }
+  
   return instruments
 }
 
