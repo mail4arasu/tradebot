@@ -1,6 +1,12 @@
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/mongodb'
 import { getIntradayPositionsForAutoExit, updatePositionWithExit, markPositionForAutoExit } from '@/utils/positionManager'
+import { 
+  validatePositionInZerodha, 
+  reconcileExternallyClosedPosition, 
+  recordValidationResult,
+  executeNormalAutoExit 
+} from '@/utils/positionValidation'
 
 interface ScheduledExit {
   positionId: string
@@ -100,106 +106,114 @@ class IntradayScheduler {
   }
 
   /**
-   * Execute auto square-off for a position
+   * Execute auto square-off for a position with pre-exit validation
    */
   private async executeAutoExit(positionId: string): Promise<void> {
     try {
-      console.log(`🔄 Executing auto square-off for position: ${positionId}`)
+      console.log(`🚀 Executing auto square-off with pre-validation for position: ${positionId}`)
       
       const client = await clientPromise
       const db = client.db('tradebot')
       
-      // Get position details
+      // Get position details from database
       const position = await db.collection('positions').findOne({
         _id: new ObjectId(positionId),
         status: { $in: ['OPEN', 'PARTIAL'] }
       })
 
       if (!position) {
-        console.log(`⚠️ Position ${positionId} not found or already closed`)
+        console.log(`⚠️ Position ${positionId} not found or already closed in database`)
         this.scheduledExits.delete(positionId)
         return
       }
 
-      // Get bot and user allocation details
-      const bot = await db.collection('bots').findOne({ _id: position.botId })
-      const allocation = await db.collection('userbotallocations').findOne({ _id: position.allocationId })
+      // ⭐ PRE-EXIT VALIDATION: Check if position exists in Zerodha
+      console.log(`🔍 Pre-validation: Checking position ${position.positionId} in Zerodha`)
+      const validation = await validatePositionInZerodha(position)
 
-      if (!bot || !allocation) {
-        console.error(`❌ Bot or allocation not found for position ${positionId}`)
-        return
-      }
+      if (validation.existsInZerodha) {
+        // SCENARIO 1: Position exists in Zerodha - proceed with normal auto-exit
+        console.log(`✅ Position ${position.positionId} confirmed in Zerodha - executing auto-exit`)
+        
+        const exitResult = await executeNormalAutoExit(position, validation)
+        
+        if (exitResult.success) {
+          // Create execution record for successful auto-exit
+          const autoExitExecution = {
+            userId: position.userId,
+            botId: position.botId,
+            signalId: new ObjectId(),
+            allocationId: position.allocationId,
+            symbol: position.symbol,
+            exchange: position.exchange,
+            instrumentType: position.instrumentType,
+            quantity: position.currentQuantity,
+            orderType: 'SELL',
+            requestedPrice: null,
+            executedPrice: exitResult.executedPrice,
+            executedQuantity: exitResult.executedQuantity,
+            zerodhaOrderId: exitResult.orderId,
+            zerodhaTradeId: null,
+            status: 'EXECUTED',
+            submittedAt: new Date(),
+            executedAt: new Date(),
+            error: null,
+            retryCount: 0,
+            zerodhaResponse: {
+              validationData: validation,
+              orderResponse: exitResult.response
+            },
+            pnl: validation.zerodhaPnl || 0,
+            fees: 0,
+            isEmergencyExit: false,
+            riskCheckPassed: true,
+            positionId: position._id,
+            parentPositionId: position._id,
+            tradeType: 'EXIT',
+            exitReason: 'AUTO_SQUARE_OFF',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
 
-      // Create auto-exit trade execution
-      const autoExitExecution = {
-        userId: position.userId,
-        botId: position.botId,
-        signalId: new ObjectId(), // Generate new ObjectId for auto-exit
-        allocationId: position.allocationId,
-        symbol: position.symbol,
-        exchange: position.exchange,
-        instrumentType: position.instrumentType,
-        quantity: position.currentQuantity,
-        orderType: 'SELL', // Always sell for auto square-off
-        requestedPrice: null, // Market order
-        executedPrice: null,
-        executedQuantity: null,
-        zerodhaOrderId: null,
-        zerodhaTradeId: null,
-        status: 'PENDING',
-        submittedAt: new Date(),
-        executedAt: null,
-        error: null,
-        retryCount: 0,
-        zerodhaResponse: null,
-        pnl: null,
-        fees: null,
-        isEmergencyExit: false,
-        riskCheckPassed: true,
-        positionId: position._id,
-        parentPositionId: position._id,
-        tradeType: 'EXIT',
-        exitReason: 'AUTO_SQUARE_OFF',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
+          const executionResult = await db.collection('tradeexecutions').insertOne(autoExitExecution)
 
-      // For now, simulate the execution (in production, this would call Zerodha API)
-      const simulatedResult = await this.simulateAutoExit(position)
-      
-      // Update execution record
-      autoExitExecution.status = simulatedResult.success ? 'EXECUTED' : 'FAILED'
-      autoExitExecution.executedAt = simulatedResult.success ? new Date() : null
-      autoExitExecution.executedPrice = simulatedResult.executedPrice
-      autoExitExecution.executedQuantity = simulatedResult.executedQuantity
-      autoExitExecution.zerodhaOrderId = simulatedResult.orderId
-      autoExitExecution.error = simulatedResult.error
-      autoExitExecution.zerodhaResponse = simulatedResult.response
+          // Update position with successful exit
+          await updatePositionWithExit(position._id, {
+            executionId: executionResult.insertedId,
+            signalId: autoExitExecution.signalId,
+            quantity: position.currentQuantity,
+            price: exitResult.executedPrice || 0,
+            orderId: exitResult.orderId || 'AUTO_EXIT',
+            reason: 'AUTO_SQUARE_OFF'
+          })
 
-      // Insert execution record
-      const executionResult = await db.collection('tradeexecutions').insertOne(autoExitExecution)
+          // Record validation result
+          await recordValidationResult(position.positionId, validation, 'AUTO_EXIT')
+          
+          console.log(`✅ Auto square-off completed successfully for position ${positionId}`)
+        } else {
+          console.error(`❌ Auto square-off order failed for position ${positionId}: ${exitResult.error}`)
+          // Record failed attempt but don't update position
+          await recordValidationResult(position.positionId, validation, 'AUTO_EXIT')
+        }
 
-      if (simulatedResult.success) {
-        // Update position with exit
-        await updatePositionWithExit(position._id, {
-          executionId: executionResult.insertedId,
-          signalId: autoExitExecution.signalId,
-          quantity: position.currentQuantity,
-          price: simulatedResult.executedPrice || 0,
-          orderId: simulatedResult.orderId || 'AUTO_EXIT',
-          reason: 'AUTO_SQUARE_OFF'
-        })
-
-        console.log(`✅ Auto square-off completed for position ${positionId}`)
       } else {
-        console.error(`❌ Auto square-off failed for position ${positionId}: ${simulatedResult.error}`)
+        // SCENARIO 2: Position missing in Zerodha - reconcile as external exit
+        console.log(`🔄 Position ${position.positionId} not found in Zerodha - reconciling as external exit`)
+        
+        await reconcileExternallyClosedPosition(position, validation)
+        await recordValidationResult(position.positionId, validation, 'RECONCILIATION')
+        
+        console.log(`✅ Position ${positionId} reconciled as externally closed`)
       }
 
-      // Remove from scheduled exits
+      // Remove from scheduled exits regardless of outcome
       this.scheduledExits.delete(positionId)
 
     } catch (error) {
-      console.error(`❌ Error executing auto-exit for position ${positionId}:`, error)
+      console.error(`❌ Error in auto-exit processing for position ${positionId}:`, error)
+      // Remove from scheduled exits to prevent retry loops
+      this.scheduledExits.delete(positionId)
     }
   }
 

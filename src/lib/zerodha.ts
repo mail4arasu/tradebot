@@ -206,6 +206,46 @@ export class ZerodhaAPI {
     }
   }
 
+  async placeOrder(variety: string, orderParams: any) {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      const formBody = new URLSearchParams()
+      formBody.append('exchange', orderParams.exchange)
+      formBody.append('tradingsymbol', orderParams.tradingsymbol)
+      formBody.append('transaction_type', orderParams.transaction_type)
+      formBody.append('quantity', orderParams.quantity.toString())
+      formBody.append('order_type', orderParams.order_type)
+      formBody.append('product', orderParams.product)
+      formBody.append('validity', orderParams.validity)
+      if (orderParams.price) formBody.append('price', orderParams.price.toString())
+      if (orderParams.trigger_price) formBody.append('trigger_price', orderParams.trigger_price.toString())
+      if (orderParams.tag) formBody.append('tag', orderParams.tag)
+
+      const response = await fetch(`${this.baseUrl}/orders/${variety}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.accessToken}`,
+          'X-Kite-Version': '3',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formBody.toString()
+      })
+      
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to place order: ${error}`)
+      }
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Error placing order:', error)
+      throw error
+    }
+  }
+
   static getLoginUrl(apiKey: string, redirectUrl: string): string {
     return `https://kite.zerodha.com/connect/login?api_key=${apiKey}&v=3&redirect_url=${encodeURIComponent(redirectUrl)}`
   }
