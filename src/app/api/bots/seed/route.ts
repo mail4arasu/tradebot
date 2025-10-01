@@ -49,6 +49,12 @@ export async function POST(request: NextRequest) {
         symbol: 'NIFTY50',
         exchange: 'NFO',
         instrumentType: 'FUTURES',
+        // Trade lifecycle management fields
+        tradingType: 'INTRADAY',
+        intradayExitTime: '15:15',
+        autoSquareOff: true,
+        allowMultiplePositions: false,
+        maxPositionHoldDays: 1,
         createdAt: new Date(),
         updatedAt: new Date()
       },
@@ -75,6 +81,12 @@ export async function POST(request: NextRequest) {
         symbol: 'NIFTY',
         exchange: 'NFO',
         instrumentType: 'OPTIONS',
+        // Trade lifecycle management fields
+        tradingType: 'INTRADAY',
+        intradayExitTime: '15:10', // Exit options 5 minutes before futures
+        autoSquareOff: true,
+        allowMultiplePositions: false,
+        maxPositionHoldDays: 1,
         botId: Math.random().toString(36).substring(2, 10).toUpperCase(),
         createdAt: new Date(),
         updatedAt: new Date()

@@ -15,7 +15,30 @@ const BotSchema = new mongoose.Schema({
   emergencyStop: { type: Boolean, default: false }, // Emergency stop flag
   symbol: { type: String }, // Trading symbol (e.g., "NIFTY50")
   exchange: { type: String }, // Exchange (e.g., "NFO")
-  instrumentType: { type: String } // Instrument type (e.g., "FUTURES")
+  instrumentType: { type: String }, // Instrument type (e.g., "FUTURES")
+  // Trade lifecycle management fields
+  tradingType: { 
+    type: String, 
+    enum: ['INTRADAY', 'POSITIONAL'], 
+    required: true,
+    default: 'INTRADAY'
+  },
+  intradayExitTime: { 
+    type: String, 
+    default: '15:15' // Default exit time for intraday bots (3:15 PM)
+  },
+  autoSquareOff: { 
+    type: Boolean, 
+    default: true // Auto exit for intraday bots
+  },
+  allowMultiplePositions: { 
+    type: Boolean, 
+    default: false // Allow multiple open positions simultaneously
+  },
+  maxPositionHoldDays: { 
+    type: Number, 
+    default: 1 // For positional bots - max days to hold position
+  }
 }, {
   timestamps: true
 })

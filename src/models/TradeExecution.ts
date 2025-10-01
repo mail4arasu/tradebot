@@ -51,7 +51,22 @@ const TradeExecutionSchema = new mongoose.Schema({
   
   // Risk management
   isEmergencyExit: { type: Boolean, default: false }, // Was this an emergency exit trade?
-  riskCheckPassed: { type: Boolean, default: true } // Did trade pass risk checks?
+  riskCheckPassed: { type: Boolean, default: true }, // Did trade pass risk checks?
+  
+  // Position linking (new fields for trade lifecycle management)
+  positionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Position' }, // Link to position
+  tradeType: { 
+    type: String, 
+    enum: ['ENTRY', 'EXIT', 'PARTIAL_EXIT'], 
+    required: true,
+    default: 'ENTRY'
+  },
+  parentPositionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Position' }, // For exit trades
+  exitReason: { 
+    type: String, 
+    enum: ['SIGNAL', 'AUTO_SQUARE_OFF', 'EMERGENCY', 'MANUAL'],
+    required: function() { return this.tradeType !== 'ENTRY' }
+  }
 }, {
   timestamps: true
 })
@@ -62,5 +77,8 @@ TradeExecutionSchema.index({ botId: 1, status: 1 })
 TradeExecutionSchema.index({ signalId: 1 })
 TradeExecutionSchema.index({ zerodhaOrderId: 1 })
 TradeExecutionSchema.index({ status: 1, createdAt: -1 })
+TradeExecutionSchema.index({ positionId: 1 })
+TradeExecutionSchema.index({ tradeType: 1, status: 1 })
+TradeExecutionSchema.index({ parentPositionId: 1 })
 
 export default mongoose.models.TradeExecution || mongoose.model('TradeExecution', TradeExecutionSchema)

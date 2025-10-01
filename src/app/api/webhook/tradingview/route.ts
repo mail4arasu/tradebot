@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import clientPromise from '@/lib/mongodb'
 import { ObjectId } from 'mongodb'
 import { executeOptionsBotTrade, validateOptionsBotConfig } from '@/utils/optionsBotExecution'
+import { 
+  createPosition, 
+  updatePositionWithExit, 
+  getOpenPositions, 
+  determineSignalType, 
+  determinePositionSide 
+} from '@/utils/positionManager'
+import { intradayScheduler } from '@/services/intradayScheduler'
 
 // TradingView Alert Interface
 interface TradingViewAlert {
@@ -215,8 +223,8 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
           continue
         }
 
-        // Execute trade for this user
-        const executionResult = await executeTradeForUser(
+        // Execute trade for this user with position management
+        const executionResult = await executeTradeWithPositionManagement(
           allocation,
           bot,
           payload,
@@ -263,6 +271,205 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
   } catch (error) {
     console.error('❌ Signal processing error:', error)
     throw error
+  }
+}
+
+async function executeTradeWithPositionManagement(allocation: any, bot: any, payload: TradingViewAlert, signalId: ObjectId, db: any) {
+  try {
+    console.log(`💼 Executing trade with position management for user: ${allocation.userId}`)
+    
+    // Determine signal type
+    const signalType = determineSignalType(payload)
+    console.log(`📊 Signal type determined: ${signalType}`)
+    
+    if (signalType === 'ENTRY') {
+      return await processEntrySignal(allocation, bot, payload, signalId, db)
+    } else if (signalType === 'EXIT') {
+      return await processExitSignal(allocation, bot, payload, signalId, db)
+    } else {
+      console.log(`⚠️ Unknown signal type: ${payload.action}`)
+      return {
+        success: false,
+        executionId: null,
+        error: `Unknown signal type: ${payload.action}`
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error in position-aware trade execution:', error)
+    return {
+      success: false,
+      executionId: null,
+      error: error.message
+    }
+  }
+}
+
+async function processEntrySignal(allocation: any, bot: any, payload: TradingViewAlert, signalId: ObjectId, db: any) {
+  try {
+    console.log(`🚪 Processing ENTRY signal for user: ${allocation.userId}`)
+    
+    // Check if bot allows multiple positions
+    if (!bot.allowMultiplePositions) {
+      const openPositions = await getOpenPositions(new ObjectId(allocation.userId), bot._id)
+      if (openPositions.length > 0) {
+        console.log(`❌ Multiple positions not allowed for bot: ${bot.name}`)
+        return {
+          success: false,
+          executionId: null,
+          error: 'Multiple positions not allowed for this bot'
+        }
+      }
+    }
+    
+    // Execute the entry trade using existing logic
+    const executionResult = await executeTradeForUser(allocation, bot, payload, signalId, db)
+    
+    if (executionResult.success) {
+      // Create position record
+      const positionData = {
+        userId: new ObjectId(allocation.userId),
+        botId: bot._id,
+        allocationId: allocation._id,
+        symbol: payload.symbol,
+        exchange: payload.exchange || bot.exchange || 'NFO',
+        instrumentType: payload.instrumentType || bot.instrumentType || 'FUTURES',
+        entryExecutionId: executionResult.executionId,
+        entrySignalId: signalId,
+        entryPrice: payload.price || 0,
+        entryQuantity: allocation.quantity,
+        entryTime: new Date(),
+        entryOrderId: executionResult.orderId || 'SIMULATED',
+        side: determinePositionSide(payload),
+        isIntraday: bot.tradingType === 'INTRADAY',
+        scheduledExitTime: bot.tradingType === 'INTRADAY' ? bot.intradayExitTime : undefined,
+        stopLoss: payload.stopLoss,
+        target: payload.target
+      }
+      
+      const positionId = await createPosition(positionData)
+      console.log(`📊 Position created: ${positionId}`)
+      
+      // Update trade execution with position link
+      await db.collection('tradeexecutions').updateOne(
+        { _id: executionResult.executionId },
+        {
+          $set: {
+            positionId: positionId,
+            tradeType: 'ENTRY',
+            updatedAt: new Date()
+          }
+        }
+      )
+      
+      // Schedule intraday auto-exit if needed
+      if (bot.tradingType === 'INTRADAY' && bot.autoSquareOff && bot.intradayExitTime) {
+        try {
+          await intradayScheduler.schedulePositionExit(positionId.toString(), bot.intradayExitTime)
+          console.log(`📅 Intraday auto-exit scheduled for position ${positionId} at ${bot.intradayExitTime}`)
+        } catch (schedulerError) {
+          console.error(`❌ Failed to schedule auto-exit for position ${positionId}:`, schedulerError)
+          // Don't fail the trade, just log the error
+        }
+      }
+    }
+    
+    return executionResult
+  } catch (error) {
+    console.error('❌ Error processing entry signal:', error)
+    return {
+      success: false,
+      executionId: null,
+      error: error.message
+    }
+  }
+}
+
+async function processExitSignal(allocation: any, bot: any, payload: TradingViewAlert, signalId: ObjectId, db: any) {
+  try {
+    console.log(`🚪 Processing EXIT signal for user: ${allocation.userId}`)
+    
+    // Find open positions for this user and bot
+    const openPositions = await getOpenPositions(new ObjectId(allocation.userId), bot._id)
+    
+    if (openPositions.length === 0) {
+      console.log(`⚠️ No open positions found for user: ${allocation.userId}, bot: ${bot.name}`)
+      return {
+        success: false,
+        executionId: null,
+        error: 'No open positions to exit'
+      }
+    }
+    
+    console.log(`📊 Found ${openPositions.length} open position(s) to exit`)
+    
+    // Process exit for each open position
+    const exitResults = []
+    for (const position of openPositions) {
+      try {
+        // Calculate exit quantity (for now, exit full position)
+        const exitQuantity = position.currentQuantity
+        
+        // Create exit trade execution
+        const exitPayload = {
+          ...payload,
+          action: 'SELL' // Convert EXIT to SELL for execution
+        }
+        
+        const executionResult = await executeTradeForUser(allocation, bot, exitPayload, signalId, db)
+        
+        if (executionResult.success) {
+          // Update position with exit
+          await updatePositionWithExit(position._id, {
+            executionId: executionResult.executionId,
+            signalId: signalId,
+            quantity: exitQuantity,
+            price: payload.price || 0,
+            orderId: executionResult.orderId || 'SIMULATED',
+            reason: 'SIGNAL'
+          })
+          
+          // Update trade execution with position link
+          await db.collection('tradeexecutions').updateOne(
+            { _id: executionResult.executionId },
+            {
+              $set: {
+                positionId: position._id,
+                parentPositionId: position._id,
+                tradeType: exitQuantity >= position.entryQuantity ? 'EXIT' : 'PARTIAL_EXIT',
+                exitReason: 'SIGNAL',
+                updatedAt: new Date()
+              }
+            }
+          )
+          
+          console.log(`✅ Position ${position.positionId} exit processed successfully`)
+        }
+        
+        exitResults.push(executionResult)
+      } catch (positionError) {
+        console.error(`❌ Error processing exit for position ${position._id}:`, positionError)
+        exitResults.push({
+          success: false,
+          executionId: null,
+          error: positionError.message
+        })
+      }
+    }
+    
+    // Return result of the first exit (can be enhanced later)
+    return exitResults.length > 0 ? exitResults[0] : {
+      success: false,
+      executionId: null,
+      error: 'No exits processed'
+    }
+    
+  } catch (error) {
+    console.error('❌ Error processing exit signal:', error)
+    return {
+      success: false,
+      executionId: null,
+      error: error.message
+    }
   }
 }
 
