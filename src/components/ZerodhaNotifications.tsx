@@ -50,10 +50,23 @@ export default function ZerodhaNotifications() {
   const checkStatus = async () => {
     setLoading(true)
     try {
+      console.log('Checking user status...')
+      
+      // First test the user data endpoint
+      const testResponse = await fetch('/api/debug/user-test')
+      if (testResponse.ok) {
+        const testResult = await testResponse.json()
+        console.log('User test result:', testResult)
+      } else {
+        console.error('User test failed:', testResponse.status)
+      }
+      
       const response = await fetch('/api/debug/status')
+      console.log('Status response status:', response.status)
       
       if (response.ok) {
         const result = await response.json()
+        console.log('Status result:', result)
         setStatusData(result)
         
         // Show modal if notification is needed and not dismissed in this session
@@ -63,7 +76,8 @@ export default function ZerodhaNotifications() {
           }, 500)
         }
       } else {
-        console.error('Failed to check Zerodha status:', response.status)
+        const errorText = await response.text()
+        console.error('Failed to check Zerodha status:', response.status, errorText)
       }
     } catch (error) {
       console.error('Error checking Zerodha status:', error)

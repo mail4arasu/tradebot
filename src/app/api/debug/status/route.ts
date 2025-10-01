@@ -6,18 +6,27 @@ import User from '@/models/User'
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('=== Debug Status Check Started ===')
+    
     const session = await getServerSession(authOptions)
+    console.log('Session user email:', session?.user?.email)
     
     if (!session?.user?.email) {
+      console.log('No authenticated user found')
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
     await dbConnect()
+    console.log('Database connected')
 
     // Find the actual user in the database
     const user = await User.findOne({ email: session.user.email })
+    console.log('User found:', user ? 'Yes' : 'No')
+    console.log('User name:', user?.name)
+    console.log('User email:', user?.email)
     
     if (!user) {
+      console.log('User document not found in database')
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
@@ -62,7 +71,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const response = {
       success: true,
       user: {
         email: user.email,
@@ -81,7 +90,11 @@ export async function GET(request: NextRequest) {
         canTrade,
         needsAuth
       }
-    })
+    }
+
+    console.log('Final response:', response)
+    console.log('=== Debug Status Check Completed ===')
+    return NextResponse.json(response)
 
   } catch (error: any) {
     console.error('Error checking user Zerodha status:', error)
