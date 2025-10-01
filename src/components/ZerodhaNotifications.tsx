@@ -153,9 +153,35 @@ export default function ZerodhaNotifications() {
     return null
   }
 
-  // Don't show modal if conditions not met
-  if (!showModal || !statusData || statusData.status.canTrade || sessionDismissed) {
-    return null
+  // Always show a debug banner when user is logged in
+  if (!statusData) {
+    return (
+      <div className="fixed top-4 right-4 z-50 bg-yellow-500 text-black p-4 rounded shadow-lg">
+        <p><strong>DEBUG:</strong> Loading user status...</p>
+        <p>Session email: {session.user.email}</p>
+        <p>Loading: {loading ? 'Yes' : 'No'}</p>
+      </div>
+    )
+  }
+
+  // Show debug info even if modal is not shown
+  if (!showModal || statusData.status.canTrade || sessionDismissed) {
+    return (
+      <div className="fixed top-4 right-4 z-50 bg-green-500 text-black p-4 rounded shadow-lg max-w-sm">
+        <p><strong>DEBUG:</strong> Status loaded</p>
+        <p>User: {statusData.user.name}</p>
+        <p>Email: {statusData.user.email}</p>
+        <p>Can Trade: {statusData.status.canTrade ? 'Yes' : 'No'}</p>
+        <p>Status: {statusData.status.status}</p>
+        <p>Modal dismissed: {sessionDismissed ? 'Yes' : 'No'}</p>
+        <button 
+          onClick={() => setSessionDismissed(false)}
+          className="mt-2 px-2 py-1 bg-white text-black rounded text-sm"
+        >
+          Reset & Show Modal
+        </button>
+      </div>
+    )
   }
 
   const notification = getNotificationContent()
