@@ -9,6 +9,7 @@ import Link from 'next/link'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
+  const [userName, setUserName] = useState('')
   const [zerodhaConnected, setZerodhaConnected] = useState(false)
   const [balance, setBalance] = useState(0)
   const [activeBots] = useState(0)
@@ -26,6 +27,7 @@ export default function Dashboard() {
       const response = await fetch('/api/user/profile')
       if (response.ok) {
         const data = await response.json()
+        setUserName(data.name || 'User')
         setZerodhaConnected(data.zerodhaConfig?.isConnected || false)
         setBalance(data.zerodhaConfig?.balance || 0)
         
@@ -150,7 +152,7 @@ export default function Dashboard() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
-          Welcome back, {session.user?.name}!
+          Welcome back, {userName || session.user?.name}!
         </h1>
         <p style={{ color: 'var(--muted-foreground)' }}>Here&apos;s your trading overview</p>
       </div>
