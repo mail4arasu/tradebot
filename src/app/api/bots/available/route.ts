@@ -30,7 +30,13 @@ export async function GET(request: NextRequest) {
       emergencyStop: bot.emergencyStop || false,
       minInvestment: bot.minInvestment,
       maxInvestment: bot.maxInvestment,
-      expectedReturn: bot.expectedReturn
+      expectedReturn: bot.expectedReturn,
+      // Trading type configuration
+      tradingType: bot.tradingType || 'INTRADAY',
+      intradayExitTime: bot.intradayExitTime || '15:15',
+      autoSquareOff: bot.autoSquareOff !== undefined ? bot.autoSquareOff : true,
+      allowMultiplePositions: bot.allowMultiplePositions || false,
+      maxPositionHoldDays: bot.maxPositionHoldDays || 1
     }))
 
     return NextResponse.json({ bots: formattedBots })

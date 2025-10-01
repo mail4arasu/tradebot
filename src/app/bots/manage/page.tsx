@@ -43,6 +43,12 @@ interface AvailableBot {
   instrumentType: string
   isActive: boolean
   emergencyStop: boolean
+  // Trading type configuration
+  tradingType: 'INTRADAY' | 'POSITIONAL'
+  intradayExitTime: string
+  autoSquareOff: boolean
+  allowMultiplePositions: boolean
+  maxPositionHoldDays: number
 }
 
 export default function BotManagement() {
@@ -98,10 +104,36 @@ export default function BotManagement() {
         await fetchData() // Refresh data
       } else {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        console.error('Error updating allocation:', error)
+        alert('Error updating allocation: ' + error.message)
       }
     } catch (error) {
       console.error('Error updating allocation:', error)
+      alert('Error updating allocation')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const updateBotConfig = async (botId: string, updates: Partial<AvailableBot>) => {
+    try {
+      setSaving(botId)
+      
+      const response = await fetch('/api/admin/bots', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botId, ...updates })
+      })
+
+      if (response.ok) {
+        await fetchData() // Refresh data
+      } else {
+        const error = await response.json()
+        console.error('Error updating bot config:', error)
+        alert('Error updating bot configuration: ' + error.error)
+      }
+    } catch (error) {
+      console.error('Error updating bot config:', error)
       alert('Error updating bot configuration')
     } finally {
       setSaving(null)
@@ -473,6 +505,190 @@ export default function BotManagement() {
                 </CardContent>
               </Card>
             )}
+          </div>
+
+          {/* Bot Configuration (Admin View) */}
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold mb-4">Bot Configuration (Admin)</h2>
+            <div className="space-y-4">
+              {availableBots.map((bot) => (
+                <Card key={`config-${bot._id}`}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <Settings className="h-5 w-5" />
+                        {bot.name} Configuration
+                      </CardTitle>
+                      <Badge className={getRiskColor(bot.riskLevel)}>
+                        {bot.riskLevel} Risk
+                      </Badge>
+                    </div>
+                    <CardDescription>
+                      Configure trading type and auto-exit settings for {bot.strategy}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Trading Type Configuration */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">Trading Type</h4>
+                        
+                        <div>
+                          <Label htmlFor={`tradingType-${bot._id}`}>Trading Type</Label>
+                          <select
+                            id={`tradingType-${bot._id}`}
+                            value={bot.tradingType}
+                            onChange={(e) => {
+                              updateBotConfig(bot._id, { 
+                                tradingType: e.target.value as 'INTRADAY' | 'POSITIONAL'
+                              })
+                            }}
+                            disabled={saving === bot._id}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                          >
+                            <option value="INTRADAY">Intraday</option>
+                            <option value="POSITIONAL">Positional</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Intraday: Positions auto-close same day | Positional: Hold for multiple days
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label>
+                            <input
+                              type="checkbox"
+                              checked={bot.autoSquareOff}
+                              onChange={(e) => {
+                                updateBotConfig(bot._id, { autoSquareOff: e.target.checked })
+                              }}
+                              disabled={saving === bot._id}
+                              className="mr-2"
+                            />
+                            Auto Square-off
+                          </Label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Automatically close positions at scheduled time
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label>
+                            <input
+                              type="checkbox"
+                              checked={bot.allowMultiplePositions}
+                              onChange={(e) => {
+                                updateBotConfig(bot._id, { allowMultiplePositions: e.target.checked })
+                              }}
+                              disabled={saving === bot._id}
+                              className="mr-2"
+                            />
+                            Allow Multiple Positions
+                          </Label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Allow multiple open positions simultaneously
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Timing Configuration */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">Timing Settings</h4>
+                        
+                        <div>
+                          <Label htmlFor={`exitTime-${bot._id}`}>
+                            Intraday Exit Time
+                          </Label>
+                          <Input
+                            id={`exitTime-${bot._id}`}
+                            type="time"
+                            value={bot.intradayExitTime}
+                            onChange={(e) => {
+                              updateBotConfig(bot._id, { intradayExitTime: e.target.value })
+                            }}
+                            disabled={saving === bot._id || bot.tradingType !== 'INTRADAY'}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Time to auto-close intraday positions (24hr format)
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`holdDays-${bot._id}`}>
+                            Max Position Hold Days
+                          </Label>
+                          <Input
+                            id={`holdDays-${bot._id}`}
+                            type="number"
+                            min="1"
+                            max="30"
+                            value={bot.maxPositionHoldDays}
+                            onChange={(e) => {
+                              const days = parseInt(e.target.value)
+                              if (days > 0 && days <= 30) {
+                                updateBotConfig(bot._id, { maxPositionHoldDays: days })
+                              }
+                            }}
+                            disabled={saving === bot._id || bot.tradingType !== 'POSITIONAL'}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Maximum days to hold positional trades
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Current Status */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">Current Settings</h4>
+                        
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Type:</span>
+                            <Badge variant={bot.tradingType === 'INTRADAY' ? 'default' : 'secondary'}>
+                              {bot.tradingType}
+                            </Badge>
+                          </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Auto Exit:</span>
+                            <span className={bot.autoSquareOff ? 'text-green-600' : 'text-gray-400'}>
+                              {bot.autoSquareOff ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Exit Time:</span>
+                            <span className="font-medium">
+                              {bot.tradingType === 'INTRADAY' ? bot.intradayExitTime : 'N/A'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Multiple Positions:</span>
+                            <span className={bot.allowMultiplePositions ? 'text-blue-600' : 'text-gray-400'}>
+                              {bot.allowMultiplePositions ? 'Allowed' : 'Single Only'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Max Hold:</span>
+                            <span className="font-medium">
+                              {bot.tradingType === 'POSITIONAL' ? `${bot.maxPositionHoldDays} days` : '1 day'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {saving === bot._id && (
+                          <div className="text-blue-600 text-sm">
+                            Saving configuration...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </div>
       )}
