@@ -25,11 +25,21 @@ interface ZerodhaStatusResult {
 }
 
 export default function ZerodhaNotifications() {
+  console.log('🚀 ZerodhaNotifications component is loading!')
+  
   const { data: session } = useSession()
   const [statusData, setStatusData] = useState<ZerodhaStatusResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [sessionDismissed, setSessionDismissed] = useState(false)
+  
+  console.log('📱 Component state:', { 
+    hasSession: !!session, 
+    sessionEmail: session?.user?.email,
+    statusData: !!statusData,
+    showModal,
+    sessionDismissed 
+  })
 
   useEffect(() => {
     if (session?.user) {
@@ -148,10 +158,20 @@ export default function ZerodhaNotifications() {
     }
   }
 
-  // Don't render anything if user is not logged in
+  // ALWAYS render something for testing
+  console.log('🎯 Rendering decision point reached')
+  
+  // Show test banner regardless of session
   if (!session?.user) {
-    return null
+    console.log('❌ No session - showing test banner')
+    return (
+      <div className="fixed top-4 right-4 z-50 bg-red-500 text-white p-4 rounded shadow-lg">
+        <p><strong>TEST:</strong> Component loaded but no session</p>
+      </div>
+    )
   }
+  
+  console.log('✅ Has session - proceeding with logic')
 
   // Always show a debug banner when user is logged in
   if (!statusData) {
