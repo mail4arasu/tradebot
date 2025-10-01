@@ -50,37 +50,43 @@ export default function ZerodhaNotifications() {
   const checkStatus = async () => {
     setLoading(true)
     try {
-      console.log('Checking user status...')
+      console.log('🔍 Starting NEW Zerodha status check...')
       
-      // First test the user data endpoint
-      const testResponse = await fetch('/api/debug/user-test')
-      if (testResponse.ok) {
-        const testResult = await testResponse.json()
-        console.log('User test result:', testResult)
-      } else {
-        console.error('User test failed:', testResponse.status)
-      }
+      // Use the new API endpoint to avoid any caching issues
+      const response = await fetch('/api/user/zerodha-status', {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
       
-      const response = await fetch('/api/debug/status')
-      console.log('Status response status:', response.status)
+      console.log('📡 Response status:', response.status)
       
       if (response.ok) {
         const result = await response.json()
-        console.log('Status result:', result)
+        console.log('✅ SUCCESS - Got result from new endpoint:', result)
+        console.log('👤 User name from API:', result.user?.name)
+        console.log('📧 User email from API:', result.user?.email)
+        console.log('🔌 Can trade:', result.status?.canTrade)
+        
         setStatusData(result)
         
         // Show modal if notification is needed and not dismissed in this session
         if (!result.status.canTrade && !sessionDismissed) {
+          console.log('💡 Will show notification - user cannot trade')
           setTimeout(() => {
             setShowModal(true)
           }, 500)
+        } else {
+          console.log('🚫 No notification needed - user can trade or already dismissed')
         }
       } else {
         const errorText = await response.text()
-        console.error('Failed to check Zerodha status:', response.status, errorText)
+        console.error('❌ Failed to check Zerodha status:', response.status, errorText)
       }
     } catch (error) {
-      console.error('Error checking Zerodha status:', error)
+      console.error('💥 Error checking Zerodha status:', error)
     } finally {
       setLoading(false)
     }
