@@ -212,13 +212,25 @@ export default function BotManagement() {
                           <Badge className={getRiskColor(allocation.botRiskLevel)}>
                             {allocation.botRiskLevel} Risk
                           </Badge>
-                          <Switch
-                            checked={allocation.isActive}
-                            onCheckedChange={(checked) => 
-                              updateAllocation(allocation._id, { isActive: checked })
-                            }
-                            disabled={saving === allocation._id}
-                          />
+                          <div className="flex items-center gap-3">
+                            <Switch
+                              checked={allocation.isActive}
+                              onCheckedChange={(checked) => 
+                                updateAllocation(allocation._id, { isActive: checked })
+                              }
+                              disabled={saving === allocation._id}
+                              className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-300"
+                            />
+                            <Button
+                              size="sm"
+                              variant={allocation.isActive ? "destructive" : "default"}
+                              onClick={() => updateAllocation(allocation._id, { isActive: !allocation.isActive })}
+                              disabled={saving === allocation._id}
+                              className="min-w-[80px]"
+                            >
+                              {saving === allocation._id ? 'Saving...' : allocation.isActive ? 'Disable' : 'Enable'}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                       <CardDescription>
