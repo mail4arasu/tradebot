@@ -29,6 +29,7 @@ interface BotAllocation {
   successfulTrades: number
   totalPnl: number
   allocatedAmount: number
+  riskPercentage: number
 }
 
 interface AvailableBot {
@@ -118,7 +119,8 @@ export default function BotManagement() {
           botId,
           quantity: 1, // Default quantity
           maxTradesPerDay: 1,
-          allocatedAmount: 300000 // Default 3 Lakh allocation
+          allocatedAmount: 300000, // Default 3 Lakh allocation
+          riskPercentage: 2 // Default 2% risk per trade
         })
       })
 
@@ -269,6 +271,28 @@ export default function BotManagement() {
                               Daily trade limit for risk management
                             </p>
                           </div>
+
+                          <div>
+                            <Label htmlFor={`riskPercentage-${allocation._id}`}>Risk Per Trade (%)</Label>
+                            <Input
+                              id={`riskPercentage-${allocation._id}`}
+                              type="number"
+                              min="0.1"
+                              max="50"
+                              step="0.1"
+                              value={allocation.riskPercentage}
+                              onChange={(e) => {
+                                const riskPercentage = parseFloat(e.target.value)
+                                if (riskPercentage > 0 && riskPercentage <= 50) {
+                                  updateAllocation(allocation._id, { riskPercentage })
+                                }
+                              }}
+                              disabled={saving === allocation._id}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Percentage of allocated amount to risk per trade
+                            </p>
+                          </div>
                         </div>
 
                         {/* Trading Hours */}
@@ -347,6 +371,13 @@ export default function BotManagement() {
                               <span className="text-gray-500">Allocated Amount:</span>
                               <span className="font-medium">
                                 ₹{allocation.allocatedAmount.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                            
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-500">Risk Per Trade:</span>
+                              <span className="font-medium">
+                                {allocation.riskPercentage}%
                               </span>
                             </div>
                           </div>
