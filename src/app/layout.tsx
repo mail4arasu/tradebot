@@ -36,10 +36,6 @@ export default function RootLayout({
             {children}
           </main>
           <ZerodhaNotifications />
-          <div className="fixed bottom-4 left-4 z-50 bg-blue-500 text-white p-4 rounded shadow-lg">
-            <h3 className="font-bold">🔵 LAYOUT TEST</h3>
-            <p>This proves layout.tsx is working!</p>
-          </div>
         </Providers>
       </body>
     </html>
