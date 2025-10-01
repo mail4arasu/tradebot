@@ -61,11 +61,38 @@ export async function GET(request: NextRequest) {
       }
     ]).toArray()
 
-    // Get execution details for recent signals
+    // Get execution details for recent signals with user data
     const signalIds = signals.map(s => s._id)
-    const executions = await db.collection('tradeexecutions').find({
-      signalId: { $in: signalIds }
-    }).toArray()
+    const executions = await db.collection('tradeexecutions').aggregate([
+      { $match: { signalId: { $in: signalIds } } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      {
+        $unwind: {
+          path: '$user',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          signalId: 1,
+          userId: 1,
+          quantity: 1,
+          status: 1,
+          executedPrice: 1,
+          error: 1,
+          createdAt: 1,
+          'user.email': 1,
+          'user.name': 1
+        }
+      }
+    ]).toArray()
 
     // Group executions by signal
     const executionsBySignal = executions.reduce((acc, exec) => {
