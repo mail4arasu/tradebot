@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
+import clientPromise from '@/lib/mongodb'
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,13 +20,32 @@ export async function GET(request: NextRequest) {
     await dbConnect()
     console.log('Database connected successfully')
 
-    // Find the actual user in the database
-    const user = await User.findOne({ email: session.user.email })
+    // Check for active impersonation session (same logic as user profile)
+    const client = await clientPromise
+    const db = client.db('tradebot')
+    
+    const activeImpersonation = await db.collection('impersonation_sessions').findOne({
+      adminEmail: session.user.email,
+      expiresAt: { $gt: new Date() }
+    })
+
+    let targetEmail = session.user.email
+    let isImpersonating = false
+
+    if (activeImpersonation) {
+      targetEmail = activeImpersonation.targetUserEmail
+      isImpersonating = true
+      console.log('🎭 IMPERSONATION ACTIVE - Admin:', session.user.email, 'viewing as:', targetEmail)
+    }
+
+    // Find the actual user in the database (or impersonated user)
+    const user = await User.findOne({ email: targetEmail })
     console.log('User search result:')
     console.log('- Found user:', user ? 'YES' : 'NO')
     console.log('- User name from DB:', user?.name)
     console.log('- User email from DB:', user?.email)
-    console.log('- Session email:', session.user.email)
+    console.log('- Target email:', targetEmail)
+    console.log('- Is impersonating:', isImpersonating)
     
     if (!user) {
       console.log('ERROR: User document not found in database')
@@ -111,7 +131,9 @@ export async function GET(request: NextRequest) {
         timestamp: new Date().toISOString(),
         endpoint: '/api/user/zerodha-status',
         sessionEmail: session.user.email,
-        userFromDB: user.email
+        targetEmail: targetEmail,
+        userFromDB: user.email,
+        isImpersonating: isImpersonating
       }
     }
 
