@@ -211,6 +211,16 @@ export default function AdminDashboard() {
                 Trading Control
               </button>
             </Link>
+            <Link href="/admin/intraday-scheduler">
+              <button className="px-4 py-2 rounded transition-colors duration-200 border"
+                      style={{
+                        backgroundColor: 'var(--secondary)',
+                        color: 'var(--secondary-foreground)',
+                        borderColor: 'var(--border)'
+                      }}>
+                ⏰ Intraday Scheduler
+              </button>
+            </Link>
             <Link href="/admin/cleanup">
               <button className="px-4 py-2 rounded transition-colors duration-200 border"
                       style={{
