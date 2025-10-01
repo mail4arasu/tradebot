@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/mongodb'
+import { intradayScheduler } from '@/services/intradayScheduler'
 
 export interface CreatePositionData {
   userId: ObjectId
@@ -117,6 +118,17 @@ export async function updatePositionWithExit(
         }
       }
     )
+    
+    // Cancel scheduled auto-exit if position is fully closed
+    if (newStatus === 'CLOSED' && position.isIntraday) {
+      try {
+        intradayScheduler.cancelPositionExit(position.positionId)
+        console.log(`🚫 Cancelled scheduled auto-exit for closed position: ${position.positionId}`)
+      } catch (schedulerError) {
+        console.error('⚠️ Error cancelling scheduled exit:', schedulerError)
+        // Don't throw - position update was successful, scheduler error is secondary
+      }
+    }
     
     console.log(`📊 Position updated: ${positionId} - Status: ${newStatus}, Remaining: ${remainingQuantity}`)
   } catch (error) {
