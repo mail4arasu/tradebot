@@ -72,14 +72,34 @@ export async function GET(request: NextRequest) {
     }
     
     if (action === 'list') {
-      // List user's backtests
-      const response = await proxyToBacktestVM('/api/backtest/list')
-      const data = await response.json()
-      
-      return NextResponse.json({
-        success: true,
-        backtests: data.backtests || []
-      })
+      try {
+        // Try Backtest VM first
+        const response = await proxyToBacktestVM('/api/backtest/list')
+        const data = await response.json()
+        
+        return NextResponse.json({
+          success: true,
+          backtests: data.backtests || []
+        })
+      } catch (vmError) {
+        console.log('Backtest VM unavailable, using local backtests')
+        
+        // Fallback to local backtests
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
+        
+        const localData = await localResponse.json()
+        
+        return NextResponse.json({
+          success: localData.success,
+          backtests: localData.backtests || [],
+          usingLocalEngine: true
+        })
+      }
     }
     
     // Default: return available operations
@@ -117,22 +137,6 @@ export async function POST(request: NextRequest) {
     const { action, ...params } = body
     
     if (action === 'start') {
-      // Start new backtest
-      const backtestParams = {
-        botId: params.botId || 'nifty50-futures-bot',
-        startDate: new Date(params.startDate),
-        endDate: new Date(params.endDate),
-        initialCapital: params.initialCapital || 500000,
-        lotSize: params.lotSize || 25,
-        useStratFilter: params.useStratFilter !== false,
-        useGaussianFilter: params.useGaussianFilter !== false,
-        useFibEntry: params.useFibEntry !== false,
-        maxBulletsPerDay: params.maxBulletsPerDay || 1,
-        takeProfitPercent: params.takeProfitPercent,
-        useStratStops: params.useStratStops !== false,
-        timezone: params.timezone || 'Asia/Kolkata'
-      }
-      
       // Validate parameters
       if (!params.startDate || !params.endDate) {
         return NextResponse.json({
@@ -147,22 +151,66 @@ export async function POST(request: NextRequest) {
           error: 'End date must be after start date'
         }, { status: 400 })
       }
-      
-      // Start backtest on Backtest VM
-      const response = await proxyToBacktestVM(
-        '/api/backtest/start',
-        'POST',
-        { params: backtestParams }
-      )
-      
-      const data = await response.json()
-      
-      return NextResponse.json({
-        success: data.success,
-        backtestId: data.backtestId,
-        message: data.message,
-        parameters: backtestParams
-      })
+
+      try {
+        // Try Backtest VM first
+        const backtestParams = {
+          botId: params.botId || 'nifty50-futures-bot',
+          startDate: new Date(params.startDate),
+          endDate: new Date(params.endDate),
+          initialCapital: params.initialCapital || 500000,
+          lotSize: params.lotSize || 25,
+          useStratFilter: params.useStratFilter !== false,
+          useGaussianFilter: params.useGaussianFilter !== false,
+          useFibEntry: params.useFibEntry !== false,
+          maxBulletsPerDay: params.maxBulletsPerDay || 1,
+          takeProfitPercent: params.takeProfitPercent,
+          useStratStops: params.useStratStops !== false,
+          timezone: params.timezone || 'Asia/Kolkata'
+        }
+        
+        const response = await proxyToBacktestVM(
+          '/api/backtest/start',
+          'POST',
+          { params: backtestParams }
+        )
+        
+        const data = await response.json()
+        
+        return NextResponse.json({
+          success: data.success,
+          backtestId: data.backtestId,
+          message: data.message,
+          parameters: backtestParams
+        })
+        
+      } catch (vmError) {
+        console.log('Backtest VM unavailable, using local implementation')
+        
+        // Fallback to local implementation
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': request.headers.get('cookie') || ''
+          },
+          body: JSON.stringify({
+            startDate: params.startDate,
+            endDate: params.endDate,
+            initialCapital: params.initialCapital || 100000,
+            symbol: 'NIFTY'
+          })
+        })
+        
+        const localData = await localResponse.json()
+        
+        return NextResponse.json({
+          success: localData.success,
+          backtestId: localData.backtestId,
+          message: localData.message + ' (Local Engine)',
+          usingLocalEngine: true
+        })
+      }
     }
     
     if (action === 'sync-data') {

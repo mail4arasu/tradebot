@@ -50,43 +50,86 @@ export async function GET(
     const type = searchParams.get('type') || 'result'
     
     if (type === 'status') {
-      // Get backtest status only
-      const response = await proxyToBacktestVM(`/api/backtest/status/${backtestId}`)
-      
-      if (!response.ok) {
-        const error = await response.json()
+      try {
+        // Try Backtest VM first
+        const response = await proxyToBacktestVM(`/api/backtest/status/${backtestId}`)
+        
+        if (!response.ok) {
+          throw new Error('VM backtest not found')
+        }
+        
+        const data = await response.json()
+        
         return NextResponse.json({
-          success: false,
-          error: error.error || 'Backtest not found'
-        }, { status: response.status })
+          success: true,
+          status: data.status
+        })
+      } catch (vmError) {
+        // Fallback to local backtest
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
+        
+        if (!localResponse.ok) {
+          return NextResponse.json({
+            success: false,
+            error: 'Backtest not found'
+          }, { status: 404 })
+        }
+        
+        const localData = await localResponse.json()
+        
+        return NextResponse.json({
+          success: true,
+          status: localData.backtest?.status || 'UNKNOWN',
+          progress: localData.backtest?.progress || 0,
+          usingLocalEngine: true
+        })
       }
-      
-      const data = await response.json()
-      
-      return NextResponse.json({
-        success: true,
-        status: data.status
-      })
     }
     
     if (type === 'result') {
-      // Get complete backtest result
-      const response = await proxyToBacktestVM(`/api/backtest/result/${backtestId}`)
-      
-      if (!response.ok) {
-        const error = await response.json()
+      try {
+        // Try Backtest VM first
+        const response = await proxyToBacktestVM(`/api/backtest/result/${backtestId}`)
+        
+        if (!response.ok) {
+          throw new Error('VM backtest not found')
+        }
+        
+        const data = await response.json()
+        
         return NextResponse.json({
-          success: false,
-          error: error.error || 'Backtest not found'
-        }, { status: response.status })
+          success: true,
+          result: data.result
+        })
+      } catch (vmError) {
+        // Fallback to local backtest
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
+        
+        if (!localResponse.ok) {
+          return NextResponse.json({
+            success: false,
+            error: 'Backtest not found'
+          }, { status: 404 })
+        }
+        
+        const localData = await localResponse.json()
+        
+        return NextResponse.json({
+          success: true,
+          result: localData.backtest,
+          usingLocalEngine: true
+        })
       }
-      
-      const data = await response.json()
-      
-      return NextResponse.json({
-        success: true,
-        result: data.result
-      })
     }
     
     return NextResponse.json({
