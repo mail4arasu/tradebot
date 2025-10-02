@@ -34,16 +34,22 @@ const HistoricalDataSchema = new mongoose.Schema({
 
 const HistoricalData = mongoose.models.HistoricalData || mongoose.model('HistoricalData', HistoricalDataSchema)
 
-// Nifty50 Continuous Futures Contract
-const NIFTY_CONTRACTS = [
-  'NIFTY', // Continuous contract symbol
-  'NIFTY50' // Alternative continuous contract symbol
-]
-
-// Also include current month for live trading
-const CURRENT_CONTRACTS = [
-  'NIFTY25OCTFUT', // Current month for live trading
-  'NIFTY25NOVFUT'  // Next month for live trading
+// Nifty50 Futures Contracts - Current and Historical
+const NIFTY_FUTURES = [
+  // Current Active Contracts
+  { symbol: 'NIFTY25OCTFUT', expiry: '2025-10-28', active: true },
+  { symbol: 'NIFTY25NOVFUT', expiry: '2025-11-25', active: true },
+  { symbol: 'NIFTY25DECFUT', expiry: '2025-12-30', active: true },
+  
+  // Historical Contracts for Continuous Data
+  { symbol: 'NIFTY25SEPFUT', expiry: '2025-09-26', active: false },
+  { symbol: 'NIFTY25AUGFUT', expiry: '2025-08-29', active: false },
+  { symbol: 'NIFTY25JULFUT', expiry: '2025-07-25', active: false },
+  { symbol: 'NIFTY25JUNFUT', expiry: '2025-06-26', active: false },
+  { symbol: 'NIFTY25MAYFUT', expiry: '2025-05-29', active: false },
+  { symbol: 'NIFTY24DECFUT', expiry: '2024-12-26', active: false },
+  { symbol: 'NIFTY24NOVFUT', expiry: '2024-11-28', active: false },
+  { symbol: 'NIFTY24OCTFUT', expiry: '2024-10-31', active: false }
 ]
 
 /**
@@ -63,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { action = 'start', days = 365, instruments = [...NIFTY_CONTRACTS, ...CURRENT_CONTRACTS] } = body
+    const { action = 'start', days = 365, instruments = NIFTY_FUTURES.map(f => f.symbol) } = body
 
     if (action === 'start') {
       // Start background sync process
@@ -154,39 +160,22 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
       user.zerodhaConfig.accessToken
     )
 
-    // Get instruments list - Check both NFO and NSE for continuous contracts
+    // Get instruments list from NFO
     const nfoInstruments = await zerodha.getInstruments('NFO')
-    const nseInstruments = await zerodha.getInstruments('NSE')
     
-    console.log('📊 Looking for continuous contracts...')
+    console.log('📊 Looking for Nifty futures contracts...')
     
-    // Look for continuous contracts in NSE first
-    let niftyInstruments = nseInstruments.filter((inst: any) => 
-      (inst.name === 'NIFTY 50' || inst.name === 'NIFTY' || inst.tradingsymbol === 'NIFTY 50') &&
-      inst.instrument_type === 'EQ' // Continuous contracts are usually in EQ
-    )
-    
-    console.log(`Found ${niftyInstruments.length} continuous contracts in NSE`)
-    
-    // If no continuous contracts found, fall back to current month futures
-    if (niftyInstruments.length === 0) {
-      console.log('📊 No continuous contracts found, using current month futures...')
-      niftyInstruments = nfoInstruments.filter((inst: any) => 
-        inst.name === 'NIFTY' && 
-        inst.instrument_type === 'FUT' &&
-        (inst.tradingsymbol.includes('25OCT') || inst.tradingsymbol.includes('25NOV'))
-      )
-    }
-    
-    // Also add current futures for live trading
-    const currentFutures = nfoInstruments.filter((inst: any) => 
-      inst.name === 'NIFTY' && 
+    // Find matching Nifty futures from our target list
+    const niftyInstruments = nfoInstruments.filter((inst: any) => 
+      inst.name === '"NIFTY"' && 
       inst.instrument_type === 'FUT' &&
-      (inst.tradingsymbol.includes('25OCT') || inst.tradingsymbol.includes('25NOV'))
+      instruments.includes(inst.tradingsymbol)
     )
     
-    // Combine continuous and current futures
-    niftyInstruments = [...niftyInstruments, ...currentFutures]
+    console.log(`📊 Found ${niftyInstruments.length} matching Nifty futures:`)
+    niftyInstruments.forEach(inst => {
+      console.log(`  - ${inst.tradingsymbol} (Token: ${inst.instrument_token}, Expiry: ${inst.expiry})`)
+    })
 
     console.log(`✅ Found ${niftyInstruments.length} matching Nifty futures`)
 
@@ -233,6 +222,9 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
     }
     
     console.log('✅ Background historical data sync completed')
+    
+    // Create continuous contract from individual monthly contracts
+    await createContinuousContract()
     
   } catch (error) {
     console.error('❌ Background sync error:', error)
@@ -293,4 +285,108 @@ async function getDataStats() {
   ])
   
   return stats
+}
+
+/**
+ * Create continuous contract by stitching monthly futures
+ */
+async function createContinuousContract() {
+  try {
+    console.log('🔗 Creating continuous Nifty futures contract...')
+    
+    // Get all Nifty futures data, sorted by date
+    const allData = await HistoricalData.find({
+      symbol: 'NIFTY',
+      timeframe: '5minute'
+    }).sort({ date: 1 })
+    
+    if (allData.length === 0) {
+      console.log('❌ No Nifty futures data found')
+      return
+    }
+    
+    // Group by contract and create rollover map
+    const contractData = new Map()
+    allData.forEach(candle => {
+      if (!contractData.has(candle.tradingsymbol)) {
+        contractData.set(candle.tradingsymbol, [])
+      }
+      contractData.get(candle.tradingsymbol).push(candle)
+    })
+    
+    console.log(`📊 Processing ${contractData.size} contracts for continuous series`)
+    
+    // Sort contracts by expiry date
+    const sortedContracts = NIFTY_FUTURES
+      .filter(f => contractData.has(f.symbol))
+      .sort((a, b) => new Date(a.expiry).getTime() - new Date(b.expiry).getTime())
+    
+    const continuousData = []
+    let rolloverAdjustment = 0
+    
+    for (let i = 0; i < sortedContracts.length; i++) {
+      const contract = sortedContracts[i]
+      const candles = contractData.get(contract.symbol)
+      const nextContract = sortedContracts[i + 1]
+      
+      console.log(`📈 Processing ${contract.symbol} (${candles.length} candles)`)
+      
+      // Determine rollover date (5 days before expiry)
+      const expiryDate = new Date(contract.expiry)
+      const rolloverDate = new Date(expiryDate)
+      rolloverDate.setDate(rolloverDate.getDate() - 5)
+      
+      // Use data until rollover date
+      const contractCandles = candles.filter(c => new Date(c.date) <= rolloverDate)
+      
+      // Calculate price adjustment for next contract
+      if (nextContract && contractCandles.length > 0) {
+        const lastPrice = contractCandles[contractCandles.length - 1].close
+        const nextCandles = contractData.get(nextContract.symbol)
+        const nextFirstCandle = nextCandles?.find(c => new Date(c.date) >= rolloverDate)
+        
+        if (nextFirstCandle) {
+          const priceGap = lastPrice - nextFirstCandle.close
+          rolloverAdjustment += priceGap
+          console.log(`🔄 Rollover from ${contract.symbol} to ${nextContract.symbol}: adjustment ${priceGap.toFixed(2)}`)
+        }
+      }
+      
+      // Add adjusted candles to continuous series
+      contractCandles.forEach(candle => {
+        continuousData.push({
+          ...candle.toObject(),
+          tradingsymbol: 'NIFTY_CONTINUOUS',
+          open: candle.open + rolloverAdjustment,
+          high: candle.high + rolloverAdjustment,
+          low: candle.low + rolloverAdjustment,
+          close: candle.close + rolloverAdjustment,
+          continuous: true
+        })
+      })
+    }
+    
+    console.log(`📊 Created ${continuousData.length} continuous candles`)
+    
+    // Save continuous contract data
+    if (continuousData.length > 0) {
+      const bulkOps = continuousData.map(candle => ({
+        updateOne: {
+          filter: {
+            tradingsymbol: 'NIFTY_CONTINUOUS',
+            timeframe: candle.timeframe,
+            date: candle.date
+          },
+          update: { $set: candle },
+          upsert: true
+        }
+      }))
+      
+      await HistoricalData.bulkWrite(bulkOps)
+      console.log(`✅ Saved ${continuousData.length} continuous contract candles`)
+    }
+    
+  } catch (error) {
+    console.error('❌ Error creating continuous contract:', error)
+  }
 }
