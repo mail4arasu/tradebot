@@ -362,9 +362,32 @@ async function runBacktestInBackground(
     // Log backtest parameters
     console.log(`📊 Backtest parameters: ${startDate} to ${endDate}, Capital: ₹${initialCapital}`)
     
-    // Get historical data
+    // First, check what data is available in the database
+    const availableDataSample = await HistoricalData.find({
+      symbol: '"NIFTY"',
+      timeframe: '5minute'
+    }).sort({ date: 1 }).limit(5)
+    
+    const totalAvailableRecords = await HistoricalData.countDocuments({
+      symbol: '"NIFTY"',
+      timeframe: '5minute'
+    })
+    
+    console.log(`📈 Available NIFTY data: ${totalAvailableRecords} total records`)
+    if (availableDataSample.length > 0) {
+      const firstDate = availableDataSample[0].date
+      const lastSample = await HistoricalData.findOne({
+        symbol: '"NIFTY"',
+        timeframe: '5minute'
+      }).sort({ date: -1 })
+      const lastDate = lastSample?.date
+      
+      console.log(`📅 Data range available: ${firstDate?.toISOString().split('T')[0]} to ${lastDate?.toISOString().split('T')[0]}`)
+    }
+    
+    // Get historical data - note: symbol is stored as "NIFTY" with quotes from Zerodha API
     const historicalData = await HistoricalData.find({
-      symbol: 'NIFTY',
+      symbol: '"NIFTY"',
       timeframe: '5minute',
       date: {
         $gte: new Date(startDate),
@@ -374,11 +397,13 @@ async function runBacktestInBackground(
     
     if (historicalData.length === 0) {
       console.log(`❌ No historical data found for ${startDate} to ${endDate}`)
+      console.log(`🔍 Query dates: ${new Date(startDate).toISOString()} to ${new Date(endDate).toISOString()}`)
+      
       await BacktestResult.updateOne(
         { backtestId },
         { 
           status: 'FAILED', 
-          error: 'No historical data found for the selected period',
+          error: `No historical data found for the selected period. Available data: ${totalAvailableRecords} records`,
           progress: 0
         }
       )
@@ -410,8 +435,18 @@ async function runBacktestInBackground(
     // Get final results
     const results = strategy.getResults()
     
+    console.log(`📊 Strategy completed processing ${historicalData.length} candles`)
+    console.log(`💼 Final Results:`)
+    console.log(`   - Total Trades: ${results.totalTrades}`)
+    console.log(`   - Winning Trades: ${results.winningTrades}`)
+    console.log(`   - Losing Trades: ${results.losingTrades}`)
+    console.log(`   - Total P&L: ₹${results.totalPnL.toFixed(2)}`)
+    console.log(`   - Final Capital: ₹${results.finalCapital.toFixed(2)}`)
+    console.log(`   - Max Drawdown: ${results.maxDrawdown.toFixed(2)}%`)
+    console.log(`   - Win Rate: ${results.winRate.toFixed(2)}%`)
+    
     // Update backtest record with results
-    await BacktestResult.updateOne(
+    const updateResult = await BacktestResult.updateOne(
       { backtestId },
       {
         status: 'COMPLETED',
@@ -429,7 +464,8 @@ async function runBacktestInBackground(
     )
     
     console.log(`✅ Backtest ${backtestId} completed successfully`)
-    console.log(`📈 Results: ${results.totalTrades} trades, ₹${results.totalPnL.toFixed(2)} P&L`)
+    console.log(`💾 Database update result:`, updateResult.modifiedCount > 0 ? 'SUCCESS' : 'NO_CHANGES')
+    console.log(`📈 Final Results: ${results.totalTrades} trades, ₹${results.totalPnL.toFixed(2)} P&L`)
     
   } catch (error) {
     console.error(`❌ Backtest ${backtestId} failed:`, error)
