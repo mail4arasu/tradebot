@@ -20,6 +20,47 @@ export class ZerodhaAPI {
     this.accessToken = accessToken
   }
 
+  // Generic method to make authenticated requests to Zerodha API
+  private async makeRequest(method: string, endpoint: string, body?: any): Promise<any> {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      const url = `${this.baseUrl}${endpoint}`
+      const options: RequestInit = {
+        method,
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.accessToken}`,
+          'X-Kite-Version': '3',
+          'Content-Type': 'application/json'
+        }
+      }
+
+      if (body && (method === 'POST' || method === 'PUT')) {
+        options.body = JSON.stringify(body)
+      }
+
+      console.log(`🔗 Making ${method} request to: ${url}`)
+      
+      const response = await fetch(url, options)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ API Error ${response.status}:`, errorText)
+        throw new Error(`API request failed: ${response.status} - ${errorText}`)
+      }
+      
+      const data = await response.json()
+      console.log(`✅ API Response received for ${endpoint}`)
+      
+      return data
+    } catch (error) {
+      console.error(`❌ Request failed for ${endpoint}:`, error)
+      throw error
+    }
+  }
+
   async getProfile() {
     if (!this.accessToken) {
       throw new Error('Access token required. Please complete OAuth flow first.')
