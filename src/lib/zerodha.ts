@@ -347,8 +347,47 @@ export class ZerodhaAPI {
   // Historical Data Methods
   async getInstruments(exchange: string = 'NFO'): Promise<any[]> {
     try {
-      const response = await this.makeRequest('GET', `/instruments/${exchange}`)
-      return response
+      // Zerodha instruments endpoint doesn't use /instruments/{exchange}
+      // It uses /instruments endpoint and returns CSV data
+      const url = `${this.baseUrl}/instruments`
+      
+      console.log(`🔗 Fetching instruments from: ${url}`)
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.accessToken}`,
+          'X-Kite-Version': '3'
+        }
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`❌ Instruments API Error ${response.status}:`, errorText)
+        throw new Error(`Instruments API failed: ${response.status} - ${errorText}`)
+      }
+      
+      // Zerodha returns CSV data, not JSON
+      const csvData = await response.text()
+      console.log(`✅ Got CSV data, first 200 chars:`, csvData.substring(0, 200))
+      
+      // Parse CSV to JSON
+      const lines = csvData.trim().split('\n')
+      const headers = lines[0].split(',')
+      const instruments = lines.slice(1).map(line => {
+        const values = line.split(',')
+        const instrument: any = {}
+        headers.forEach((header, index) => {
+          instrument[header] = values[index]
+        })
+        return instrument
+      })
+      
+      // Filter by exchange if specified
+      if (exchange && exchange !== 'ALL') {
+        return instruments.filter(inst => inst.exchange === exchange)
+      }
+      
+      return instruments
     } catch (error) {
       console.error('Error fetching instruments:', error)
       throw error

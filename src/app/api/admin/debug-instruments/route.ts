@@ -62,27 +62,42 @@ export async function GET(request: NextRequest) {
 
     console.log('🔍 Fetching instruments for debugging...')
 
-    // Get instruments from different exchanges
-    const nfoInstruments = await zerodha.getInstruments('NFO')
-    const nseInstruments = await zerodha.getInstruments('NSE')
+    try {
+      // First test basic authentication
+      console.log('🧪 Testing profile endpoint first...')
+      const profile = await zerodha.getProfile()
+      console.log('✅ Profile fetch successful:', profile?.data?.user_name)
+    } catch (profileError) {
+      console.error('❌ Profile fetch failed:', profileError)
+      return NextResponse.json({
+        success: false,
+        error: 'Authentication failed: ' + (profileError as Error).message,
+        debug: {
+          step: 'profile_test',
+          userEmail: user.email,
+          apiKeyLength: apiKey.length,
+          accessTokenLength: accessToken.length
+        }
+      })
+    }
 
-    // Filter for Nifty-related instruments
-    const niftyNFO = nfoInstruments.filter((inst: any) => 
-      inst.name === 'NIFTY' || inst.tradingsymbol.includes('NIFTY')
-    ).slice(0, 20) // Limit for debugging
+    try {
+      // Get instruments from NFO only for now
+      console.log('🔍 Fetching NFO instruments...')
+      const nfoInstruments = await zerodha.getInstruments('NFO')
+      
+      console.log(`✅ Got ${nfoInstruments.length} NFO instruments`)
 
-    const niftyNSE = nseInstruments.filter((inst: any) => 
-      inst.name === 'NIFTY 50' || 
-      inst.name === 'NIFTY' || 
-      inst.tradingsymbol.includes('NIFTY')
-    ).slice(0, 20) // Limit for debugging
+      // Filter for Nifty-related instruments
+      const niftyNFO = nfoInstruments.filter((inst: any) => 
+        inst.name === 'NIFTY' || inst.tradingsymbol.includes('NIFTY')
+      ).slice(0, 10) // Limit for debugging
 
-    return NextResponse.json({
-      success: true,
-      debug: {
-        nfo: {
-          total: nfoInstruments.length,
-          niftyCount: niftyNFO.length,
+      return NextResponse.json({
+        success: true,
+        debug: {
+          totalNFOInstruments: nfoInstruments.length,
+          niftyInstruments: niftyNFO.length,
           samples: niftyNFO.map(inst => ({
             name: inst.name,
             tradingsymbol: inst.tradingsymbol,
@@ -90,21 +105,24 @@ export async function GET(request: NextRequest) {
             instrument_token: inst.instrument_token,
             expiry: inst.expiry,
             exchange: inst.exchange
-          }))
-        },
-        nse: {
-          total: nseInstruments.length,
-          niftyCount: niftyNSE.length,
-          samples: niftyNSE.map(inst => ({
-            name: inst.name,
-            tradingsymbol: inst.tradingsymbol,
-            instrument_type: inst.instrument_type,
-            instrument_token: inst.instrument_token,
-            exchange: inst.exchange
-          }))
+          })),
+          userInfo: {
+            email: user.email,
+            authenticated: true
+          }
         }
-      }
-    })
+      })
+    } catch (instrumentError) {
+      console.error('❌ Instruments fetch failed:', instrumentError)
+      return NextResponse.json({
+        success: false,
+        error: 'Instruments fetch failed: ' + (instrumentError as Error).message,
+        debug: {
+          step: 'instruments_fetch',
+          errorDetails: instrumentError
+        }
+      })
+    }
 
   } catch (error: any) {
     console.error('Debug instruments error:', error)
