@@ -221,6 +221,16 @@ export default function AdminDashboard() {
                 ⏰ Intraday Scheduler
               </button>
             </Link>
+            <Link href="/admin/announcements">
+              <button className="px-4 py-2 rounded transition-colors duration-200 border"
+                      style={{
+                        backgroundColor: 'var(--secondary)',
+                        color: 'var(--secondary-foreground)',
+                        borderColor: 'var(--border)'
+                      }}>
+                📢 Announcements
+              </button>
+            </Link>
             <Link href="/admin/cleanup">
               <button className="px-4 py-2 rounded transition-colors duration-200 border"
                       style={{
