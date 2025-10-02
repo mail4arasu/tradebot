@@ -45,12 +45,27 @@ export default function Backtest() {
     initialCapital: 100000
   })
   const [backtesting, setBacktesting] = useState(false)
+  const [backtestResults, setBacktestResults] = useState<any[]>([])
+  const [loadingResults, setLoadingResults] = useState(false)
+  const [currentBacktestId, setCurrentBacktestId] = useState<string | null>(null)
 
   useEffect(() => {
     if (session) {
       fetchBots()
+      fetchBacktestResults()
     }
   }, [session])
+
+  // Poll for backtest progress if there's a current backtest
+  useEffect(() => {
+    if (currentBacktestId) {
+      const interval = setInterval(() => {
+        checkBacktestStatus(currentBacktestId)
+      }, 5000) // Check every 5 seconds
+
+      return () => clearInterval(interval)
+    }
+  }, [currentBacktestId])
 
   const fetchBots = async () => {
     try {
@@ -64,6 +79,60 @@ export default function Backtest() {
       console.error('Error fetching bots:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBacktestResults = async () => {
+    try {
+      setLoadingResults(true)
+      const response = await fetch('/api/backtest?action=list')
+      if (response.ok) {
+        const data = await response.json()
+        setBacktestResults(data.backtests || [])
+      }
+    } catch (error) {
+      console.error('Error fetching backtest results:', error)
+    } finally {
+      setLoadingResults(false)
+    }
+  }
+
+  const checkBacktestStatus = async (backtestId: string) => {
+    try {
+      const response = await fetch(`/api/backtest/${backtestId}?type=status`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.status) {
+          // Update the backtest in our results list
+          setBacktestResults(prev => prev.map(bt => 
+            bt.id === backtestId ? { ...bt, ...data.status } : bt
+          ))
+          
+          // If completed, stop polling
+          if (data.status.status === 'COMPLETED' || data.status.status === 'FAILED') {
+            setCurrentBacktestId(null)
+            fetchBacktestResults() // Refresh the full list
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking backtest status:', error)
+    }
+  }
+
+  const viewBacktestResult = async (backtestId: string) => {
+    try {
+      const response = await fetch(`/api/backtest/${backtestId}?type=result`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.result) {
+          // Display results in a modal or expand in place
+          console.log('Backtest Result:', data.result)
+          alert(`Backtest Results:\n\nTotal Return: ₹${data.result.totalReturn}\nWin Rate: ${data.result.winRate}%\nTotal Trades: ${data.result.totalTrades}\nMax Drawdown: ${data.result.maxDrawdownPercent}%`)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching backtest result:', error)
     }
   }
 
@@ -125,7 +194,20 @@ export default function Backtest() {
       }
       
       console.log('Backtest started:', data)
-      alert(`Backtest started successfully!\n\nBacktest ID: ${data.backtestId}\n\nYou can monitor the progress and view results once completed.\n\nNote: This may take several minutes depending on the date range.`)
+      
+      // Add to results list and start monitoring
+      const newBacktest = {
+        id: data.backtestId,
+        status: 'RUNNING',
+        progress: 0,
+        startTime: new Date().toISOString(),
+        ...data.parameters
+      }
+      
+      setBacktestResults(prev => [newBacktest, ...prev])
+      setCurrentBacktestId(data.backtestId)
+      
+      alert(`Backtest started successfully!\n\nBacktest ID: ${data.backtestId}\n\nYou can monitor the progress in the results section below.\n\nNote: This may take several minutes depending on the date range.`)
       
     } catch (error: any) {
       console.error('Backtest error:', error)
@@ -377,6 +459,167 @@ export default function Backtest() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Backtest Results Section */}
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Backtest Results
+              </CardTitle>
+              <CardDescription>
+                Monitor progress and view completed backtest results
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingResults ? (
+                <div className="flex justify-center items-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                  <span>Loading results...</span>
+                </div>
+              ) : backtestResults.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No backtest results yet</p>
+                  <p className="text-sm">Run a backtest to see results here</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {backtestResults.map((result) => (
+                    <Card
+                      key={result.id}
+                      className="border-l-4 border-l-blue-500"
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-semibold">
+                                {result.id}
+                              </h3>
+                              <Badge
+                                className={
+                                  result.status === 'COMPLETED'
+                                    ? 'bg-green-100 text-green-800'
+                                    : result.status === 'RUNNING'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : result.status === 'FAILED'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }
+                              >
+                                {result.status}
+                              </Badge>
+                              {result.status === 'RUNNING' && (
+                                <div className="flex items-center gap-2">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-sm text-gray-600">
+                                    {result.progress || 0}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-500">Bot:</span>
+                                <span className="ml-2 font-medium">
+                                  {result.botId || 'Nifty50 Futures'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Capital:</span>
+                                <span className="ml-2 font-medium">
+                                  ₹{(result.initialCapital || 100000).toLocaleString()}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Period:</span>
+                                <span className="ml-2 font-medium">
+                                  {result.startDate ? new Date(result.startDate).toLocaleDateString() : 'N/A'} - 
+                                  {result.endDate ? new Date(result.endDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Started:</span>
+                                <span className="ml-2 font-medium">
+                                  {result.startTime ? new Date(result.startTime).toLocaleString() : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {result.status === 'COMPLETED' && result.totalReturn !== undefined && (
+                              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-500">Total Return:</span>
+                                    <span className={`ml-2 font-bold ${
+                                      (result.totalReturn || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                                    }`}>
+                                      ₹{(result.totalReturn || 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Win Rate:</span>
+                                    <span className="ml-2 font-medium">
+                                      {(result.winRate || 0).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Total Trades:</span>
+                                    <span className="ml-2 font-medium">
+                                      {result.totalTrades || 0}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">Max Drawdown:</span>
+                                    <span className="ml-2 font-medium text-red-600">
+                                      {(result.maxDrawdownPercent || 0).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="ml-4 flex flex-col gap-2">
+                            {result.status === 'COMPLETED' && (
+                              <Button
+                                size="sm"
+                                onClick={() => viewBacktestResult(result.id)}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                <TrendingUp className="h-4 w-4 mr-1" />
+                                View Results
+                              </Button>
+                            )}
+                            {result.status === 'RUNNING' && currentBacktestId === result.id && (
+                              <Badge variant="secondary" className="text-xs">
+                                Monitoring...
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {result.status === 'RUNNING' && (
+                          <div className="mt-3">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                                style={{ width: `${result.progress || 0}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

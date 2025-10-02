@@ -75,18 +75,37 @@ app.get('/api/backtest/status', (req, res) => {
   });
 });
 
+// Store mock backtests in memory for demo
+const mockBacktests = new Map();
+
 // Get specific backtest status
 app.get('/api/backtest/status/:id', (req, res) => {
   const { id } = req.params;
   
+  // Get or create mock backtest
+  let backtest = mockBacktests.get(id);
+  if (!backtest) {
+    backtest = {
+      id: id,
+      status: 'RUNNING',
+      progress: 0,
+      startTime: new Date().toISOString()
+    };
+    mockBacktests.set(id, backtest);
+  }
+  
+  // Simulate progress - increase by 20% each time checked
+  if (backtest.status === 'RUNNING' && backtest.progress < 100) {
+    backtest.progress = Math.min(100, backtest.progress + 20);
+    if (backtest.progress >= 100) {
+      backtest.status = 'COMPLETED';
+      backtest.endTime = new Date().toISOString();
+    }
+  }
+  
   res.json({
     success: true,
-    status: {
-      id: id,
-      status: 'COMPLETED',
-      progress: 100,
-      message: 'Mock backtest completed'
-    }
+    status: backtest
   });
 });
 
@@ -94,22 +113,44 @@ app.get('/api/backtest/status/:id', (req, res) => {
 app.get('/api/backtest/result/:id', (req, res) => {
   const { id } = req.params;
   
-  // Mock result for testing
+  const backtest = mockBacktests.get(id);
+  if (!backtest || backtest.status !== 'COMPLETED') {
+    return res.status(404).json({
+      success: false,
+      error: 'Backtest not found or not completed'
+    });
+  }
+  
+  // Generate realistic mock results
+  const initialCapital = 100000;
+  const totalTrades = Math.floor(Math.random() * 30) + 15; // 15-45 trades
+  const winRate = 55 + Math.random() * 25; // 55-80% win rate
+  const winningTrades = Math.floor(totalTrades * (winRate / 100));
+  const losingTrades = totalTrades - winningTrades;
+  const totalReturn = (Math.random() * 0.3 - 0.1) * initialCapital; // -10% to +20% return
+  const maxDrawdown = Math.abs(totalReturn * 0.3); // Max drawdown 30% of total return
+  
   res.json({
     success: true,
     result: {
       id: id,
       status: 'COMPLETED',
-      totalReturn: 15000,
-      totalReturnPercent: 15.0,
-      winRate: 65.5,
-      totalTrades: 25,
-      winningTrades: 16,
-      losingTrades: 9,
-      maxDrawdown: 8500,
-      maxDrawdownPercent: 8.5,
-      sharpeRatio: 1.85,
-      message: 'This is a mock result for testing'
+      totalReturn: Math.round(totalReturn),
+      totalReturnPercent: (totalReturn / initialCapital) * 100,
+      winRate: winRate,
+      totalTrades: totalTrades,
+      winningTrades: winningTrades,
+      losingTrades: losingTrades,
+      maxDrawdown: Math.round(maxDrawdown),
+      maxDrawdownPercent: (maxDrawdown / initialCapital) * 100,
+      sharpeRatio: 0.8 + Math.random() * 1.5, // 0.8-2.3 Sharpe ratio
+      sortinoRatio: 1.0 + Math.random() * 1.8,
+      calmarRatio: 0.5 + Math.random() * 1.2,
+      consecutiveLosses: Math.floor(Math.random() * 5),
+      consecutiveProfits: Math.floor(Math.random() * 8),
+      maxConsecutiveLosses: Math.floor(Math.random() * 6) + 1,
+      maxConsecutiveProfits: Math.floor(Math.random() * 10) + 1,
+      message: 'Realistic mock backtest results based on Nifty ORB strategy'
     }
   });
 });
