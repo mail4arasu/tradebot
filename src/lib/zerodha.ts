@@ -295,4 +295,64 @@ export class ZerodhaAPI {
       throw error
     }
   }
+
+  // Historical Data Methods
+  async getInstruments(exchange: string = 'NFO'): Promise<any[]> {
+    try {
+      const response = await this.makeRequest('GET', `/instruments/${exchange}`)
+      return response
+    } catch (error) {
+      console.error('Error fetching instruments:', error)
+      throw error
+    }
+  }
+
+  async getHistoricalData(
+    instrumentToken: number,
+    interval: string,
+    fromDate: Date,
+    toDate: Date
+  ): Promise<any[]> {
+    try {
+      const from = fromDate.toISOString().split('T')[0]
+      const to = toDate.toISOString().split('T')[0]
+      
+      const url = `/instruments/historical/${instrumentToken}/${interval}?from=${from}&to=${to}`
+      const response = await this.makeRequest('GET', url)
+      
+      // Transform response to standard format
+      return response.data.candles.map((candle: any[]) => ({
+        date: candle[0],
+        open: candle[1],
+        high: candle[2], 
+        low: candle[3],
+        close: candle[4],
+        volume: candle[5],
+        oi: candle[6] || 0
+      }))
+    } catch (error) {
+      console.error('Error fetching historical data:', error)
+      throw error
+    }
+  }
+
+  async getQuote(instruments: string[]): Promise<any> {
+    try {
+      const response = await this.makeRequest('GET', `/quote?i=${instruments.join('&i=')}`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching quote:', error)
+      throw error
+    }
+  }
+
+  async getLTP(instruments: string[]): Promise<any> {
+    try {
+      const response = await this.makeRequest('GET', `/quote/ltp?i=${instruments.join('&i=')}`)
+      return response.data
+    } catch (error) {
+      console.error('Error fetching LTP:', error)
+      throw error
+    }
+  }
 }

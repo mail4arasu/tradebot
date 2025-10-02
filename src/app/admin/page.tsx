@@ -231,6 +231,16 @@ export default function AdminDashboard() {
                 📢 Announcements
               </button>
             </Link>
+            <Link href="/admin/data-sync">
+              <button className="px-4 py-2 rounded transition-colors duration-200 border"
+                      style={{
+                        backgroundColor: 'var(--secondary)',
+                        color: 'var(--secondary-foreground)',
+                        borderColor: 'var(--border)'
+                      }}>
+                📊 Historical Data
+              </button>
+            </Link>
             <Link href="/admin/cleanup">
               <button className="px-4 py-2 rounded transition-colors duration-200 border"
                       style={{
