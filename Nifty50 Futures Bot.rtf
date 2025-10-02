@@ -1,0 +1,1472 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 //@version=5\
+// v3.0 - Enhanced with STRAT stops, multiple bullets, fib entry, and trailing stops\
+strategy("NIFTY Opening Range Breakout v3", overlay=true, initial_capital=500000, calc_on_every_tick = true)//margin_long=100, margin_short=100)// default_qty_type=strategy.percent_of_equity, default_qty_value=10)\
+import mail4arasu/StratComboLibrary_findlevels_ignorecolour/3 as stratcombo_levels_ignorecolour\
+\
+LS0='Solid', LS1='Dashed', LS2='Dotted'\
+BX0='DR', BX1='IDR'\
+XL0='Follow Time', XL1='Session End', XL2='ADR End', XL3='ODR End', XL4='RDR End'\
+STDLT0='Dynamic',STDLT1='Static'\
+\
+// \} Input options\
+TIMEZONE = 'Asia/Kolkata'\
+ONE_HOUR = 3600*1000\
+ONE_DAY = 24*ONE_HOUR\
+\
+var GRP1 = "Time Settings"\
+tf = input.timeframe(defval = '5',title = "Use the choosen time frame",options = ['1','5'],group=GRP1)\
+//timings\
+current_time = time(timeframe.period, TIMEZONE)\
+exchangeOffset      = 0//input.int(0,"Exchange Offset (hours)", group=GRP1)\
+regularTime         = '0915-0936'//input.session('0930-0935', 'RDR Time', group=GRP1)\
+regularExtend       = '0935-1525' //input.session(, 'RDR Lines Time', group=GRP1)\
+\
+// Date range inputs for backtesting\
+use_date_range = input.bool(true, "Use Date Range", group="Backtesting")\
+start_date = input.time(timestamp("01 Jan 2025 00:00 +0000"), "Start Date", group="Backtesting")\
+end_date = input.time(timestamp("31 Dec 2025 23:59 +0000"), "End Date", group="Backtesting")\
+\
+// STRAT Signal Filter Parameters\
+\
+// New Risk Management Parameters\
+use_Gaussian_filter = input.bool(false, "Use Gaussian Entry Filter", group="Risk Management", tooltip="When enabled, trades will only execute based on gaussian buy or sell signal")\
+use_strat_filter = input.bool(true, "Use STRAT Signals as Entry Filter", group="Risk Management", tooltip="When enabled, trades will only execute when both ORB and STRAT signals align")\
+max_bullets_per_day = input.int(2, "Max Bullets Per Day", minval=1, maxval=5, group="Risk Management", tooltip="Maximum number of trades allowed per day")\
+use_fib_entry = input.bool(true, "use_fib_entry", group="Risk Management", tooltip="Wait for pullback to 0.5 fib level before entry")\
+use_strat_stops = input.bool(false, "Use STRAT-Based Stop Loss", group="Risk Management")\
+use_trailing_stops = input.bool(false, "Enable Trailing Stops", group="Risk Management", tooltip="Trail stop loss based on new STRAT signals in same direction")\
+show_bothsignals = input.bool(title="show_bothlong_short", defval=false)\
+DaysBack = input.int(5, minval=0, title="How many days back to draw Strat Signal box - default 15 days?")\
+\
+// === User Input for Target % ===\
+var TP = "Take Profit Target"\
+notrade_after_targethit = input.bool(false, "No Trade after target hit", group=TP)\
+use_takeprofit = input.bool(false, "Use Take Profit based on previous 2 days range", group=TP)\
+tpPercent = input.float(75.0, "Target % of Range", minval=1, maxval=100, group=TP) / 100.0\
+// Trading parameters\
+use_fixedlotsize = input.bool(title="Use fixed lot size based on capital", defval=true, group="Trading Parameters",tooltip='For each 3 lakhs capital we will increase 1 lot')\
+lotSize = input.int(75, title="Lot size?",group="Trading Parameters")\
+tick_value = input.float(75.0, "Tick Value (Rs.)", minval=1.0, group="Trading Parameters")\
+slippage_amount = input.float(600.0, "Slippage Amount (Rs.)", minval=0.0, group="Trading Parameters")\
+position_size = input.float(10.0, "Position Size (% of Equity)", minval=1.0, maxval=100.0, group="Trading Parameters")\
+avoid_late_entries = input.bool(true, "Avoid Entries", inline='Late Entry', group="Trading Parameters") \
+late_entries_time = input.session('1500', 'Entry only before', inline='Late Entry', group="Trading Parameters", options=["1300", "1500"])\
+\
+CapitalAmount          = input.int(500000, 'Captial Amount ', inline='Position Size',       tooltip='Settings to Calculate position size')\
+risk_per            = input.int(1, 'Risk Percentage ',options = [1,2,3,4,5], inline='Position Size',       tooltip='Settings to Calculate position size')\
+\
+show_results_table            = input.bool(true, 'Show results_table  ', inline='table',       tooltip='Show Table')\
+\
+var OTELevels = "Show OTE Fib levels"\
+\
+OTEColor  = color.gray //input.color(color.gray, 'color',inline='OTEStyle', group=OTELevels)\
+OTEStyle  = 'LS2' //input.string(LS2, 'Style of SL', options=[LS0,LS1,LS2], inline='OTEStyle', group=OTELevels)\
+mitOTEColor = color.new(color.gray, 90) //input.color(defval=color.new(color.gray, 90), title='Mitigated OTE Color', group='OTELevels', inline='Set Custom Color Mit OTE', tooltip='Set Transparency to 0 to make mitigated OTE disappear')\
+plotLabelOTE = true //input.bool(defval=true, title='Plot OTE Label', inline='OTE label', group='OTELevels')\
+OTELabelColor = color.gray //input.color(defval=color.gray, title='Color', inline='OTE label', group='OTELevels')\
+OTELabelSize = size.tiny //input.string(defval=size.tiny, title="Size", options=[size.huge, size.large, size.small, size.tiny, size.auto, size.normal], inline='OTE label', group='OTELevels')\
+OTEBullColor = color.new(color.green, 90) //input.color(defval=color.new(color.green, 90), title='Bullish OTE Color', inline='Set Custom Color', group='OTELevels')\
+OTEBearColor = color.new(color.red, 90) //input.color(defval=color.new(color.red, 90), title='Bearish OTE Color', inline='Set Custom Color', group='OTELevels')\
+OTEBorderTransparency = 80//input.int(defval=80, title='OTE Border Box Transparency', minval=0, maxval=100, group='OTELevels')\
+OTEBoxBorder = line.style_solid //input.string(defval=line.style_solid, title='OTE Box Border Style', options=[line.style_dashed, line.style_dotted, line.style_solid], group='OTELevels', tooltip='To disable border, set Border Width below to 0')\
+\
+var AS_long = "Actionable Signals Long"\
+show_is2D2U_signal = input.bool(title="show_is2D2U_signalcombo", defval=true, inline='AS_Long', group = AS_long)\
+show_is2D3U_signal = input.bool(title="show_is2D3U_signal combo", defval=false, inline='AS_Long', group = AS_long)\
+show_is3D3U_signal = input.bool(title="show_is3D3U_signal combo", defval=false, inline='AS_Long', group = AS_long)\
+\
+var AS_short = "Actionable Signals Short"\
+show_is2U2D_signal = input.bool(title="show_is2U2D_signal combo", defval=true,inline='AS_Short',group = AS_short)\
+show_is2U3D_signal = input.bool(title="show_is2U3D_signal combo", defval=false,inline='AS_Short',group = AS_short)\
+show_is3U3D_signal = input.bool(title="show_is3U3D_signal combo", defval=false,inline='AS_Short',group = AS_short)\
+\
+\
+\
+\
+showBackground      = true//input.bool(true, 'Show DR/IDR Box ?', group=GRP2)\
+boxType             = BX1 //input.string(BX1, 'Box DR or IDR ?', options=[BX0,BX1], group=GRP2)\
+drlines             = true//input.bool(true, 'Show DR Lines ?', group=GRP2)\
+idrlines            = true//input.bool(true, 'Show IDR Lines ?', group=GRP2)\
+middledrline        = false//input.bool(false, 'Show Middle DR Line ?', group=GRP2)\
+middleidrline       = true//input.bool(true, 'Show Middle IDR Line ?', group=GRP2)\
+openline            = input.bool(false, 'Show Opening & Close Line ?', tooltip='Shows the Opening line of the Defining Range.\\n- Extend: Extends the drawing of the Opening line into the RDR/ODR Lines Time.')\
+useBoxColors        = true//input.bool(true, 'Box color based on open and close', 'If unchecked, it will default to the selected Box Background Color', group=GRP2)\
+extendToEndOfRDR    = false//input.bool(false, 'Extend lines of all ranges to end of most recent Regular session?', group=GRP2)\
+\
+extendopLines       = true//input.bool(true, 'Extend',                                  group=GRP2, inline='openline') // Extend, follow price\
+extenddrLines       = true//input.bool(true, 'Extend DR Lines ?', group=GRP2)\
+extendidrLines      = true//input.bool(true, 'Extend IDR Lines ?', group=GRP2)\
+\
+var GRP3 = "Styles"\
+drlinesWidth          = 1//input.int(1, 'Box And Lines Width ?', minval=1, maxval=4, group=GRP3)\
+linesWidth          = 2//input.int(1, 'Box And Lines Width ?', minval=1, maxval=4, group=GRP3)\
+drLineColor         = color.gray //input.color(color.gray, 'DR Line Color', group=GRP3, inline='drline')\
+drLineStyle         = LS0 //input.string(LS0, 'Style', options=[LS0,LS1,LS2], group=GRP3, inline='drline')\
+idrLineColor        = color.red //input.color(color.red, 'IDR Line Color', group=GRP3, inline='idrline')\
+idrLineStyle        = LS1 //input.string(LS1, 'Style', options=[LS0,LS1,LS2], group=GRP3, inline='idrline')\
+middleLineColor     = color.gray //input.color(color.gray, 'Middle Line Color', group=GRP3, inline='midline')\
+middleLineStyle     = LS1 //input.string(LS2, 'Style', options=[LS0,LS1,LS2], group=GRP3, inline='midline')\
+opLineColor         = color.green //input.color(color.green, 'Opening Line',                  group=GRP3, inline='openline',      tooltip='Opening line:\\n- Color\\n- Style\\n- Width')\
+closeLineColor      = color.blue //input.color(color.green, 'Opening Line',                  group=GRP3, inline='openline',      tooltip='Opening line:\\n- Color\\n- Style\\n- Width')\
+opLineStyle         = LS1 //input.string(LS2, '', options=[LS0,LS1,LS2],                group=GRP3, inline='openline')\
+stdLineColor        = color.gray //input.color(color.gray, 'STD Lines',                  group=GRP3, inline='stdline',      tooltip='Standard deviation lines:\\n- Color\\n- Style\\n- Width')\
+stdLineStyle        = LS2 //input.string(LS2, '', options=[LS0,LS1,LS2],                group=GRP3, inline='stdline')\
+backgroundColor     = color.new(color.gray, 75) //input.color(color.new(color.gray, 75), 'Box Background Color', group=GRP3)\
+boxBorderSize       = 0 //input.int(0, title="Box border size", minval=0, group=GRP3)\
+upBoxColor          = color.new(color.green, 85)// input.color(color.new(color.green, 85), 'Up box', group=GRP3, inline='upbox')\
+upBorderColor       = color.green //input.color(color.green, 'border', group=GRP3, inline='upbox')\
+downBoxColor        = color.new(color.red, 85) //input.color(color.new(color.red, 85), 'Down box', group=GRP3, inline='downbox')\
+downBorderColor     = color.red //input.color(color.red, 'border', group=GRP3, inline='downbox')\
+\
+exchangeOffsetMS = exchangeOffset * 3600000\
+// Variables \{\
+var int     startTime           = na\
+var int     ODR_startTime       = na\
+var int     endTime             = na\
+var int     ODR_endTime         = na\
+var string  currentSession      = na\
+var int     RDRconfirmationTime = na\
+\
+//RDR\
+var line    lowrdrl             = na\
+var line    highrdrl            = na\
+var line    lowridrl            = na\
+var line    highridrl           = na\
+var line    leftrdrl            = na\
+var line    rightrdrl           = na\
+var line    middlerdrl          = na\
+var line    middleridrl         = na\
+var line    drLineOpen          = na\
+var line    drLineClose         = na\
+var box     rdr_m7Box           = na\
+var box     rdr_bgBox           = na\
+//var box     bgBox               = na\
+\
+//RDR Session\
+var float   rdrlow              = na\
+var float   rdrhigh             = na\
+var float   ridrlow             = na\
+var float   ridrhigh            = na\
+var float   rdrmiddle           = na\
+var float   ridrmiddle          = na\
+var float   sessionOpen         = na\
+var float   sessionClose        = na\
+var float   ridrrange           = na\
+\
+\
+var float   regidrlow                 = na\
+var float   regidrhigh                = na\
+var float   sessionHigh               = na\
+var float   sessionLow                = na\
+var int     stdLinesStartTime         = na\
+var int     stdLinesStopTime          = na\
+var int     RDR_Lensdataendtime   = na\
+\
+var bool    rdrlong_confirmation      = na\
+var bool    rdrshort_confirmation     = na\
+var bool    rdr_falseday              = na\
+\
+var float rdrlong_confirmation_bucket = na\
+var float rdrshort_confirmation_bucket = na\
+\
+var bool    use_m5                      = false\
+\
+// Functions\
+\
+_roundtotick(x, n) =>\
+    rnd = 1\
+    if n != 0\
+        for i = 1 to math.abs(n) by 1\
+            rnd *= 10\
+            rnd\
+    y = n >= 0 ? math.round(x * rnd) / rnd : math.round(x / rnd) * rnd\
+    rnd2 = 1\
+    if n != 0\
+        for i = 1 to math.abs(n) by 1\
+            rnd2 /= 10\
+            rnd2\
+    r = float(0.0)\
+    if n != 0\
+        for i = 0 to 1000 by 1\
+            if y == math.floor(x)\
+                break\
+            y -= rnd2\
+            r := i + 1\
+            r\
+    rtt = math.round(r / rnd / syminfo.mintick) * syminfo.mintick\
+    output = math.floor(x) + rtt\
+    output\
+\
+f_insession(_session) => \
+    not na(time(timeframe.period, _session, TIMEZONE))\
+\
+f_newline(_color, _style) => line.new(na, na, na, na, xloc=xloc.bar_time, color=_color, style=_style, width=linesWidth)\
+f_newline_dr(_color, _style) => line.new(na, na, na, na, xloc=xloc.bar_time, color=_color, style=_style, width=drlinesWidth)\
+\
+f_timestrToHM(_timeStr) =>\
+    var int     hourInt   = na\
+    var int     minuteInt = na\
+    if str.length(_timeStr) == 4\
+        hourInt   := int(str.tonumber(str.substring(_timeStr, 0, 2)))\
+        minuteInt := int(str.tonumber(str.substring(_timeStr, 2, 4)))\
+    [hourInt, minuteInt]\
+\
+f_lineStyle(_inputOption) =>\
+    switch(_inputOption)\
+        LS0 => line.style_solid\
+        LS1 => line.style_dashed\
+        LS2 => line.style_dotted\
+        => line.style_solid \
+f_sessionTime(_session, _timezone=syminfo.timezone, _part) =>\
+    var int ts = na\
+    if str.length(_session) == 9 and (_part == 0 or _part == 1)\
+        arraySessionSplit = str.split(_session, '-')\
+        timeStrTo          = array.get(arraySessionSplit, _part)\
+        [hourTo, minuteTo] = f_timestrToHM(timeStrTo)\
+        ts := timestamp(_timezone, year, month, dayofmonth, hourTo, minuteTo)\
+    ts\
+f_sessionTime_single(_session, _timezone=syminfo.timezone) =>\
+    var int ts = na\
+    if str.length(_session) == 4 \
+        [hourTo, minuteTo] = f_timestrToHM(_session)\
+        ts := timestamp(_timezone, year, month, dayofmonth, hourTo, minuteTo)\
+    ts \
+f_newdrline()   => f_newline_dr(drLineColor, f_lineStyle(drLineStyle))\
+f_newidrline()  => f_newline_dr(idrLineColor, f_lineStyle(idrLineStyle))\
+f_newmdline()   => f_newline(middleLineColor, f_lineStyle(middleLineStyle)) \
+f_newopline()   => f_newline(opLineColor, f_lineStyle(opLineStyle)) \
+f_newcloseline()   => f_newline(closeLineColor, f_lineStyle(opLineStyle)) \
+f_sessionStartTime(_session, _timezone=syminfo.timezone) => f_sessionTime(_session, _timezone, 0)\
+f_sessionStopTime(_session, _timezone=syminfo.timezone)  => f_sessionTime(_session, _timezone, 1)\
+f_timestamp_to_date(int _ts = na, string _tz = na) => timestamp(_tz, year(_ts, _tz), month(_ts, _tz), dayofmonth(_ts, _tz))\
+\
+f_newbox()      => box.new(na, na, na, na, xloc=xloc.bar_time, bgcolor=backgroundColor, border_width=boxBorderSize)\
+f_moveLine(_line, _x1, _y, _x2) => line.set_xy1(_line, _x1 + exchangeOffsetMS, _y), line.set_xy2(_line, _x2 + exchangeOffsetMS, _y), _line\
+f_movebox(_box, _left, _top, _right, _bottom, _bordercolor, _bgcolor) => box.set_lefttop(_box, _left + exchangeOffsetMS, _top), box.set_rightbottom(_box, _right + exchangeOffsetMS, _bottom), box.set_border_color(_box, _bordercolor), box.set_bgcolor(_box, _bgcolor)\
+\
+find_positionsize(entry,sl) =>\
+    var float positionSize = na\
+    var float stopLossPips = na\
+    var float tickvalue = na\
+    var float pointvalue = na\
+    var float tickprice = na\
+\
+    tickvalue := syminfo.mintick\
+    pointvalue := syminfo.pointvalue\
+    \
+    tickprice := tickvalue * lotSize //pointvalue\
+\
+    stopLossPips := math.round_to_mintick(math.abs(entry - sl)/syminfo.mintick)\
+    positionSize := math.round((CapitalAmount*(risk_per/100))/ (stopLossPips*tickprice))\
+    positionSize\
+\
+find_positionsize_fixed(CapitalAmount) =>\
+    var float positionSize = na\
+    positionSize := math.floor(CapitalAmount / 300000)\
+    positionSize\
+\
+// === Function to calculate TP ===\
+calc_takeprofit(multiplier) =>\
+// Pull unshifted daily highs/lows\
+    //dh = request.security(syminfo.tickerid, "D", high, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)\
+    //dl = request.security(syminfo.tickerid, "D", low,  gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)\
+\
+    dh1 = request.security(syminfo.tickerid, "D", high[1], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off) // yesterday\
+    dh2 = request.security(syminfo.tickerid, "D", high[2], gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off) // day before\
+    dl1 = request.security(syminfo.tickerid, "D", low[1],  gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)\
+    dl2 = request.security(syminfo.tickerid, "D", low[2],  gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)\
+\
+\
+    // Last two *completed* daily bars are dh[1] and dh[2]\
+    hh = math.max(dh1, dh2)\
+    ll = math.min(dl1, dl2)\
+\
+    // Volatility range\
+    _range = hh - ll\
+    tp = _range * multiplier\
+    [tp, hh, ll]\
+\
+calcATRTarget(percent) =>\
+    // Step 1: Daily TR series\
+    dTR_1 = request.security(syminfo.tickerid, "D", ta.tr(true)[1], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)\
+    dTR_2 = request.security(syminfo.tickerid, "D", ta.tr(true)[2], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)\
+    // Step 2: Daily ATR\
+    dATR = math.avg(dTR_1, dTR_2)\
+    // Step 4: Target = % of ATR\
+    target = dATR * percent // 100.0\
+    target\
+\
+\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+// Gaussian band\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+var Gaussian_filter = "Gaussian filters" \
+//@variable len Length of the Gaussian filter for smoothing (minimum value: 5)\
+int    len         = input.int(32, "Length", minval = 5,group = Gaussian_filter)\
+//@variable mode Select the mode of aggregation to be used: AVG (average), MEADIAN (median), or MODE (mode)\
+string mode        = input.string("AVG", "Type", ["AVG", "MEADIAN", "MODE"],group = Gaussian_filter)\
+//@variable distance Multiplier for calculating the distance between the Gaussian filter and the volatility bands\
+float  distance    = input.float(1.5, step = 0.1,group = Gaussian_filter)\
+//@variable show_retest Boolean input to determine if retest signals should be displayed\
+bool   show_retest = input.bool(false, "Retest Signals",group = Gaussian_filter)\
+\
+//@variable up Color for upward trends and visual signals, represented in RGB\
+color  up          = input.color(color.rgb(40, 218, 150),group = Gaussian_filter)\
+//@variable dn Color for downward trends and visual signals, represented in hex code\
+color  dn          = input.color(#287bda,group = Gaussian_filter)\
+// \uc0\u65315 \u65313 \u65324 \u65315 \u65333 \u65324 \u65313 \u65332 \u65321 \u65327 \u65326 \u65331  =============================================================================================\{\
+[D_open, D_high, D_low, D_close] = request.security(syminfo.tickerid, 'D', [open, high, low, close], lookahead = barmerge.lookahead_on)\
+//@function Calculates a Gaussian filter for smoothing the data\
+//@param src (series float) Source price series\
+//@param length (int) Length of the filter\
+//@param sigma (float) Standard deviation for the Gaussian function\
+//@returns (float) Smoothed value for the current bar\
+gaussian_filter(src, length, sigma) =>\
+    var float[] weights = array.new_float(100)  // Create an array to store weights for Gaussian filter\
+    float total = 0.0                           // Sum of all weights, used for normalization\
+    float pi = math.pi                          // Define Pi constant\
+\
+    // Calculate weights for Gaussian filter\
+    for i = 0 to length - 1\
+        float weight = math.exp(-0.5 * math.pow((i - length / 2) / sigma, 2.0)) / math.sqrt(sigma * 2.0 * pi)\
+        weights.set(i, weight)\
+        total := total + weight\
+\
+    // Normalize weights\
+    for i = 0 to length - 1\
+        weights.set(i, weights.get(i) / total)\
+\
+    // Apply Gaussian filter to the source series\
+    float sum = 0.0\
+    for i = 0 to length - 1\
+        sum := sum + src[i] * weights.get(i)\
+    sum\
+\
+//@function Multi-trend calculation using Gaussian filter\
+//@param src (series float) Source price series\
+//@param period (int) Lookback period for trend calculation\
+//@returns (float[]) Returns score, value, color, trend line, and trend status\
+multi_trend(src, period) =>\
+    array<float> g_value     = array.new<float>()       // Array to store Gaussian filtered values\
+    float        volatility  = ta.sma(D_high - D_low, 100) // Calculate the average true range (ATR) volatility\
+\
+    var float lower_band = 0.0     // Lower band for trend analysis\
+    var float upper_band = 0.0    // Upper band for trend analysis\
+    var float trend_line = 0.0   // Trend line value\
+    var bool trend = na         // Trend direction status\
+\
+    // Apply Gaussian filter with a step adjustment to calculate multiple trend lines\
+    for step = 0 to 20 by 1\
+        float gaussian_filter = gaussian_filter(src, (period + step), 10)\
+        g_value.push(gaussian_filter)\
+\
+    float coeff = 0.05\
+    float score = 0.0\
+\
+    // Calculate score based on trend analysis\
+    for i = 0 to g_value.size() - 1\
+        float g_f = g_value.get(i)\
+        if g_f > g_value.first()\
+            score += coeff\
+\
+    // Determine color based on score\
+    color color = score > 0.5 \
+             ? color.from_gradient(score, 0.5, 1, na, dn) \
+             : color.from_gradient(score, 0, 0.5, up, na)\
+\
+    // Determine value based on user-selected mode (AVG, MEDIAN, MODE)\
+    float value = switch mode \
+        "AVG"     => g_value.avg()\
+        "MEADIAN" => g_value.median()\
+        "MODE"    => g_value.mode()\
+\
+    lower_band := value - volatility * distance   // Calculate lower band based on value and volatility\
+    upper_band := value + volatility * distance  // Calculate upper band based on value and volatility\
+\
+    // Check crossover and crossunder of price with bands to determine trend\
+    if ta.crossover(D_close, upper_band)\
+        trend := true\
+    if ta.crossunder(D_close, lower_band)\
+        trend := false\
+\
+    // Set trend line based on trend direction\
+    trend_line :=\
+         trend ? lower_band \
+         : not trend ? upper_band : na\
+\
+    // Return values: score, value, color, trend line, and trend status\
+    [score, value, color, trend_line, trend]\
+\
+// Get the result from the multi-trend function\
+[score, avg, color, trend_line, trend] = multi_trend(D_close, len)\
+//[score, avg, color, trend_line, trend] = multi_trend(close, len)\
+// \uc0\u65328 \u65324 \u65327 \u65332  =============================================================================================================\{\
+// Calculate score-up and score-down for trend strength representation\
+float score_up = (score - 1) * -1\
+float score_dn = 1 - score_up\
+\
+var gaussian_buy_signal = false\
+var gaussian_sell_signal = false\
+\
+if score_up>=1\
+    gaussian_buy_signal := true\
+    gaussian_sell_signal := false\
+else \
+    gaussian_buy_signal := false\
+    \
+\
+if score_dn >=1\
+    gaussian_sell_signal := true \
+    gaussian_buy_signal := false\
+else \
+    gaussian_sell_signal := false\
+\
+\
+// \}\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+// Gaussian band - End\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+// DAILY TARGET - CALCULATION\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+\
+// === Call the Take Proft function ===\
+var float todayOpen = na\
+var float longTP = na\
+var float shortTP = na\
+var bool RDR_targetreached = na\
+//[takeProfit, HH, LL] = calc_takeprofit(tpPercent)\
+tp_amount = calcATRTarget(tpPercent)\
+todayOpen := request.security(syminfo.tickerid, "D", open,gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)\
+longTP  := todayOpen + tp_amount\
+shortTP := todayOpen - tp_amount\
+\
+\
+var tp_table = table.new(position.bottom_right, columns=2, rows=30, bgcolor=color.white, border_width=1, border_color=color.black, frame_width=2, frame_color=color.black)\
+\
+dTR_1 = request.security(syminfo.tickerid, "D", ta.tr(true)[1], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)\
+dTR_2 = request.security(syminfo.tickerid, "D", ta.tr(true)[2], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)\
+dATR = math.avg(dTR_1, dTR_2)\
+target = dATR * tpPercent\
+\
+// find if target reached\
+//if barstate.islast\
+if low <= shortTP and (na(RDR_targetreached) or not RDR_targetreached)\
+    RDR_targetreached := true\
+if high >= longTP and (na(RDR_targetreached) or not RDR_targetreached)\
+    RDR_targetreached := true\
+\
+\
+\
+table.cell(tp_table, 0, 1, "dTR_1", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 1, str.tostring(request.security(syminfo.tickerid, "D", ta.tr(true)[1], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 2, "dTR_2", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 2, str.tostring(request.security(syminfo.tickerid, "D", ta.tr(true)[2], gaps = barmerge.gaps_off, lookahead = barmerge.lookahead_off)), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 3, "dATR", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 3, str.tostring(math.avg(dTR_1, dTR_2)), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 4, "todayOpen", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 4, str.tostring(todayOpen), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 5, "target", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 5, str.tostring(target), text_color=color.black, bgcolor=color.white)\
+\
+\
+table.cell(tp_table, 0, 6, "tp_amount", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 6, str.tostring(tp_amount), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 7, "longTP", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 7, str.tostring(longTP), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 8, "shortTP", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 8, str.tostring(shortTP), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(tp_table, 0, 9, "RDR_targetreached", text_color=color.black, bgcolor=color.white)\
+table.cell(tp_table, 1, 9, str.tostring(RDR_targetreached), text_color=color.black, bgcolor=color.white)\
+\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+// DAILY TARGET - CALCULATION -END\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+\
+// Use the 5 minute timeframe if the chart timeframe is lower than 5m\
+if barstate.isfirst\
+    use_m5 := timeframe.in_seconds() < 300\
+ \
+//[m5_open, m5_high, m5_low, m5_close] = request.security(syminfo.tickerid, '5', [open, high, low, close], lookahead = barmerge.lookahead_on)\
+[m5_open, m5_high, m5_low, m5_close] = request.security(syminfo.tickerid, tf, [open, high, low, close], lookahead = barmerge.lookahead_on)\
+open_value  = use_m5 ? m5_open  : open\
+high_value  = use_m5 ? m5_high  : high\
+low_value   = use_m5 ? m5_low   : low\
+close_value = use_m5 ? m5_close : close\
+\
+ \
+inRegularSession    = f_insession(regularTime)  \
+inRegularExtend     = f_insession(regularExtend) \
+\
+// RDR Session\
+inRDRSession           = inRegularSession\
+inRDRExtend            = inRegularExtend\
+enterRDRSession        = inRDRSession and not inRDRSession[1]\
+enterRDRExtend         = inRDRExtend  and not inRDRExtend[1]\
+leaveRDRSession        = not  inRDRSession  and     inRDRSession[1]\
+leaveRDRExtend         = not inRDRExtend and inRDRExtend[1]\
+leaveRegularSession     = not  inRegularSession  and     inRegularSession[1]\
+enterRegularExtend      =      inRegularExtend   and not inRegularExtend[1]\
+\
+// RDR Session\
+if timeframe.isintraday //and (PCchart.barIsVisible() or not showAllHistory)\
+    if enterRDRSession\
+        currentSession := inRegularSession ? regularTime: na\
+    else if enterRDRExtend\
+        currentSession := inRegularExtend ? regularExtend: na\
+\
+    if inRDRSession\
+ \
+        // Initialize levels\
+        if not inRDRSession[1]\
+            startTime   := time\
+            sessionOpen := open_value\
+            rdrhigh     := high_value\
+            rdrlow      := low_value \
+            ridrlow     := close_value //math.min(open_value, close_value)\
+            ridrhigh    := close_value //math.max(open_value, close_value)\
+\
+            // Initialize drawing objects\
+            if showBackground\
+                rdr_bgBox       := f_newbox()\
+ \
+            if drlines\
+                highrdrl    := f_newdrline()\
+                lowrdrl     := f_newdrline()\
+\
+            if idrlines\
+                highridrl   := f_newidrline()\
+                lowridrl    := f_newidrline()\
+ \
+            if middledrline\
+                middlerdrl  := f_newmdline()\
+            \
+            if middleidrline\
+                middleridrl := f_newmdline()\
+ \
+            if openline\
+                drLineOpen    := f_newopline()\
+                drLineClose    := f_newcloseline()\
+\
+        // Calculate levels\
+        rdrhigh     := math.max(high_value, rdrhigh)\
+        rdrlow      := math.min(low_value, rdrlow)\
+        ridrhigh    := math.max(close_value, ridrhigh)//math.max(open_value, close_value, ridrhigh)\
+        ridrlow     := math.min(ridrlow, close_value) //math.min(open_value, close_value, ridrlow)\
+        rdrmiddle   := math.avg(rdrhigh, rdrlow)\
+        ridrmiddle  := math.avg(ridrhigh, ridrlow)\
+        ridrrange   := ridrhigh-ridrlow\
+  \
+\
+    if  inRDRSession[1] and not inRDRSession     \
+        sessionClose := close_value[1]\
+\
+\
+    if inRDRExtend\
+        if rdrlong_confirmation\
+            rdrlong_confirmation := rdrlong_confirmation[1]\
+        else if high_value > rdrhigh //close_value > rdrhigh\
+            rdrlong_confirmation := true\
+            //rdrlong_confirmation_bucket := inRDRbucket1 ? 1 : inRDRbucket2 ? 2 : na\
+            RDRconfirmationTime := time\
+\
+\
+        if rdrshort_confirmation\
+            rdrshort_confirmation := rdrshort_confirmation[1]\
+        else if low_value < rdrlow //close_value < rdrlow\
+            rdrshort_confirmation := true\
+            //rdrshort_confirmation_bucket := inRDRbucket1 ? 1 : inRDRbucket2 ? 2 : na \
+            RDRconfirmationTime := time\
+\
+\
+        if rdrlong_confirmation and rdrshort_confirmation\
+            rdr_falseday := true\
+\
+\
+    if leaveRDRExtend\
+        rdrlong_confirmation := na\
+        rdrshort_confirmation := na\
+        RDRconfirmationTime := na\
+        rdr_falseday := na\
+    \
+    if leaveRegularSession\
+\
+        regidrhigh := ridrhigh\
+        regidrlow  := ridrlow\
+        if inRegularExtend\
+            stdLinesStartTime := f_sessionStartTime(regularExtend, TIMEZONE)\
+            //stdLinesStopTime :=  f_sessionStopTime(afterTime, TIMEZONE) + ONE_DAY * (dayofweek == dayofweek.friday and syminfo.type != 'crypto' ? 3 : 1)\
+            RDR_Lensdataendtime :=  f_sessionStopTime(regularExtend, TIMEZONE) //+ ONE_DAY * (dayofweek == dayofweek.friday and syminfo.type != 'crypto' ? 3 : 1) \
+\
+    if enterRegularExtend\
+        // Initialize session high/low.\
+        sessionHigh := high_value\
+        sessionLow  := low_value\
+\
+    // Remember high/low since session started. Needed for drawing STD levels. Also keep high low beyond Extend.\
+    sessionHigh     := math.max(sessionHigh, high_value)\
+    sessionLow      := math.min(sessionLow,  low_value)\
+\
+    // Draw objects\
+    if showBackground and inRDRSession\
+        boxUp               = close_value > sessionOpen\
+        boxBorderColor      = useBoxColors ? (boxUp ? upBorderColor : downBorderColor) : backgroundColor\
+        boxBackgroundColor  = useBoxColors ? (boxUp ? upBoxColor    : downBoxColor)    : backgroundColor\
+        boxHigh             = boxType==BX0 ? rdrhigh : ridrhigh\
+        boxLow              = boxType==BX0 ? rdrlow  : ridrlow\
+        f_movebox(rdr_bgBox, startTime, boxHigh, time, boxLow, boxBorderColor, boxBackgroundColor)\
+ \
+    if extendToEndOfRDR\
+        if syminfo.type == 'warrant' or syminfo.type == 'structured' or syminfo.type == 'right'\
+            endTime := time\
+        else if time > (timenow - 2 * ONE_DAY) // no need to call functions every bar. Only start checking 2 days ago.\
+            if f_timestamp_to_date(f_sessionStopTime(currentSession, TIMEZONE), TIMEZONE) == f_timestamp_to_date(timenow, TIMEZONE)  //timenow_date\
+                endTime := f_sessionStopTime(regularExtend, TIMEZONE)\
+            else\
+                endTime := time\
+        else\
+            endTime := time\
+    else\
+        endTime := time\
+\
+    if drlines and (inRDRSession or (extenddrLines and inRDRExtend))\
+        f_moveLine(highrdrl, startTime, rdrhigh, endTime)\
+        f_moveLine(lowrdrl,  startTime, rdrlow,  endTime)\
+        if middledrline\
+            f_moveLine(middlerdrl, startTime, rdrmiddle, endTime)\
+    \
+    if idrlines and (inRDRSession or (extendidrLines and inRDRExtend))\
+        f_moveLine(highridrl, startTime, ridrhigh, endTime)\
+        f_moveLine(lowridrl,  startTime, ridrlow,  endTime)\
+        if middleidrline\
+            f_moveLine(middleridrl, startTime, ridrmiddle, endTime)\
+\
+    if openline and (inRDRSession or (extendopLines and inRDRExtend))\
+        f_moveLine(drLineOpen, startTime, sessionOpen, endTime)\
+        f_moveLine(drLineClose, startTime, sessionClose, endTime)\
+\
+    //if showStdLines\
+    //    f_drawStdLines(stdLinesStartTime, stdLinesStopTime, enterRegularExtend) \
+\
+plotshape(inRDRExtend and rdrlong_confirmation and not rdrlong_confirmation[1], style = shape.triangleup, location = location.abovebar,color = color.green,size=size.tiny)\
+plotshape(inRDRExtend and rdrshort_confirmation and not rdrshort_confirmation[1] , style = shape.triangledown, location = location.belowbar,color = color.red,size=size.tiny)\
+\
+\
+\
+///////@@@@@@@@@@@@@@@@@/////////////////////\
+// TIME FRAME CONTINUITY\
+//////////////////////////////////////////////\
+var ftfc = "Strat Full Time Frame Continuity"\
+show_ftfc = input.bool(false, title="Show entry signal only if it is Full Time Frame Continuity",group = ftfc)\
+display = input.string('Horizontal', "Table Display", options = ['Horizontal', 'Vertical'], group = ftfc)\
+paint_ftfc = input.bool(false, "FTFC Candles", inline = "FTFC", tooltip = "Paint candles as FTFC Up/Down/Neutral", group = ftfc)\
+ftfc_up_color = input.color(color.rgb(0, 255, 0), "", inline = "FTFC", group = ftfc)\
+ftfc_dn_color = input.color(color.rgb(255, 0, 0), "", inline = "FTFC", group = ftfc)\
+ftfc_nu_color = input.color(color.gray, "", inline = "FTFC", group = ftfc)\
+table_position = input.string('Middle Right', "Table Position", options = ['Bottom Center', 'Bottom Left', 'Bottom Right', 'Middle Center', 'Middle Left', 'Middle Right', 'Top Center', 'Top Left', 'Top Right'], group = ftfc)\
+\
+tf0  = input.timeframe("5", "Time Frame",options=["5","15","30","60","D"], inline = "0", group = ftfc)\
+tf1 = input.timeframe("5", "TF 1", inline = "1", group = ftfc)\
+tf2 = input.timeframe("15", "TF 2", inline = "2", group = ftfc)\
+tf3 = input.timeframe("30", "TF 3", inline = "3", group = ftfc)\
+tf4 = input.timeframe("60", "TF 4", inline = "4", group = ftfc)\
+tf5 = input.timeframe("D", "TF 5", inline = "5", group = ftfc)\
+y1 = input.bool(true, "", inline = "1", group = ftfc)\
+y2 = input.bool(true, "", inline = "2", group = ftfc)\
+y3 = input.bool(true, "", inline = "3", group = ftfc)\
+y4 = input.bool(true, "", inline = "4", group = ftfc)\
+y5 = input.bool(false, "", inline = "5", group = ftfc)\
+\
+text_color = input.color(color.white, "Text", group = ftfc) \
+up_close_color = input.color(color.new(color.teal, 0), "Up-Close", group = ftfc) \
+dn_close_color = input.color(color.new(color.red, 0), "Down-Close", group = ftfc)\
+inside_up_color = input.color(color.new(color.blue, 0), "Inside-Up-Close", group = ftfc) \
+inside_dn_color = input.color(color.new(color.purple, 0), "Inside-Down-Close", group = ftfc)\
+// -------------------------------------------------- Variables --------------------------------------------------\
+[o1, h1, l1] = request.security(syminfo.tickerid, tf1, [open, high, low], barmerge.gaps_off, barmerge.lookahead_on)\
+[o2, h2, l2] = request.security(syminfo.tickerid, tf2, [open, high, low], barmerge.gaps_off, barmerge.lookahead_on)\
+[o3, h3, l3] = request.security(syminfo.tickerid, tf3, [open, high, low], barmerge.gaps_off, barmerge.lookahead_on)\
+[o4, h4, l4] = request.security(syminfo.tickerid, tf4, [open, high, low], barmerge.gaps_off, barmerge.lookahead_on)\
+[o5, h5, l5] = request.security(syminfo.tickerid, tf5, [open, high, low], barmerge.gaps_off, barmerge.lookahead_on)\
+\
+var tf1_h = array.new_float()\
+var tf2_h = array.new_float()\
+var tf3_h = array.new_float()\
+var tf4_h = array.new_float()\
+var tf5_h = array.new_float()\
+\
+var tf1_l = array.new_float()\
+var tf2_l = array.new_float()\
+var tf3_l = array.new_float()\
+var tf4_l = array.new_float()\
+var tf5_l = array.new_float()\
+\
+// -------------------------------------------------- Functions --------------------------------------------------\
+get_table_pos(pos) =>\
+    result = switch pos\
+        "Bottom Center" => position.bottom_center\
+        "Bottom Left" => position.bottom_left\
+        "Bottom Right" => position.bottom_right\
+        "Middle Center" => position.middle_center\
+        "Middle Left" => position.middle_left\
+        "Middle Right" => position.middle_right\
+        "Top Center" => position.top_center\
+        "Top Left" => position.top_left\
+        "Top Right" => position.top_right\
+    result\
+\
+update_hl(_ah, _al, _tf, _h, _l) =>\
+    if timeframe.change(_tf)\
+        _ah.unshift(_h[1])\
+        _al.unshift(_l[1])\
+    if _ah.size() > 3\
+        _ah.pop()\
+        _al.pop()\
+\
+check_tfc(_tfc, _ah, _al, _h, _l) =>\
+    color table_color = na\
+    if _ah.size() > 0\
+        if _h <= _ah.get(0) and _l >= _al.get(0)\
+            if _tfc\
+                table_color := inside_up_color\
+            else\
+                table_color := inside_dn_color\
+        else\
+            if _tfc\
+                table_color := up_close_color\
+            else\
+                table_color := dn_close_color\
+        table_color\
+\
+// -------------------------------------------------- Logic --------------------------------------------------\
+update_hl(tf1_h, tf1_l, tf1, h1, l1)\
+update_hl(tf2_h, tf2_l, tf2, h2, l2)\
+update_hl(tf3_h, tf3_l, tf3, h3, l3)\
+update_hl(tf4_h, tf4_l, tf4, h4, l4)\
+update_hl(tf5_h, tf5_l, tf5, h5, l5)\
+\
+// Check if up-close\
+tfc1 = close > o1\
+tfc2 = close > o2\
+tfc3 = close > o3\
+tfc4 = close > o4\
+tfc5 = close > o5\
+\
+use_arr = array.from(y1, y2, y3, y4, y5)\
+tfc_arr = array.from(tfc1, tfc2, tfc3, tfc4, tfc5)\
+\
+// Determine FTFC\
+ftfc_up = false\
+ftfc_dn = false\
+\
+var bool ftfc_up_last = na\
+\
+true_count = 0\
+false_count = 0\
+for i = 0 to tfc_arr.size() - 1\
+    if use_arr.get(i) \
+        if tfc_arr.get(i)\
+            true_count := true_count + 1\
+        else \
+            false_count := false_count +1\
+            \
+if true_count > 3\
+    ftfc_up := true\
+    ftfc_dn := false\
+if false_count > 3\
+    ftfc_up := false\
+    ftfc_dn := true\
+\
+\
+//if ftfc_up and not ftfc_up[1]\
+//    ftfc_up_last := true\
+    \
+//if ftfc_dn and not ftfc_dn[1]\
+//    ftfc_up_last := false\
+    \
+// Change bar color according to FTFC\
+barcolor(not paint_ftfc ? na : ftfc_up ? ftfc_up_color : ftfc_dn ? ftfc_dn_color : ftfc_nu_color)\
+\
+// -------------------------------------------------- Logic --------------------------------------------------\
+\
+// -------------------------------------------------- Table --------------------------------------------------\
+// Create TFC table\
+var table tfc = table.new(get_table_pos(table_position), 10, 10)\
+horizontal = display == 'Horizontal'\
+\
+if barstate.islast\
+    if y1 \
+        table.cell(tfc, horizontal ? 0 : 0, horizontal ? 0 : 0, str.tostring(tf1), text_color = text_color, bgcolor = check_tfc(tfc1, tf1_h, tf1_l, h1, l1))\
+    if y2\
+        table.cell(tfc, horizontal ? 1 : 0, horizontal ? 0 : 1, str.tostring(tf2), text_color = text_color, bgcolor = check_tfc(tfc2, tf2_h, tf2_l, h2, l2))\
+    if y3\
+        table.cell(tfc, horizontal ? 2 : 0, horizontal ? 0 : 2, str.tostring(tf3), text_color = text_color, bgcolor = check_tfc(tfc3, tf3_h, tf3_l, h3, l3))\
+    if y4\
+        table.cell(tfc, horizontal ? 3 : 0, horizontal ? 0 : 3, str.tostring(tf4), text_color = text_color, bgcolor = check_tfc(tfc4, tf4_h, tf4_l, h4, l4))\
+    if y5\
+        table.cell(tfc, horizontal ? 4 : 0, horizontal ? 0 : 4, str.tostring(tf5), text_color = text_color, bgcolor = check_tfc(tfc5, tf5_h, tf5_l, h5, l5))\
+\
+    //table.cell(tfc, horizontal ? 1 : 1, horizontal ? 1 : 1, str.tostring(true_count), text_color = text_color, bgcolor = color.green)\
+    //table.cell(tfc, horizontal ? 2 : 2, horizontal ? 2 : 2, str.tostring(false_count), text_color = text_color, bgcolor = color.red)\
+// -------------------------------------------------- Table --------------------------------------------------\
+\
+\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+// STRAT SIGNALS\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+var bool Actionablesignal_Long = na\
+var bool Actionablesignal_Short = na\
+\
+//======= Reversal== LONG===== =====//\
+[is2D2U_signal, is2D2U_high,is2D2U_low] = stratcombo_levels_ignorecolour.is2D2U(high[2],low[2],high[1],low[1],high[0],low[0])\
+[is2D3U_signal, is2D3U_high,is2D3U_low] = stratcombo_levels_ignorecolour.is2D3U(high[2],low[2],high[1],low[1],open[0],high[0],low[0],close[0])\
+[is3D3U_signal, is3D3U_high,is3D3U_low] = stratcombo_levels_ignorecolour.is3D3U(high[2],low[2],open[1],close[1],high[1],low[1],open[0],high[0],low[0],close[0])\
+//======= Reversal== SHORT===== =====//\
+[is2U2D_signal, is2U2D_high,is2U2D_low] = stratcombo_levels_ignorecolour.is2U2D(high[2],low[2],high[1],low[1],high[0],low[0])\
+[is2U3D_signal, is2U3D_high,is2U3D_low] = stratcombo_levels_ignorecolour.is2U3D(high[2],low[2],high[1],low[1],open[0],high[0],low[0],close[0])\
+[is3U3D_signal, is3U3D_high,is3U3D_low] = stratcombo_levels_ignorecolour.is3U3D(high[2],low[2],open[1],close[1],high[1],low[1],open[0],high[0],low[0],close[0])\
+\
+Actionablesignal_Long := ((show_ftfc and ftfc_up) or not show_ftfc) and (is2D2U_signal and show_is2D2U_signal and close[0] > open[0]) or  (is2D3U_signal and show_is2D3U_signal and close[0] > open[1] and close[0] > open[0]) or (is3D3U_signal and show_is3D3U_signal and close[0] > open[1] and close[0] > open[0])\
+Actionablesignal_Short := ((show_ftfc and ftfc_dn) or not show_ftfc)  and  (is2U2D_signal and show_is2U2D_signal and close[0] < open[0]) or (is2U3D_signal and show_is2U3D_signal and close[0] < open[1] and close[0] < open[0]) or (is3U3D_signal and show_is3U3D_signal and close[0] < open[1] and close[0] < open[0])\
+\
+\
+///////////////====STOP LEVELS and FIB LEVELS ========//////////////////\
+// find the SL \
+var float stoploss_long = na\
+var float stoploss_short = na\
+var string comboText = na\
+\
+var float signalhigh_long = na\
+var float signallow_long = na\
+var float signalhigh_short = na\
+var float signallow_short = na\
+\
+if barstate.isconfirmed and Actionablesignal_Long\
+    if is2D2U_signal\
+        comboText     := "2D2U"\
+        stoploss_long := is2D2U_low\
+        signalhigh_long := is2D2U_high\
+        signallow_long := is2D2U_low\
+    else if  is2D3U_signal\
+        comboText     := "2D3U"\
+        stoploss_long := is2D3U_low\
+        signalhigh_long := is2D3U_high\
+        signallow_long := is2D3U_low\
+    else if  is3D3U_signal\
+        comboText     := "3D3U"\
+        stoploss_long := is3D3U_low\
+        signalhigh_long := is3D3U_high\
+        signallow_long := is3D3U_low\
+\
+\
+if barstate.isconfirmed and Actionablesignal_Short\
+    if is2U2D_signal\
+        comboText     := "2U2D"\
+        stoploss_short := is2U2D_high\
+        signalhigh_short := is2U2D_high\
+        signallow_short := is2U2D_low\
+    else if is2U3D_signal\
+        comboText     := "2U3D"\
+        stoploss_short := is2U3D_high\
+        signalhigh_short := is2U3D_high\
+        signallow_short := is2U3D_low\
+    else if is3U3D_signal\
+        comboText     := "3U3D"\
+        stoploss_short := is3U3D_high\
+        signalhigh_short := is3U3D_high\
+        signallow_short := is3U3D_low\
+\
+\
+\
+//////////////////// OTE LEVELS //////////////////\
+//Bullish OTE Box Plotting\
+var int signalindexUp =na\
+var float isOTEUp = 0//na\
+var float comborange_up = na\
+var float fib_0_up = na\
+var float fib_0_5_up = na\
+var float fib_0_618_up = na\
+var float fib_1_up = na\
+var label fib_0_5_up_label = na\
+var label fib_0_618_up_label = na\
+var int boxtimeup = na\
+var int boxendtime = na\
+var line    Slline_Long         = na\
+var line    Slline_Short         = na\
+var label   Slline_Long_label          = na\
+var label   Slline_Short_label         = na\
+var line    fib_0_5_up_line         = na\
+var line    fib_0_5_Down_line         = na\
+var line    fib_0_618_up_line         = na\
+var line    fib_0_618_Down_line         = na\
+//OTE Box Arrays\
+var box[] _bearBoxesOTE  = array.new_box()\
+var box[] _bullBoxesOTE  = array.new_box()\
+var line[] fib_0_5_up_lines  = array.new_line()\
+var line[] fib_0_618_up_lines  = array.new_line()\
+var label[] fib_0_5_up_labels  = array.new_label()\
+var label[] fib_0_618_up_labels  = array.new_label()\
+var line[] fib_0_5_down_lines  = array.new_line()\
+var line[] fib_0_618_down_lines  = array.new_line()\
+var label[] fib_0_5_down_labels  = array.new_label()\
+var label[] fib_0_618_down_labels  = array.new_label()\
+var label[] signallabel_up = array.new_label()\
+var label[] signallabel_down = array.new_label()\
+var string _OTELabel  = "OTE"\
+\
+boxendtime :=  f_sessionStopTime(regularExtend, TIMEZONE) + ONE_DAY * (dayofweek == dayofweek.friday and syminfo.type != 'crypto' ? 3 : 2) \
+\
+var tn = timenow\
+var firstDate = timestamp(year(tn), month(tn),dayofmonth(tn)-DaysBack, 0, 0, 0)\
+var today = timestamp(year(tn), month(tn),dayofmonth(tn), 0, 0, 0)\
+var box matrixbullboxOTE = na\
+\
+if barstate.isconfirmed and Actionablesignal_Long and ((rdrlong_confirmation  and not rdr_falseday) or  (show_bothsignals and (rdrlong_confirmation or rdrshort_confirmation)))\
+    signalindexUp := bar_index\
+//    lbl_up := label.new(bar_index, low, text="\uc0\u9650 ", color=color.green, style=label.style_circle, size=size.tiny)\
+    array.push(signallabel_up, label.new(bar_index, low, text="\uc0\u9650 ", color=color.green, style=label.style_circle, size=size.auto))\
+    isOTEUp := isOTEUp + 1 //na(isOTEUp) ? 0 : \
+    comborange_up := math.abs(signalhigh_long - signallow_long) \
+    fib_0_up := signalhigh_long\
+    fib_1_up := signallow_long\
+    //fib_0_5_up := signalhigh_long - (0.5 * comborange_up)\
+    //fib_0_618_up := signalhigh_long - (0.618 * comborange_up)\
+    //fib_0_786_up := signalhigh_long - (0.786 * comborange_up)\
+    fib_0_5_up := _roundtotick((signalhigh_long - (0.5 * comborange_up)), 2)\
+    fib_0_618_up := _roundtotick((signalhigh_long - (0.618 * comborange_up)),2)\
+    boxtimeup := current_time\
+ \
+if isOTEUp != isOTEUp[1] and (time > firstDate) //and (inintransitionTime or inRegularExtend or inRegularSession) \
+\
+    fib_0_5_up_line := line.new(bar_index-1, fib_0_5_up, bar_index+4, fib_0_5_up, xloc = xloc.bar_index, color = OTEColor, style = f_lineStyle(OTEStyle))\
+    fib_0_5_up_label :=  label.new(bar_index+4,fib_0_5_up,  "fib0.5 "+ str.tostring(math.round_to_mintick(fib_0_5_up)), color=color.black, style = label.style_none, size=size.small)\
+    fib_0_618_up_line := line.new(bar_index-1, fib_0_618_up, bar_index+4, fib_0_618_up, xloc = xloc.bar_index, color = OTEColor, style = f_lineStyle(OTEStyle))\
+    fib_0_618_up_label :=  label.new(bar_index+4,fib_0_618_up, "fib0.62"+ str.tostring(math.round_to_mintick(fib_0_618_up)), color=color.black, style = label.style_none, size=size.small)\
+    \
+    matrixbullboxOTE := box.new(left=boxtimeup, top=fib_0_5_up, right=boxendtime, xloc = xloc.bar_time, bottom=fib_1_up - (3*syminfo.mintick),border_color=color.new(OTEBullColor, OTEBorderTransparency), border_style=OTEBoxBorder, border_width=1, bgcolor=OTEBullColor,text=plotLabelOTE ? _OTELabel  + "+" : "", text_halign=text.align_right, text_valign=text.align_bottom, text_size=OTELabelSize, text_color=OTELabelColor,text_font_family=font.family_monospace)\
+    array.push(_bullBoxesOTE, matrixbullboxOTE)\
+    array.push(fib_0_5_up_lines,fib_0_5_up_line)\
+    array.push(fib_0_618_up_lines,fib_0_618_up_line)\
+    array.push(fib_0_5_up_labels,fib_0_5_up_label)\
+    array.push(fib_0_618_up_labels,fib_0_618_up_label)\
+\
+if barstate.isconfirmed   and not na(signalindexUp) and signalindexUp == signalindexUp[1] //and (time > today) //and not (isOTEUp > isOTEUp[1]) //and isOTEUp == isOTEUp[1] \
+    if array.size(_bullBoxesOTE) > 0\
+        var box _box = na\
+        var float _boxHigh = na\
+        var float _boxLow = na\
+\
+        for i = array.size(_bullBoxesOTE) - 1 to 0 by 1\
+            _box := array.get(_bullBoxesOTE, i)\
+            _boxHigh := box.get_top(_box)\
+            _boxLow := box.get_bottom(_box)\
+            \
+            //box  temp_box = array.get(_bullBoxesOTE, i)\
+            line temp_fib_0_5_up_line = array.get(fib_0_5_up_lines, i)\
+            line temp_fib_0_618_up_line = array.get(fib_0_618_up_lines, i)\
+            label temp_fib_0_5_up_label = array.get(fib_0_5_up_labels, i)\
+            label temp_fib_0_618_up_label = array.get(fib_0_618_up_labels, i)\
+            label l = array.get(signallabel_up, i)\
+\
+            if low <= _boxHigh //and not Actionablesignal_Long\
+                box.set_right(_box, current_time)\
+                box.set_bgcolor(_box, mitOTEColor)\
+                box.set_border_color(_box, mitOTEColor)\
+                //box.delete(temp_box)\
+                array.remove(_bullBoxesOTE,i)\
+                // Remove fib_0.5_up_line & label\
+                line.delete(temp_fib_0_5_up_line)\
+                array.remove(fib_0_5_up_lines,i)\
+                label.delete(temp_fib_0_5_up_label)\
+                array.remove(fib_0_5_up_labels,i)\
+                // Remove fib_0.618_up_line & label\
+                line.delete(temp_fib_0_618_up_line)\
+                array.remove(fib_0_618_up_lines,i)\
+                label.delete(temp_fib_0_618_up_label)\
+                array.remove(fib_0_618_up_labels,i)\
+                // Remove Long Signal\
+                label.delete(l)\
+                array.remove(signallabel_up,i)\
+\
+\
+//BEARISH OTE Box Plotting\
+var int signalindexDown =na\
+var float isOTEDown = 0//na\
+var float comborange_Down = na\
+var float fib_0_Down = na\
+var float fib_0_5_Down = na\
+var float fib_0_618_Down = na\
+var float fib_1_Down = na\
+var int    boxtimeDown = na\
+var box matrixbearboxOTE = na\
+var label fib_0_5_Down_label = na\
+var label fib_0_618_Down_label = na\
+\
+if barstate.isconfirmed and Actionablesignal_Short and ((rdrshort_confirmation  and not rdr_falseday) or  (show_bothsignals and (rdrlong_confirmation or rdrshort_confirmation)))\
+    signalindexDown := bar_index\
+    //lbl_down := label.new(bar_index, high, text="S", color=color.red, style=label.style_circle, size=size.tiny)\
+    array.push(signallabel_down, label.new(bar_index, high, text="S", color=color.red, style=label.style_circle, size=size.auto))\
+    //label.delete(lbl_down)\
+    isOTEDown := isOTEDown + 1 //na(isOTEUp) ? 0 : \
+    comborange_Down := math.abs(signalhigh_short - signallow_short) \
+    fib_0_Down:= signallow_short\
+    fib_1_Down := signalhigh_short\
+    //fib_0_5_Down := signallow_short + (0.5 * comborange_Down)\
+    //fib_0_618_Down := signallow_short + (0.618 * comborange_Down)\
+    //fib_0_786_Down := signallow_short + (0.786 * comborange_Down)    \
+    fib_0_5_Down := _roundtotick((signallow_short + (0.5 * comborange_Down)),2)\
+    fib_0_618_Down := _roundtotick((signallow_short + (0.618 * comborange_Down)),2)\
+    boxtimeDown := current_time\
+\
+\
+if isOTEDown != isOTEDown[1]  and (time > firstDate)  //and (inintransitionTime or inRegularExtend or inRegularSession)  \
+    fib_0_5_Down_line := line.new(bar_index-1, fib_0_5_Down, bar_index+4, fib_0_5_Down, xloc = xloc.bar_index, color = OTEColor, style = f_lineStyle(OTEStyle))\
+    fib_0_5_Down_label :=  label.new(bar_index+4,fib_0_5_Down,  "fib0.5 "+ str.tostring(math.round_to_mintick(fib_0_5_Down)), color=color.black, style = label.style_none, size=size.small)\
+    fib_0_618_Down_line := line.new(bar_index-1, fib_0_618_Down, bar_index+4, fib_0_618_Down, xloc = xloc.bar_index, color = OTEColor, style = f_lineStyle(OTEStyle))\
+    fib_0_618_Down_label :=  label.new(bar_index+4,fib_0_618_Down, "fib0.62"+ str.tostring(math.round_to_mintick(fib_0_618_Down)), color=color.black, style = label.style_none, size=size.small)\
+    \
+    matrixbearboxOTE := box.new(left=boxtimeDown, top=fib_0_5_Down, right=boxendtime, xloc = xloc.bar_time, bottom=fib_1_Down + (3*syminfo.mintick),border_color=color.new(OTEBearColor, OTEBorderTransparency), border_style=OTEBoxBorder, border_width=1, bgcolor=OTEBearColor,text=plotLabelOTE ? _OTELabel  + "-" : "", text_halign=text.align_right, text_valign=text.align_bottom, text_size=OTELabelSize, text_color=OTELabelColor,text_font_family=font.family_monospace)\
+    array.push(_bearBoxesOTE, matrixbearboxOTE)\
+    array.push(fib_0_5_down_lines,fib_0_5_Down_line)\
+    array.push(fib_0_5_down_labels,fib_0_5_Down_label)\
+    array.push(fib_0_618_down_lines,fib_0_618_Down_line)\
+    array.push(fib_0_618_down_labels,fib_0_618_Down_label)\
+\
+if barstate.isconfirmed   and not na(signalindexDown) and signalindexDown == signalindexDown[1] //and (time > today) //and not (isOTEDown > isOTEDown[1]) //and isOTEDown == isOTEDown[1] \
+    if array.size(_bearBoxesOTE) > 0\
+        var box _box = na\
+        var float _boxLow = na\
+        var float _boxHigh = na\
+        for i = array.size(_bearBoxesOTE) - 1 to 0 by 1\
+            _box := array.get(_bearBoxesOTE, i)\
+            _boxHigh := box.get_top(_box)\
+            _boxLow := box.get_bottom(_box)\
+\
+            //box  temp_box = array.get(_bearBoxesOTE, i)\
+            line temp_fib_0_5_down_line = array.get(fib_0_5_down_lines, i)\
+            line temp_fib_0_618_down_line = array.get(fib_0_618_down_lines, i)\
+            label temp_fib_0_5_down_label = array.get(fib_0_5_down_labels, i)\
+            label temp_fib_0_618_down_label = array.get(fib_0_618_down_labels, i)\
+            label l = array.get(signallabel_down, i)\
+            \
+            if high >= _boxHigh // _boxLow //and not Actionablesignal_Long\
+                box.set_right(_box, current_time)\
+                box.set_bgcolor(_box, mitOTEColor)\
+                box.set_border_color(_box, mitOTEColor)\
+                //box.delete(temp_box)\
+                array.remove(_bearBoxesOTE,i)\
+            \
+                // Remove fib_0.5_up_line & label\
+                line.delete(temp_fib_0_5_down_line)\
+                array.remove(fib_0_5_down_lines,i)\
+                label.delete(temp_fib_0_5_down_label)\
+                array.remove(fib_0_5_down_labels,i)\
+\
+                // Remove fib_0.786_up_line & label\
+                line.delete(temp_fib_0_618_down_line)\
+                array.remove(fib_0_618_down_lines,i)\
+                label.delete(temp_fib_0_618_down_label)\
+                array.remove(fib_0_618_down_labels,i)\
+\
+                // Remove Long Signal\
+                label.delete(l)\
+                array.remove(signallabel_down,i)\
+\
+///////////////////// PREPARE TO PLACE TRADE //////////////////\
+\
+// Position tracking variables\
+var float current_stop_loss = na\
+var float current_entry_price = na\
+var string current_position_type = na\
+var bool position_active = false\
+var float fib_entry_level = na\
+var float fib_sl_level = na\
+\
+var bool waiting_for_fib_entry = false\
+\
+// Store fibonacci levels from the valid STRAT signal (static for the day)\
+var float stored_two_candle_high = na\
+var float stored_two_candle_low = na\
+var float stored_fib_05 = na\
+var float stored_fib_618 = na\
+\
+// Statistics variables for real trading\
+var int total_trades = 0\
+var int winning_trades = 0\
+var float total_pnl = 0.0\
+var float total_pnl_ticks = 0.0\
+var float total_pnl_rupees = 0.0\
+var float max_profit = 0.0\
+var float max_loss = 0.0\
+var float largest_win = 0.0\
+var float largest_loss = 0.0\
+var float largest_win_ticks = 0.0\
+var float largest_loss_ticks = 0.0\
+var string first_trade_date = na\
+var string last_trade_date = na\
+\
+// Trade tracking arrays (store latest trades)\
+var array<string> trade_dates = array.new<string>()\
+var array<string> trade_times = array.new<string>()\
+var array<string> trade_directions = array.new<string>()\
+var array<float> entry_prices = array.new<float>()\
+var array<float> exit_prices = array.new<float>()\
+var array<float> trade_pnls = array.new<float>()\
+var array<float> trade_pnls_ticks = array.new<float>()\
+var array<float> trade_pnls_rupees = array.new<float>()\
+var array<string> trade_results = array.new<string>()\
+var array<string> exit_reasons = array.new<string>()\
+\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+// ENHANCED ENTRY CONDITIONS WITH BULLET SYSTEM\
+/////@@@@@@@@@@@@@@@@@@@@//////////////////////\
+var int numberofbullet = na\
+var float qty = na\
+var bool firstbulletplaced = na\
+var bool secondbulletplaced = na\
+\
+// Bullet system logic - also check if already in position\
+if numberofbullet == 1 and (strategy.position_size > 0 or strategy.position_size < 0)\
+    firstbulletplaced := true\
+if numberofbullet == 2 and (strategy.position_size > 0 or strategy.position_size < 0)\
+    secondbulletplaced := true\
+\
+// Date range filter\
+in_date_range = use_date_range ? (time >= start_date and time <= end_date) : true\
+// When avoid_late_entries is checked: no entries after 1:00 PM (13:00)\
+// When avoid_late_entries is unchecked: no entries after 3:10 PM (15:10) - market close\
+// Check if current time is before entry cutoff (1:00 PM)\
+is_before_entry_cutoff = current_time <= f_sessionTime_single(late_entries_time, TIMEZONE) \
+entry_time_ok = avoid_late_entries ? is_before_entry_cutoff : false\
+ \
+// Original ORB conditions\
+// Trade only if it is in the date range, in the daily DR extend time zone, only before cutoff time and in the direction of confirmation. Only one open position at a time.\
+orb_long_condition = in_date_range and inRDRExtend and (rdrlong_confirmation and not rdr_falseday) and strategy.position_size == 0  and entry_time_ok\
+orb_short_condition = in_date_range and inRDRExtend and (rdrshort_confirmation and not rdr_falseday) and strategy.position_size == 0  and entry_time_ok\
+\
+// Enhanced entry conditions with STRAT filter and bullet system\
+var basic_long_condition = false\
+var basic_short_condition = false\
+if use_strat_filter\
+    if not basic_long_condition\
+    // Both ORB and STRAT signals must align, plus bullet availability\
+        basic_long_condition := orb_long_condition and Actionablesignal_Long\
+    if not basic_short_condition\
+        basic_short_condition := orb_short_condition and Actionablesignal_Short\
+else\
+    // Original ORB-only conditions plus bullet system\
+    basic_long_condition := orb_long_condition\
+    basic_short_condition := orb_short_condition\
+\
+// Fib entry logic\
+if use_fib_entry\
+    if use_strat_filter\
+        // Set fib entry levels when signal triggers - use stored fibonacci levels from valid STRAT signal\
+        // CRITICAL: Only allow fib entry setup if we have both basic condition AND stored fibonacci levels from new STRAT signal\
+        if basic_long_condition and na(fib_entry_level) and not waiting_for_fib_entry\
+            // For long signals: use stored 0.5 retracement level\
+            fib_entry_level := fib_0_5_up  // Use pre-calculated 0.5 level from STRAT signal\
+            fib_sl_level := fib_1_up //- (3*syminfo.mintick) // Use pre-calculated 0.5 level from STRAT signal\
+            waiting_for_fib_entry := true\
+        \
+            \
+        if basic_short_condition and na(fib_entry_level) and not waiting_for_fib_entry\
+            // For short signals: use stored 0.5 retracement level\
+            fib_entry_level := fib_0_5_Down  // Use pre-calculated 0.5 level from STRAT signal\
+            fib_sl_level := fib_1_Down //+ (3*syminfo.mintick) \
+            waiting_for_fib_entry := true\
+        \
+else\
+    if basic_long_condition\
+        // For long signals: use stored 0.5 retracement level\
+        fib_entry_level := close  // Use pre-calculated 0.5 level from STRAT signal\
+        //fib_sl_level := fib_0_up  // Use pre-calculated 0.5 level from STRAT signal\
+        \
+    if basic_short_condition \
+        // For short signals: use stored 0.5 retracement level\
+        fib_entry_level := close  // Use pre-calculated 0.5 level from STRAT signal\
+        //fib_sl_level := fib_1_Down\
+\
+// Position status tracking (let strategy.closedtrades handle the bullet reset)\
+\
+if strategy.position_size == 0 and position_active\
+    // Position was closed, reset tracking including fib levels\
+    position_active := false\
+    current_stop_loss := na\
+    current_entry_price := na\
+    current_position_type := na\
+    // Reset fib entry system for next bullet\
+    waiting_for_fib_entry := false\
+    //fib_entry_level := na\
+    // CRITICAL: Allow new STRAT signal processing for next bullet\
+\
+    // Clear stored fibonacci levels - need new STRAT signal for next bullet  \
+    fib_0_up := na\
+    fib_0_5_up := na\
+    fib_0_618_up := na\
+    fib_1_up := na\
+\
+    fib_0_Down := na\
+    fib_0_5_Down := na\
+    fib_0_618_Down := na\
+    fib_1_Down := na\
+\
+// Trailing stop logic - update stop loss based on new STRAT signals\
+if use_trailing_stops and position_active\
+    if current_position_type == "LONG" and Actionablesignal_Long and not na(stoploss_long)\
+        // Trail long stop loss higher\
+        if na(current_stop_loss) or stoploss_long > current_stop_loss\
+            fib_sl_level := stoploss_long\
+    \
+    if current_position_type == "SHORT" and Actionablesignal_Short and not na(stoploss_short)\
+        // Trail short stop loss lower  \
+        if na(current_stop_loss) or stoploss_short < current_stop_loss\
+            fib_sl_level := stoploss_short\
+\
+\
+// &&&&&&&&& FIRST TRADE - BULLET 1\
+// PLACE LIMIT ORDER if the SEND IT CONDITION IS TRUE and Target not already reached\
+if basic_long_condition and strategy.position_size == 0 and ((use_Gaussian_filter and gaussian_buy_signal) or not use_Gaussian_filter) and not (notrade_after_targethit and RDR_targetreached)\
+    if use_fixedlotsize\
+        qty := find_positionsize_fixed(CapitalAmount)\
+    else \
+        qty := find_positionsize(fib_entry_level,fib_sl_level)\
+    \
+    \
+    if na(numberofbullet)\
+        //strategy.entry("DR_Long_Bullet_1", strategy.long,qty= qty ,limit=fib_entry_level)//,alert_message = '\{ \\n "symbol": "\{\{ticker\}\}", \\n "date": "\{\{timenow\}\}", \\n "gtd_in_second": '+str.tostring(RDR_gtd_in_second)+' , \\n "data": "\{\{strategy.order.action\}\}", \\n "quantity": ' + str.tostring(RDR_qty) +  ', \\n "risk_percentage": 0, \\n "price":  ' + str.tostring(box.get_top(RDR_ret_pricecluster1_timecluster1_Box)) +  ', \\n"tp": ' + str.tostring(box.get_bottom(RDR_ext_median_Box)) +  ', \\n "sl": ' + str.tostring(box.get_bottom(RDR_ret_pricecluster1_timecluster1_Box)- (3*syminfo.mintick) ) +  ',  \\n"trail": 0,\\n "update_tp": false, \\n "update_sl": false,  \\n "token": "D65a17984aca95f176dfd4", \\n "duplicate_position_allow": true, \\n"reverse_order_close": false \\n \}')\
+        strategy.entry("DR_Long_Bullet_1", strategy.long,qty= qty ,limit=fib_entry_level,alert_message = '\{\\n' +'  "botId": "68db6c39d9df74e7bd5403c3",\\n' + '  "symbol": "\{\{ticker\}\}",\\n' + '  "action": "\{\{strategy.order.action\}\}",\\n' + '  "price": \{\{close\}\},\\n' + '  "strategy": "Options Delta Strategy",\\n' + '  "exchange": "NFO",\\n' + '  "instrumentType": "OPTIONS",\\n' + '  "timestamp": "\{\{time\}\}",\\n' + '  "comment": "\{\{strategy.order.comment\}\}"\\n' +'\}')\
+        numberofbullet := 1\
+        basic_long_condition := false\
+        waiting_for_fib_entry := false\
+        \
+//strategy.exit ("DR_Long_Bullet_1_EXIT","DR_Long_Bullet_1", limit = box.get_bottom(RDR_ext_median_Box) ,stop = fib_sl_level )\
+\
+\
+if basic_short_condition and strategy.position_size == 0 and ((use_Gaussian_filter and gaussian_sell_signal ) or not use_Gaussian_filter) and not (notrade_after_targethit and RDR_targetreached)\
+\
+    if use_fixedlotsize\
+        qty := find_positionsize_fixed(CapitalAmount)\
+    else \
+        qty := find_positionsize(fib_entry_level,fib_sl_level)\
+    \
+    if na(numberofbullet) \
+        strategy.entry("DR_Short_Bullet_1", strategy.short,qty= qty ,limit=fib_entry_level)//,alert_message = '\{ \\n "symbol": "\{\{ticker\}\}", \\n "date": "\{\{timenow\}\}", \\n "gtd_in_second": '+str.tostring(RDR_gtd_in_second)+' , \\n "data": "\{\{strategy.order.action\}\}", \\n "quantity": ' + str.tostring(RDR_qty) +  ', \\n "risk_percentage": 0, \\n "price":  ' + str.tostring(box.get_bottom(RDR_ret_pricecluster1_timecluster1_Box)) +  ', \\n"tp": ' + str.tostring(box.get_top(RDR_ext_median_Box)) +  ', \\n "sl": ' + str.tostring(box.get_top(RDR_ret_pricecluster1_timecluster1_Box)+ (3*syminfo.mintick) ) +  ',  \\n"trail": 0,\\n "update_tp": false, \\n "update_sl": false,  \\n "token": "D65a17984aca95f176dfd4", \\n "duplicate_position_allow": true, \\n"reverse_order_close": false \\n \}')\
+        numberofbullet := 1\
+        basic_short_condition := false\
+        waiting_for_fib_entry := false\
+\
+//strategy.exit ("DR_Short_Bullet_1_EXIT","DR_Short_Bullet_1", limit = box.get_bottom(RDR_ext_median_Box) ,stop = fib_sl_level )\
+\
+// If any position is active \
+if inRDRExtend\
+    if strategy.position_size > 0\
+        position_active := true\
+        current_position_type := "LONG"\
+    \
+    if strategy.position_size < 0\
+        position_active := true\
+        current_position_type := "SHORT"\
+\
+// CANCEL SEND IT TRADE IF NOT FILLED BEFORE THE END OF TIME MODE 1 or Target reached after placing limit order but not yet filled\
+//        if inRDRExtend and ((current_time >= RDR_ret_timecluster1_end) or (not RDR_targetreached[1] and RDR_targetreached))\
+if inRDRExtend and (current_time >= f_sessionTime_single(late_entries_time, TIMEZONE) or (notrade_after_targethit and RDR_targetreached))\
+    strategy.cancel("DR_Long_Bullet_1")\
+    strategy.cancel("DR_Short_Bullet_1")    \
+    if na(firstbulletplaced)\
+        numberofbullet := na\
+\
+\
+// Take Profit execution\
+if position_active and use_takeprofit and not na(current_stop_loss)\
+    if strategy.position_size > 0 and high >= longTP\
+        strategy.close_all("Profit Target hit")\
+    else if strategy.position_size < 0 and low <= shortTP\
+        strategy.close_all("Profit Target hit")\
+\
+// Stop loss execution\
+if position_active and use_strat_stops //and not na(current_stop_loss)\
+    if strategy.position_size > 0\
+        strategy.exit("Long SL", "DR_Long_Bullet_1", stop=fib_sl_level, comment="STRAT Stop Loss")\
+    else if strategy.position_size < 0\
+        strategy.exit("Short SL", "DR_Short_Bullet_1", stop=fib_sl_level, comment="STRAT Stop Loss")\
+\
+\
+\
+// CLOSE THE TRADE AT 15:10 (predefined time)\
+if inRDRExtend and ((strategy.position_size > 0) or (strategy.position_size < 0)) and current_time >= f_sessionTime_single('1510', TIMEZONE)\
+    strategy.close_all("Close@15:10")//,alert_message = '\{ \\n "symbol": "\{\{ticker\}\}", \\n "date": "\{\{timenow\}\}", \\n "data": "close", \\n "quantity": '+str.tostring(RDR_qty)+' , \\n "risk_percentage": 0, \\n "price":' + str.tostring(close) + ',\\n "gtd_in_second": 0, \\n"tp": 0,\\n "percentage_tp": 0,\\n "dollar_tp": 0, \\n "sl": 0, \\n "dollar_sl": 0, \\n "percentage_sl": 0, \\n "trail": 0, \\n "trail_stop": 0, \\n "trail_trigger": 0, \\n "trail_freq": 0, \\n "update_tp": false, \\n "update_sl": false,  \\n "token": "D65a17984aca95f176dfd4", \\n "duplicate_position_allow": true, \\n"reverse_order_close": true \\n \}')\
+\
+var table results_table = na\
+if show_results_table\
+    results_table := table.new(position.top_right, columns=2, rows=30, bgcolor=color.white, border_width=1, border_color=color.black, frame_width=2, frame_color=color.black)\
+\
+table_title = "NIFTY ORB+STRAT v3 Results"\
+//table.cell(results_table, 0, 0, table_title, text_color=color.white, bgcolor=color.blue, text_size=size.normal)\
+//table.cell(results_table, 1, 0, "", text_color=color.white, bgcolor=color.blue)\
+\
+//table.cell(results_table, 0, 1, "in_date_range", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 1, str.tostring(in_date_range), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 2, "inRDRExtend", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 2, str.tostring(inRDRExtend), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 3, "rdrlong_confirmation", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 3, str.tostring(rdrlong_confirmation), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 4, "rdrshort_confirmation", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 4, str.tostring(rdrshort_confirmation), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(results_table, 0, 5, "rdr_falseday", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 5, str.tostring(rdr_falseday), text_color=color.black, bgcolor=color.white)\
+\
+\
+table.cell(results_table, 0, 6, "Target Reached", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 6, str.tostring(RDR_targetreached), text_color=color.black, bgcolor=RDR_targetreached?color.red:color.white)\
+\
+\
+//table.cell(results_table, 0, 6, "positionSize", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 6, str.tostring(strategy.position_size), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 7, "entry_time_ok", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 7, str.tostring(entry_time_ok), text_color=color.black, bgcolor=color.white)\
+\
+\
+\
+//table.cell(results_table, 0, 8, "orb_long_condition", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 8, str.tostring(orb_long_condition), text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 0, 9, "orb_short_condition", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 9, str.tostring(orb_short_condition), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 10, "basic_long_condition", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 10, str.tostring(basic_long_condition), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 11, "basic_short_condition", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 11, str.tostring(basic_short_condition), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 12, "qty", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 12, str.tostring(qty), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 13, "numberofbullet", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 13, str.tostring(numberofbullet), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(results_table, 0, 14, "fib_entry_level", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 14, str.tostring(fib_entry_level), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(results_table, 0, 15, "fib_sl_level", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 15, str.tostring(fib_sl_level), text_color=color.black, bgcolor=color.white)\
+\
+\
+//table.cell(results_table, 0, 16, "use_strat_filter", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 16, str.tostring(use_strat_filter), text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 0, 17, "not basic_long_condition", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 17, str.tostring(not basic_long_condition), text_color=color.black, bgcolor=color.white)\
+\
+\
+\
+\
+//table.cell(results_table, 0, 18, "Actionablesignal_Long", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 18, str.tostring(Actionablesignal_Long), text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 0, 19, "Actionablesignal_short", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 19, str.tostring(Actionablesignal_Short), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 20, "not na(stoploss_long)", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 20, str.tostring(not na(stoploss_long)), text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 0, 21, "not na(stoploss_short)", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 21, str.tostring(not na(stoploss_short)), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 22, "current_position_type", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 22, str.tostring(current_position_type), text_color=color.black, bgcolor=color.white)\
+\
+//table.cell(results_table, 0, 23, "is strategy.position_size == 0 ?", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 23, str.tostring(strategy.position_size == 0 ), text_color=color.black, bgcolor=color.white)\
+\
+table.cell(results_table, 0, 15, "CapitalAmount", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 15, "Rs." + str.tostring(CapitalAmount), text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 0, 16, "risk_per", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 16, str.tostring(risk_per), text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 0, 17, "Risk Amount", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 17, "Rs." + str.tostring(math.round(CapitalAmount*(risk_per/100))), text_color=color.black, bgcolor=color.white)\
+\
+\
+table.cell(results_table, 0, 18, "Stoploss distance", text_color=color.black, bgcolor=color.white)\
+//table.cell(results_table, 1, 18, str.tostring(math.round_to_mintick(math.abs(fib_entry_level - fib_sl_level))+" Points"), text_color=color.black, bgcolor=color.white)\
+\
+stoplossDist = math.round_to_mintick(math.abs(fib_entry_level - fib_sl_level))\
+table.cell(results_table, 1, 18, str.tostring(stoplossDist) + " Points", text_color=color.black, bgcolor=color.white)\
+\
+\
+table.cell(results_table, 0, 19, "Total tickes", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 19, str.tostring(math.round_to_mintick(math.abs(fib_entry_level - fib_sl_level)/syminfo.mintick)), text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 0, 20, "lotSize", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 20, str.tostring(lotSize), text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 0, 21, "tickprice", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 21, "Rs." + str.tostring(syminfo.mintick * lotSize), text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 0, 22, "Risk per lot", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 22, "Rs." + str.tostring(((math.round_to_mintick(math.abs(fib_entry_level - fib_sl_level)/syminfo.mintick))*(syminfo.mintick * lotSize))), text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 0, 23, "qty", text_color=color.black, bgcolor=color.white)\
+table.cell(results_table, 1, 23, str.tostring(qty), text_color=color.black, bgcolor=color.white)\
+\
+\
+\
+table.cell(results_table, 0, 24, "Take Profit Target", text_color=color.black, bgcolor=color.white)\
+if basic_long_condition\
+    table.cell(results_table, 1, 24, str.tostring(longTP), text_color=color.black, bgcolor=color.white)\
+else if basic_short_condition\
+    table.cell(results_table, 1, 24, str.tostring(shortTP), text_color=color.black, bgcolor=color.white)\
+\
+\
+//table.cell(results_table, 0, 25, "score_up", text_color=color.white, bgcolor=color.blue, text_size=size.normal)\
+//table.cell(results_table, 1, 25, str.tostring(score_up), text_color=color.white, bgcolor=color.blue)\
+\
+//table.cell(results_table, 0, 26, "score_dn", text_color=color.white, bgcolor=color.blue, text_size=size.normal)\
+//table.cell(results_table, 1, 26, str.tostring(score_dn), text_color=color.white, bgcolor=color.blue)\
+\
+table.cell(results_table, 0, 27, "Buy signal", text_color=color.white, bgcolor=color.blue, text_size=size.normal)\
+table.cell(results_table, 1, 27, str.tostring(gaussian_buy_signal), text_color=color.white, bgcolor=color.blue)\
+\
+table.cell(results_table, 0, 28, "Sell signal", text_color=color.white, bgcolor=color.blue, text_size=size.normal)\
+table.cell(results_table, 1, 28, str.tostring(gaussian_sell_signal), text_color=color.white, bgcolor=color.blue)\
+\
+\
+// Reset variables at start of new day\
+if leaveRDRExtend  //or  ta.change(dayofweek) != 0 or (hour == 9 and minute == 15)\
+    numberofbullet  := na\
+    firstbulletplaced := na\
+    secondbulletplaced := na\
+    basic_long_condition := false\
+    basic_short_condition := false\
+    orb_long_condition := na\
+    orb_short_condition := na\
+    qty := na\
+    firstbulletplaced := na\
+    secondbulletplaced := na\
+    fib_entry_level := na\
+    fib_sl_level := na\
+    //position_active := false\
+\
+    todayOpen := na\
+    longTP := na\
+    shortTP := na\
+    RDR_targetreached := na\
+\
+if ta.change(dayofweek) != 0 or (hour == 9 and minute == 15)\
+    gaussian_buy_signal := false\
+    gaussian_sell_signal := false\
+\
+}

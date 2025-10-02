@@ -84,14 +84,52 @@ export default function Backtest() {
 
     setBacktesting(true)
     try {
-      // TODO: Implement backtest API call
-      console.log('Running backtest with config:', backtestConfig)
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      alert('Backtest completed! (This is a demo - full implementation coming soon)')
-    } catch (error) {
+      console.log('Starting backtest with config:', backtestConfig)
+      
+      // First, check backtest engine health
+      const healthResponse = await fetch('/api/backtest?action=health')
+      const healthData = await healthResponse.json()
+      
+      if (!healthData.success) {
+        throw new Error('Backtest engine is not available')
+      }
+      
+      console.log('Backtest engine status:', healthData.backtestEngine)
+      
+      // Start the backtest
+      const response = await fetch('/api/backtest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'start',
+          botId: selectedBot.name || 'nifty50-futures-bot',
+          startDate: backtestConfig.startDate,
+          endDate: backtestConfig.endDate,
+          initialCapital: backtestConfig.initialCapital,
+          lotSize: 25, // Nifty lot size
+          useStratFilter: true,
+          useGaussianFilter: true,
+          useFibEntry: true,
+          maxBulletsPerDay: 1,
+          useStratStops: true,
+          timezone: 'Asia/Kolkata'
+        })
+      })
+
+      const data = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to start backtest')
+      }
+      
+      console.log('Backtest started:', data)
+      alert(`Backtest started successfully!\n\nBacktest ID: ${data.backtestId}\n\nYou can monitor the progress and view results once completed.\n\nNote: This may take several minutes depending on the date range.`)
+      
+    } catch (error: any) {
       console.error('Backtest error:', error)
-      alert('Backtest failed. Please try again.')
+      alert(`Backtest failed: ${error.message}`)
     } finally {
       setBacktesting(false)
     }
