@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '../../lib/auth'
+import { authOptions } from '../../../lib/auth'
 
 const BACKTEST_VM_URL = 'http://10.128.0.3:4000' // Internal IP of Backtest VM
 
