@@ -359,6 +359,9 @@ async function runBacktestInBackground(
       await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
     }
     
+    // Log backtest parameters
+    console.log(`📊 Backtest parameters: ${startDate} to ${endDate}, Capital: ₹${initialCapital}`)
+    
     // Get historical data
     const historicalData = await HistoricalData.find({
       symbol: 'NIFTY',
@@ -370,6 +373,7 @@ async function runBacktestInBackground(
     }).sort({ date: 1 })
     
     if (historicalData.length === 0) {
+      console.log(`❌ No historical data found for ${startDate} to ${endDate}`)
       await BacktestResult.updateOne(
         { backtestId },
         { 

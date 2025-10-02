@@ -84,8 +84,15 @@ export async function GET(
         
         return NextResponse.json({
           success: true,
-          status: localData.backtest?.status || 'UNKNOWN',
-          progress: localData.backtest?.progress || 0,
+          status: {
+            status: localData.backtest?.status || 'UNKNOWN',
+            progress: localData.backtest?.progress || 0,
+            id: backtestId,
+            bot: localData.backtest?.parameters?.symbol || 'NIFTY',
+            capital: localData.backtest?.parameters?.initialCapital || 100000,
+            period: `${localData.backtest?.parameters?.startDate?.toISOString().split('T')[0]} - ${localData.backtest?.parameters?.endDate?.toISOString().split('T')[0]}`,
+            started: localData.backtest?.createdAt
+          },
           usingLocalEngine: true
         })
       }
@@ -124,9 +131,28 @@ export async function GET(
         
         const localData = await localResponse.json()
         
+        const backtest = localData.backtest
+        const results = backtest?.results || {}
+        
         return NextResponse.json({
           success: true,
-          result: localData.backtest,
+          result: {
+            id: backtestId,
+            status: backtest?.status,
+            progress: backtest?.progress,
+            totalReturn: results.totalPnL || 0,
+            totalReturnPercent: results.totalPnL ? ((results.totalPnL / (backtest?.parameters?.initialCapital || 100000)) * 100).toFixed(2) : 0,
+            winRate: results.winRate || 0,
+            totalTrades: results.totalTrades || 0,
+            winningTrades: results.winningTrades || 0,
+            losingTrades: results.losingTrades || 0,
+            maxDrawdownPercent: results.maxDrawdown || 0,
+            finalCapital: results.finalCapital || backtest?.parameters?.initialCapital || 100000,
+            trades: results.trades || [],
+            parameters: backtest?.parameters,
+            createdAt: backtest?.createdAt,
+            completedAt: backtest?.completedAt
+          },
           usingLocalEngine: true
         })
       }
