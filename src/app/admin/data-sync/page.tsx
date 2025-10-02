@@ -26,7 +26,7 @@ export default function DataSyncPage() {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [stats, setStats] = useState<DataStats[]>([])
-  const [syncDays, setSyncDays] = useState(365)
+  const [syncDays, setSyncDays] = useState(1095) // Default 3 years
   const [lastSync, setLastSync] = useState<string | null>(null)
 
   useEffect(() => {
@@ -259,23 +259,24 @@ export default function DataSyncPage() {
                   id="syncDays"
                   type="number"
                   value={syncDays}
-                  onChange={(e) => setSyncDays(parseInt(e.target.value) || 365)}
+                  onChange={(e) => setSyncDays(parseInt(e.target.value) || 1095)}
                   min={1}
-                  max={730}
-                  placeholder="365"
+                  max={1825}
+                  placeholder="1095"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Maximum 730 days (2 years) recommended
+                  Maximum 1825 days (5 years) - Recommended: 1095 days (3 years)
                 </p>
               </div>
 
               <div className="p-3 bg-yellow-50 rounded-lg">
                 <h4 className="font-medium text-yellow-900 mb-2">Sync Details:</h4>
                 <ul className="text-sm text-yellow-800 space-y-1">
-                  <li>• Nifty50 futures contracts (current & historical)</li>
+                  <li>• Maximum available Nifty50 futures contracts (2022-2025)</li>
                   <li>• 5-minute and daily timeframes</li>
                   <li>• OHLC + Volume data</li>
-                  <li>• Estimated time: ~20 minutes for 1 year</li>
+                  <li>• Estimated time: ~{Math.ceil((syncDays / 90) * 2 * 60 / 60)} hours for {syncDays} days</li>
+                  <li>• Continuous contract creation included</li>
                 </ul>
               </div>
 

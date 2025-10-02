@@ -35,22 +35,65 @@ const HistoricalDataSchema = new mongoose.Schema({
 
 const HistoricalData = mongoose.models.HistoricalData || mongoose.model('HistoricalData', HistoricalDataSchema)
 
-// Nifty50 Futures Contracts - Current and Historical
+// Nifty50 Futures Contracts - Maximum Historical Coverage (3+ years)
 const NIFTY_FUTURES = [
-  // Current Active Contracts
+  // Current Active Contracts (2025)
   { symbol: 'NIFTY25OCTFUT', expiry: '2025-10-28', active: true },
   { symbol: 'NIFTY25NOVFUT', expiry: '2025-11-25', active: true },
   { symbol: 'NIFTY25DECFUT', expiry: '2025-12-30', active: true },
   
-  // Historical Contracts for Continuous Data
+  // 2025 Historical Contracts
   { symbol: 'NIFTY25SEPFUT', expiry: '2025-09-26', active: false },
   { symbol: 'NIFTY25AUGFUT', expiry: '2025-08-29', active: false },
   { symbol: 'NIFTY25JULFUT', expiry: '2025-07-25', active: false },
   { symbol: 'NIFTY25JUNFUT', expiry: '2025-06-26', active: false },
   { symbol: 'NIFTY25MAYFUT', expiry: '2025-05-29', active: false },
+  { symbol: 'NIFTY25APRFUT', expiry: '2025-04-24', active: false },
+  { symbol: 'NIFTY25MARFUT', expiry: '2025-03-27', active: false },
+  { symbol: 'NIFTY25FEBFUT', expiry: '2025-02-27', active: false },
+  { symbol: 'NIFTY25JANFUT', expiry: '2025-01-30', active: false },
+  
+  // 2024 Historical Contracts (Full Year)
   { symbol: 'NIFTY24DECFUT', expiry: '2024-12-26', active: false },
   { symbol: 'NIFTY24NOVFUT', expiry: '2024-11-28', active: false },
-  { symbol: 'NIFTY24OCTFUT', expiry: '2024-10-31', active: false }
+  { symbol: 'NIFTY24OCTFUT', expiry: '2024-10-31', active: false },
+  { symbol: 'NIFTY24SEPFUT', expiry: '2024-09-26', active: false },
+  { symbol: 'NIFTY24AUGFUT', expiry: '2024-08-29', active: false },
+  { symbol: 'NIFTY24JULFUT', expiry: '2024-07-25', active: false },
+  { symbol: 'NIFTY24JUNFUT', expiry: '2024-06-27', active: false },
+  { symbol: 'NIFTY24MAYFUT', expiry: '2024-05-30', active: false },
+  { symbol: 'NIFTY24APRFUT', expiry: '2024-04-25', active: false },
+  { symbol: 'NIFTY24MARFUT', expiry: '2024-03-28', active: false },
+  { symbol: 'NIFTY24FEBFUT', expiry: '2024-02-29', active: false },
+  { symbol: 'NIFTY24JANFUT', expiry: '2024-01-25', active: false },
+  
+  // 2023 Historical Contracts (Full Year)
+  { symbol: 'NIFTY23DECFUT', expiry: '2023-12-28', active: false },
+  { symbol: 'NIFTY23NOVFUT', expiry: '2023-11-30', active: false },
+  { symbol: 'NIFTY23OCTFUT', expiry: '2023-10-26', active: false },
+  { symbol: 'NIFTY23SEPFUT', expiry: '2023-09-28', active: false },
+  { symbol: 'NIFTY23AUGFUT', expiry: '2023-08-31', active: false },
+  { symbol: 'NIFTY23JULFUT', expiry: '2023-07-27', active: false },
+  { symbol: 'NIFTY23JUNFUT', expiry: '2023-06-29', active: false },
+  { symbol: 'NIFTY23MAYFUT', expiry: '2023-05-25', active: false },
+  { symbol: 'NIFTY23APRFUT', expiry: '2023-04-27', active: false },
+  { symbol: 'NIFTY23MARFUT', expiry: '2023-03-30', active: false },
+  { symbol: 'NIFTY23FEBFUT', expiry: '2023-02-23', active: false },
+  { symbol: 'NIFTY23JANFUT', expiry: '2023-01-26', active: false },
+  
+  // 2022 Historical Contracts (Full Year)
+  { symbol: 'NIFTY22DECFUT', expiry: '2022-12-29', active: false },
+  { symbol: 'NIFTY22NOVFUT', expiry: '2022-11-24', active: false },
+  { symbol: 'NIFTY22OCTFUT', expiry: '2022-10-27', active: false },
+  { symbol: 'NIFTY22SEPFUT', expiry: '2022-09-29', active: false },
+  { symbol: 'NIFTY22AUGFUT', expiry: '2022-08-25', active: false },
+  { symbol: 'NIFTY22JULFUT', expiry: '2022-07-28', active: false },
+  { symbol: 'NIFTY22JUNFUT', expiry: '2022-06-30', active: false },
+  { symbol: 'NIFTY22MAYFUT', expiry: '2022-05-26', active: false },
+  { symbol: 'NIFTY22APRFUT', expiry: '2022-04-28', active: false },
+  { symbol: 'NIFTY22MARFUT', expiry: '2022-03-31', active: false },
+  { symbol: 'NIFTY22FEBFUT', expiry: '2022-02-24', active: false },
+  { symbol: 'NIFTY22JANFUT', expiry: '2022-01-27', active: false }
 ]
 
 /**
@@ -75,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { action = 'start', days = 365, instruments = NIFTY_FUTURES.map(f => f.symbol) } = body
+    const { action = 'start', days = 1095, instruments = NIFTY_FUTURES.map(f => f.symbol) } = body // Default 3 years (1095 days)
 
     if (action === 'start') {
       // Start background sync process
@@ -218,12 +261,18 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
     
     console.log('📊 Looking for Nifty futures contracts...')
     
-    // Find matching Nifty futures from our target list
-    const niftyInstruments = nfoInstruments.filter((inst: any) => 
+    // Find ALL available Nifty futures (not just our predefined list)
+    const allNiftyInstruments = nfoInstruments.filter((inst: any) => 
       inst.name === '"NIFTY"' && 
-      inst.instrument_type === 'FUT' &&
-      instruments.includes(inst.tradingsymbol)
+      inst.instrument_type === 'FUT'
     )
+    
+    console.log(`📊 Found ${allNiftyInstruments.length} total Nifty futures in Zerodha`)
+    
+    // Filter by our target list if specified, otherwise use all available
+    const niftyInstruments = instruments.length === NIFTY_FUTURES.length ? 
+      allNiftyInstruments : // Use all available if no specific filter
+      allNiftyInstruments.filter((inst: any) => instruments.includes(inst.tradingsymbol))
     
     console.log(`📊 Found ${niftyInstruments.length} matching Nifty futures:`)
     niftyInstruments.forEach(inst => {
