@@ -34,11 +34,16 @@ const HistoricalDataSchema = new mongoose.Schema({
 
 const HistoricalData = mongoose.models.HistoricalData || mongoose.model('HistoricalData', HistoricalDataSchema)
 
-// Nifty50 Futures Data
+// Nifty50 Continuous Futures Contract
 const NIFTY_CONTRACTS = [
-  'NIFTY25OCTFUT', 'NIFTY25NOVFUT', 'NIFTY25DECFUT',
-  'NIFTY25SEPFUT', 'NIFTY25AUGFUT', 'NIFTY25JULFUT',
-  'NIFTY24DECFUT', 'NIFTY24NOVFUT', 'NIFTY24OCTFUT'
+  'NIFTY', // Continuous contract symbol
+  'NIFTY50' // Alternative continuous contract symbol
+]
+
+// Also include current month for live trading
+const CURRENT_CONTRACTS = [
+  'NIFTY25OCTFUT', // Current month for live trading
+  'NIFTY25NOVFUT'  // Next month for live trading
 ]
 
 /**
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { action = 'start', days = 365, instruments = NIFTY_CONTRACTS } = body
+    const { action = 'start', days = 365, instruments = [...NIFTY_CONTRACTS, ...CURRENT_CONTRACTS] } = body
 
     if (action === 'start') {
       // Start background sync process
@@ -131,12 +136,16 @@ export async function GET(request: NextRequest) {
 async function syncHistoricalDataBackground(days: number, instruments: string[]) {
   try {
     console.log(`📊 Background sync started for ${instruments.length} instruments, ${days} days`)
+    console.log('🎯 Target instruments:', instruments)
     
     // Get connected user
     const user = await User.findOne({ 'zerodhaConfig.isConnected': true })
     if (!user) {
+      console.error('❌ No connected Zerodha user found')
       throw new Error('No connected Zerodha user found')
     }
+    
+    console.log('✅ Found connected user:', user.email)
 
     const zerodha = new ZerodhaAPI()
     zerodha.setCredentials(
@@ -145,13 +154,39 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
       user.zerodhaConfig.accessToken
     )
 
-    // Get instruments list
-    const allInstruments = await zerodha.getInstruments('NFO')
-    const niftyInstruments = allInstruments.filter((inst: any) => 
+    // Get instruments list - Check both NFO and NSE for continuous contracts
+    const nfoInstruments = await zerodha.getInstruments('NFO')
+    const nseInstruments = await zerodha.getInstruments('NSE')
+    
+    console.log('📊 Looking for continuous contracts...')
+    
+    // Look for continuous contracts in NSE first
+    let niftyInstruments = nseInstruments.filter((inst: any) => 
+      (inst.name === 'NIFTY 50' || inst.name === 'NIFTY' || inst.tradingsymbol === 'NIFTY 50') &&
+      inst.instrument_type === 'EQ' // Continuous contracts are usually in EQ
+    )
+    
+    console.log(`Found ${niftyInstruments.length} continuous contracts in NSE`)
+    
+    // If no continuous contracts found, fall back to current month futures
+    if (niftyInstruments.length === 0) {
+      console.log('📊 No continuous contracts found, using current month futures...')
+      niftyInstruments = nfoInstruments.filter((inst: any) => 
+        inst.name === 'NIFTY' && 
+        inst.instrument_type === 'FUT' &&
+        (inst.tradingsymbol.includes('25OCT') || inst.tradingsymbol.includes('25NOV'))
+      )
+    }
+    
+    // Also add current futures for live trading
+    const currentFutures = nfoInstruments.filter((inst: any) => 
       inst.name === 'NIFTY' && 
       inst.instrument_type === 'FUT' &&
-      instruments.includes(inst.tradingsymbol)
+      (inst.tradingsymbol.includes('25OCT') || inst.tradingsymbol.includes('25NOV'))
     )
+    
+    // Combine continuous and current futures
+    niftyInstruments = [...niftyInstruments, ...currentFutures]
 
     console.log(`✅ Found ${niftyInstruments.length} matching Nifty futures`)
 
