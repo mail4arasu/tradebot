@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../../lib/auth'
 import mongoose from 'mongoose'
 import { ZerodhaAPI } from '../../../../lib/zerodha'
+import { decrypt } from '../../../../lib/encryption'
 import User from '../../../../models/User'
 
 // Historical Data Schema
@@ -68,6 +69,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
+    // Connect to database
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
+    }
+
     const body = await request.json()
     const { action = 'start', days = 365, instruments = NIFTY_FUTURES.map(f => f.symbol) } = body
 
@@ -121,6 +127,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Connect to database
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
+    }
+
     const stats = await getDataStats()
     
     return NextResponse.json({
@@ -144,6 +155,11 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
     console.log(`📊 Background sync started for ${instruments.length} instruments, ${days} days`)
     console.log('🎯 Target instruments:', instruments)
     
+    // Connect to database
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
+    }
+    
     // Get connected user
     const user = await User.findOne({ 'zerodhaConfig.isConnected': true })
     if (!user) {
@@ -153,12 +169,15 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
     
     console.log('✅ Found connected user:', user.email)
 
+    // Decrypt credentials before using them
+    const apiKey = decrypt(user.zerodhaConfig.apiKey)
+    const apiSecret = decrypt(user.zerodhaConfig.apiSecret)
+    const accessToken = decrypt(user.zerodhaConfig.accessToken)
+
+    console.log('🔐 Using decrypted credentials for:', user.email)
+
     const zerodha = new ZerodhaAPI()
-    zerodha.setCredentials(
-      user.zerodhaConfig.apiKey,
-      user.zerodhaConfig.apiSecret,
-      user.zerodhaConfig.accessToken
-    )
+    zerodha.setCredentials(apiKey, apiSecret, accessToken)
 
     // Get instruments list from NFO
     const nfoInstruments = await zerodha.getInstruments('NFO')
@@ -268,6 +287,11 @@ async function saveCandles(instrument: any, candles: any[], timeframe: string) {
 }
 
 async function getDataStats() {
+  // Ensure database connection
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
+  }
+  
   const stats = await HistoricalData.aggregate([
     {
       $group: {
