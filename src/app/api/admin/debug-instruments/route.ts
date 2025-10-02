@@ -3,7 +3,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../../../../lib/auth'
 import { ZerodhaAPI } from '../../../../lib/zerodha'
-import User from '../../../../models/User'
+import { decrypt } from '../../../../lib/encryption'
+import mongoose from 'mongoose'
+
+// Define User model inline to avoid import issues
+const UserSchema = new mongoose.Schema({
+  email: String,
+  zerodhaConfig: {
+    apiKey: String,
+    apiSecret: String, 
+    accessToken: String,
+    isConnected: Boolean
+  }
+})
+
+const User = mongoose.models.User || mongoose.model('User', UserSchema)
 
 /**
  * GET /api/admin/debug-instruments - Debug Nifty instruments available
@@ -21,6 +35,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
+    // Connect to database
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
+    }
+
     // Get connected user
     const user = await User.findOne({ 'zerodhaConfig.isConnected': true })
     if (!user) {
@@ -30,12 +49,16 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // Decrypt credentials
+    const apiKey = decrypt(user.zerodhaConfig.apiKey)
+    const apiSecret = decrypt(user.zerodhaConfig.apiSecret)
+    const accessToken = decrypt(user.zerodhaConfig.accessToken)
+
+    console.log('🔐 Using credentials for:', user.email)
+    console.log('📊 API Key (first 6 chars):', apiKey.substring(0, 6))
+    
     const zerodha = new ZerodhaAPI()
-    zerodha.setCredentials(
-      user.zerodhaConfig.apiKey,
-      user.zerodhaConfig.apiSecret,
-      user.zerodhaConfig.accessToken
-    )
+    zerodha.setCredentials(apiKey, apiSecret, accessToken)
 
     console.log('🔍 Fetching instruments for debugging...')
 

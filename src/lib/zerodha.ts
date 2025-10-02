@@ -7,7 +7,14 @@ export class ZerodhaAPI {
   private accessToken?: string
   private baseUrl = 'https://api.kite.trade'
 
-  constructor(apiKey: string, apiSecret: string, accessToken?: string) {
+  constructor(apiKey: string = '', apiSecret: string = '', accessToken?: string) {
+    this.apiKey = apiKey
+    this.apiSecret = apiSecret
+    this.accessToken = accessToken
+  }
+
+  // Method to set credentials after initialization
+  setCredentials(apiKey: string, apiSecret: string, accessToken: string) {
     this.apiKey = apiKey
     this.apiSecret = apiSecret
     this.accessToken = accessToken
