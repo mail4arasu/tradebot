@@ -84,12 +84,20 @@ export async function POST(request: NextRequest) {
       // Trigger sync in background (don't await to return quickly)
       syncHistoricalDataBackground(days, instruments).catch(console.error)
       
+      // Calculate estimated time based on chunks
+      const chunksPerInstrument = Math.ceil(days / 90) // 90-day chunks
+      const requestsPerInstrument = chunksPerInstrument * 2 // 5min + daily data
+      const totalRequests = instruments.length * requestsPerInstrument
+      const estimatedMinutes = Math.ceil(totalRequests * 1.5 / 60) // 1.5 seconds per request including delays
+
       return NextResponse.json({
         success: true,
         message: 'Historical data sync started in background',
         syncId: 'sync_' + Date.now(),
-        estimatedTime: `${instruments.length * 2} minutes`,
-        contracts: instruments.length
+        estimatedTime: `${estimatedMinutes} minutes`,
+        contracts: instruments.length,
+        chunks: chunksPerInstrument,
+        totalRequests: totalRequests
       })
     }
 
@@ -150,6 +158,32 @@ export async function GET(request: NextRequest) {
   }
 }
 
+function createDateChunks(startDate: Date, endDate: Date, chunkSizeDays: number) {
+  const chunks = []
+  let currentStart = new Date(startDate)
+  
+  while (currentStart < endDate) {
+    const currentEnd = new Date(currentStart)
+    currentEnd.setDate(currentEnd.getDate() + chunkSizeDays)
+    
+    // Don't exceed the overall end date
+    if (currentEnd > endDate) {
+      currentEnd.setTime(endDate.getTime())
+    }
+    
+    chunks.push({
+      start: new Date(currentStart),
+      end: new Date(currentEnd)
+    })
+    
+    // Move to next chunk
+    currentStart = new Date(currentEnd)
+    currentStart.setDate(currentStart.getDate() + 1)
+  }
+  
+  return chunks
+}
+
 async function syncHistoricalDataBackground(days: number, instruments: string[]) {
   try {
     console.log(`📊 Background sync started for ${instruments.length} instruments, ${days} days`)
@@ -206,34 +240,55 @@ async function syncHistoricalDataBackground(days: number, instruments: string[])
       try {
         console.log(`📈 Syncing ${instrument.tradingsymbol}...`)
         
-        // Fetch 5-minute data
-        const data5min = await zerodha.getHistoricalData(
-          instrument.instrument_token,
-          '5minute',
-          startDate,
-          endDate
-        )
+        // Fetch data in chunks due to Zerodha's 100-day limit
+        const chunks = createDateChunks(startDate, endDate, 90) // Use 90 days to be safe
+        let total5min = 0
+        let totalDaily = 0
         
-        if (data5min && data5min.length > 0) {
-          await saveCandles(instrument, data5min, '5minute')
-          console.log(`  ✅ Saved ${data5min.length} 5-minute candles`)
+        for (const chunk of chunks) {
+          console.log(`  📅 Fetching chunk: ${chunk.start.toISOString().split('T')[0]} to ${chunk.end.toISOString().split('T')[0]}`)
+          
+          try {
+            // Fetch 5-minute data for this chunk
+            const data5min = await zerodha.getHistoricalData(
+              instrument.instrument_token,
+              '5minute',
+              chunk.start,
+              chunk.end
+            )
+            
+            if (data5min && data5min.length > 0) {
+              await saveCandles(instrument, data5min, '5minute')
+              total5min += data5min.length
+              console.log(`    ✅ Saved ${data5min.length} 5-minute candles for this chunk`)
+            }
+            
+            // Small delay between 5min and daily requests
+            await new Promise(resolve => setTimeout(resolve, 500))
+            
+            // Fetch daily data for this chunk
+            const dataDaily = await zerodha.getHistoricalData(
+              instrument.instrument_token,
+              'day',
+              chunk.start,
+              chunk.end
+            )
+            
+            if (dataDaily && dataDaily.length > 0) {
+              await saveCandles(instrument, dataDaily, 'day')
+              totalDaily += dataDaily.length
+              console.log(`    ✅ Saved ${dataDaily.length} daily candles for this chunk`)
+            }
+            
+            // Rate limit delay between chunks
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            
+          } catch (chunkError) {
+            console.error(`    ❌ Error fetching chunk ${chunk.start.toISOString().split('T')[0]} to ${chunk.end.toISOString().split('T')[0]}:`, chunkError)
+          }
         }
         
-        // Fetch daily data
-        const dataDaily = await zerodha.getHistoricalData(
-          instrument.instrument_token,
-          'day',
-          startDate,
-          endDate
-        )
-        
-        if (dataDaily && dataDaily.length > 0) {
-          await saveCandles(instrument, dataDaily, 'day')
-          console.log(`  ✅ Saved ${dataDaily.length} daily candles`)
-        }
-        
-        // Rate limit delay
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        console.log(`  📊 Total saved for ${instrument.tradingsymbol}: ${total5min} 5-min candles, ${totalDaily} daily candles`)
         
       } catch (error) {
         console.error(`❌ Error syncing ${instrument.tradingsymbol}:`, error)
