@@ -35,32 +35,36 @@ export async function GET(request: NextRequest) {
     const statusData = await statusResponse.json()
     console.log(`📊 VM status data:`, statusData)
     
-    if (statusData.status === 'COMPLETED') {
+    // Handle nested status structure from backtest-tradebot VM
+    const actualStatus = statusData.status?.status || statusData.status
+    const backtest = statusData.status || statusData
+    
+    if (actualStatus === 'COMPLETED') {
       // Extract results from status data
       const result = {
-        totalReturn: statusData.totalPnL || statusData.result?.totalReturn || 0,
-        totalReturnPercent: statusData.totalReturnPercent || statusData.result?.totalReturnPercent || 0,
-        winRate: statusData.winRate || statusData.result?.winRate || 0,
-        totalTrades: statusData.totalTrades || statusData.result?.totalTrades || 0,
-        winningTrades: statusData.winningTrades || statusData.result?.winningTrades || 0,
-        losingTrades: statusData.losingTrades || statusData.result?.losingTrades || 0,
-        maxDrawdownPercent: statusData.maxDrawdown || statusData.result?.maxDrawdownPercent || 0,
-        finalCapital: statusData.finalCapital || statusData.result?.finalCapital || 0,
-        sharpeRatio: statusData.sharpeRatio || statusData.result?.sharpeRatio || 0
+        totalReturn: backtest.totalPnL || backtest.result?.totalReturn || 0,
+        totalReturnPercent: backtest.totalReturnPercent || backtest.result?.totalReturnPercent || 0,
+        winRate: backtest.winRate || backtest.result?.winRate || 0,
+        totalTrades: backtest.totalTrades || backtest.result?.totalTrades || 0,
+        winningTrades: backtest.winningTrades || backtest.result?.winningTrades || 0,
+        losingTrades: backtest.losingTrades || backtest.result?.losingTrades || 0,
+        maxDrawdownPercent: backtest.maxDrawdown || backtest.result?.maxDrawdownPercent || 0,
+        finalCapital: backtest.finalCapital || backtest.result?.finalCapital || 0,
+        sharpeRatio: backtest.sharpeRatio || backtest.result?.sharpeRatio || 0
       }
       
       return NextResponse.json({
         success: true,
         result: result,
         source: 'backtest-tradebot-vm-status',
-        backtestId: statusData.id || backtestId,
+        backtestId: backtest.id || backtestId,
         vm: 'backtest-tradebot (10.160.0.3)',
         statusData: statusData
       })
     } else {
       return NextResponse.json({
         success: false,
-        error: `Backtest not completed. Status: ${statusData.status}`,
+        error: `Backtest not completed. Status: ${actualStatus}`,
         statusData: statusData
       }, { status: 400 })
     }
