@@ -115,10 +115,38 @@ export async function GET(
     }
     
     if (type === 'result') {
+      console.log(`📊 Fetching results for backtest ${backtestId}`)
+      
+      // STEP 1: Try pre-computed results first (FASTEST & CONSISTENT)
       try {
-        // Try VM first
-        console.log(`📈 Fetching results for backtest ${backtestId} from VM`)
+        console.log(`🔍 Checking for pre-computed results...`)
+        const precomputedResponse = await fetch(`${request.nextUrl.origin}/api/backtest/precomputed/${backtestId}`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
         
+        if (precomputedResponse.ok) {
+          const precomputedData = await precomputedResponse.json()
+          console.log(`✅ Found pre-computed results with ${precomputedData.result?.trades?.length || 0} trades`)
+          
+          return NextResponse.json({
+            success: true,
+            result: precomputedData.result,
+            source: 'precomputed',
+            metadata: precomputedData.metadata
+          })
+        } else {
+          console.log(`📝 No pre-computed results found (${precomputedResponse.status}), trying VM...`)
+        }
+      } catch (precomputedError: any) {
+        console.log(`⚠️ Pre-computed check failed:`, precomputedError.message)
+      }
+      
+      // STEP 2: Try backtest-tradebot VM
+      try {
+        console.log(`📡 Fetching results from VM...`)
         const response = await proxyToBacktestVM(`/api/backtest/result/${backtestId}`)
         
         if (!response.ok) {
@@ -126,33 +154,30 @@ export async function GET(
         }
         
         const data = await response.json()
-        console.log(`📈 VM results response:`, data)
+        console.log(`📈 VM results response with ${data.result?.trades?.length || 0} trades`)
         
         return NextResponse.json({
           success: true,
           result: data.result,
+          source: 'vm',
           usingBacktestVM: true
         })
-        
       } catch (vmError: any) {
-        console.error(`❌ Failed to get results from VM:`, vmError.message)
-        console.log('🔄 Falling back to local database')
-        
-        // Fallback to local database
-        try {
-          const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
-            method: 'GET',
-            headers: {
-              'Cookie': request.headers.get('cookie') || ''
-            }
-          })
-          
-          if (!localResponse.ok) {
-            throw new Error(`Local result fetch failed: ${localResponse.status}`)
+        console.log(`❌ VM fetch failed:`, vmError.message)
+      }
+      
+      // STEP 3: Try local database as final fallback
+      try {
+        console.log(`💾 Trying local database...`)
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
           }
-          
+        })
+        
+        if (localResponse.ok) {
           const localData = await localResponse.json()
-          console.log(`📈 Local results response:`, localData)
           
           if (localData.success && localData.backtest && localData.backtest.status === 'COMPLETED') {
             // Format results for frontend
@@ -166,27 +191,31 @@ export async function GET(
               losingTrades: localData.backtest.losingTrades || 0,
               maxDrawdownPercent: localData.backtest.maxDrawdown || 0,
               finalCapital: localData.backtest.finalCapital || 0,
-              sharpeRatio: 0 // Calculate if needed
+              sharpeRatio: 0,
+              trades: localData.backtest.trades || []
             }
+            
+            console.log(`💾 Local results with ${result.trades.length} trades`)
             
             return NextResponse.json({
               success: true,
               result: result,
-              usingLocalEngine: true,
-              vmError: vmError.message
+              source: 'local',
+              usingLocalEngine: true
             })
-          } else {
-            throw new Error('Backtest not completed or results not available')
           }
-        } catch (localError: any) {
-          console.error(`❌ Failed to get results from local:`, localError.message)
-          return NextResponse.json({
-            success: false,
-            error: `Backtest results not available. VM: ${vmError.message}, Local: ${localError.message}`,
-            backtestId
-          }, { status: 404 })
         }
+      } catch (localError: any) {
+        console.log(`❌ Local fetch failed:`, localError.message)
       }
+      
+      // No results found anywhere
+      return NextResponse.json({
+        success: false,
+        error: `Backtest results not available from any source (pre-computed, VM, or local)`,
+        backtestId,
+        suggestion: 'Try running pre-computation: /api/backtest/precompute'
+      }, { status: 404 })
     }
     
     return NextResponse.json({

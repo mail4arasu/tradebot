@@ -779,6 +779,37 @@ export default function Backtest() {
               >
                 🔍 Debug APIs
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  // Trigger pre-computation for instant, consistent results
+                  try {
+                    setLoadingResults(true)
+                    const response = await fetch('/api/backtest/precompute', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ force: false })
+                    })
+                    const data = await response.json()
+                    
+                    if (data.success) {
+                      alert(`✅ Pre-computation completed!\n\n${data.message}\n\nComputed: ${data.summary?.computed || 0}\nSkipped: ${data.summary?.skipped || 0}\nFailed: ${data.summary?.failed || 0}\n\nPre-computed backtests provide instant, consistent results with detailed trade history.`)
+                      fetchBacktestResults() // Refresh to show new options
+                    } else {
+                      alert(`❌ Pre-computation failed: ${data.error}`)
+                    }
+                  } catch (error) {
+                    console.error('Pre-computation error:', error)
+                    alert(`❌ Error: ${error}`)
+                  } finally {
+                    setLoadingResults(false)
+                  }
+                }}
+                className="text-xs bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100"
+              >
+                ⚡ Generate Pre-computed Results
+              </Button>
             </div>
           </div>
           <Button 
