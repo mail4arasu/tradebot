@@ -45,7 +45,7 @@ export default function Backtest() {
     initialCapital: 100000
   })
   const [backtesting, setBacktesting] = useState(false)
-  const [backtestResults, setBacktestResults] = useState<any[]>([])
+  const [backtestResults, setBacktestResults] = useState<any[]>([])\n  \n  // Debug state to see what's in backtestResults\n  useEffect(() => {\n    console.log('🐛 DEBUG: backtestResults state updated:', backtestResults)\n  }, [backtestResults])
   const [loadingResults, setLoadingResults] = useState(false)
   const [currentBacktestId, setCurrentBacktestId] = useState<string | null>(null)
   
@@ -307,21 +307,31 @@ export default function Backtest() {
                 if (resultData.success && resultData.result) {
                   console.log('Final backtest results:', resultData.result)
                   const result = resultData.result
-                  setBacktestResults(prev => prev.map(bt => 
-                    bt.id === backtestId ? { 
-                      ...bt, 
+                  // FORCE ADD RESULTS TO DISPLAY
+                  setBacktestResults(prev => {
+                    console.log('🐛 DEBUG: Forcing result display for:', backtestId)
+                    
+                    // Force add the result even if backtest doesn't exist in array
+                    const newResult = {
+                      id: backtestId,
                       status: 'COMPLETED',
                       result: result,
                       hasResults: true,
-                      // Map result fields to expected UI fields
                       totalReturn: result.totalReturn || result.totalPnL || 0,
                       totalReturnPercent: result.totalReturnPercent || 0,
                       winRate: result.winRate || 0,
                       totalTrades: result.totalTrades || 0,
                       maxDrawdownPercent: result.maxDrawdownPercent || result.maxDrawdown || 0,
-                      sharpeRatio: result.sharpeRatio || 0
-                    } : bt
-                  ))
+                      sharpeRatio: result.sharpeRatio || 0,
+                      startTime: new Date().toISOString()
+                    }
+                    
+                    // Remove any existing entry for this ID and add new one
+                    const filtered = prev.filter(bt => bt.id !== backtestId)
+                    const updated = [newResult, ...filtered]
+                    console.log('🐛 DEBUG: Updated results array:', updated)
+                    return updated
+                  })
                 } else {
                   console.error('Failed to get backtest results:', resultData.error)
                 }
