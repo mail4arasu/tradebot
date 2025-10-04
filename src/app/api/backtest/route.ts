@@ -98,23 +98,36 @@ export async function GET(request: NextRequest) {
     }
     
     if (action === 'list') {
-      // VM is inaccessible - use local backtests directly
-      console.log('🔄 VM inaccessible - fetching backtests from local database')
-      
-      const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
-        method: 'GET',
-        headers: {
-          'Cookie': request.headers.get('cookie') || ''
-        }
-      })
-      
-      const localData = await localResponse.json()
-      
-      return NextResponse.json({
-        success: localData.success,
-        backtests: localData.backtests || [],
-        usingLocalEngine: true
-      })
+      // Try VM first, fallback to local
+      try {
+        console.log('🔗 Fetching backtests from VM')
+        const response = await proxyToBacktestVM('/api/backtest/list')
+        const data = await response.json()
+        
+        return NextResponse.json({
+          success: data.success,
+          backtests: data.backtests || [],
+          usingBacktestVM: true
+        })
+      } catch (vmError) {
+        console.log('🔄 VM inaccessible - fetching backtests from local database')
+        
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
+        
+        const localData = await localResponse.json()
+        
+        return NextResponse.json({
+          success: localData.success,
+          backtests: localData.backtests || [],
+          usingLocalEngine: true,
+          vmError: vmError.message
+        })
+      }
     }
     
     // Default: return available operations
@@ -168,46 +181,84 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // VM is inaccessible - use local backtest engine directly
-        console.log('🔄 VM inaccessible - using local backtest engine')
+        // Try backtest-tradebot VM first
+        console.log('🔗 Starting backtest on VM')
         
-        const localParams = {
+        const vmParams = {
           startDate: params.startDate,
           endDate: params.endDate,
           initialCapital: params.initialCapital || 500000,
           symbol: 'NIFTY'
         }
         
-        console.log('📊 Starting local backtest:', localParams)
+        console.log('📊 VM backtest params:', vmParams)
         
-        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cookie': request.headers.get('cookie') || ''
-          },
-          body: JSON.stringify(localParams)
-        })
+        const response = await proxyToBacktestVM(
+          '/api/backtest/start',
+          'POST',
+          vmParams
+        )
         
-        const localData = await localResponse.json()
-        console.log('✅ Local backtest response:', localData)
+        if (!response.ok) {
+          throw new Error(`VM backtest failed: ${response.status} ${response.statusText}`)
+        }
         
-        return NextResponse.json({
-          success: localData.success,
-          backtestId: localData.backtestId,
-          message: localData.message || 'Backtest started using local engine',
-          parameters: localParams,
-          usingLocalEngine: true
-        })
-        
-      } catch (localError: any) {
-        console.error('❌ Local backtest failed:', localError.message)
+        const data = await response.json()
+        console.log('✅ VM backtest response:', data)
         
         return NextResponse.json({
-          success: false,
-          error: `Failed to start local backtest: ${localError.message}`,
-          suggestion: 'Local backtest engine is not available'
-        }, { status: 500 })
+          success: data.success,
+          backtestId: data.backtestId,
+          message: data.message || 'Backtest started on VM',
+          parameters: vmParams,
+          usingBacktestVM: true
+        })
+        
+      } catch (vmError: any) {
+        console.error('❌ VM backtest failed:', vmError.message)
+        console.log('🔄 Falling back to local backtest engine')
+        
+        // Fallback to local implementation
+        try {
+          const localParams = {
+            startDate: params.startDate,
+            endDate: params.endDate,
+            initialCapital: params.initialCapital || 500000,
+            symbol: 'NIFTY'
+          }
+          
+          console.log('📊 Starting local backtest:', localParams)
+          
+          const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cookie': request.headers.get('cookie') || ''
+            },
+            body: JSON.stringify(localParams)
+          })
+          
+          const localData = await localResponse.json()
+          console.log('✅ Local backtest response:', localData)
+          
+          return NextResponse.json({
+            success: localData.success,
+            backtestId: localData.backtestId,
+            message: localData.message || 'Backtest started using local engine (VM unavailable)',
+            parameters: localParams,
+            usingLocalEngine: true,
+            vmError: vmError.message
+          })
+          
+        } catch (localError: any) {
+          console.error('❌ Local backtest also failed:', localError.message)
+          
+          return NextResponse.json({
+            success: false,
+            error: `Both VM and local backtest failed. VM: ${vmError.message}, Local: ${localError.message}`,
+            suggestion: 'Neither backtest engine is available'
+          }, { status: 500 })
+        }
       }
     }
     
