@@ -70,11 +70,13 @@ export async function GET(
         })
       } catch (vmError: any) {
         console.error(`❌ Failed to get status from VM:`, vmError.message)
+        // Don't return 500 - return 404 for not found status
         return NextResponse.json({
           success: false,
-          error: `Failed to get backtest status: ${vmError.message}`,
-          vmUrl: BACKTEST_VM_URL
-        }, { status: 500 })
+          error: `Backtest status not available: ${vmError.message}`,
+          vmUrl: BACKTEST_VM_URL,
+          backtestId
+        }, { status: 404 })
       }
     }
     
@@ -99,11 +101,13 @@ export async function GET(
         })
       } catch (vmError: any) {
         console.error(`❌ Failed to get results from VM:`, vmError.message)
+        // Don't return 500 - return 404 for not found results
         return NextResponse.json({
           success: false,
-          error: `Failed to get backtest results: ${vmError.message}`,
-          vmUrl: BACKTEST_VM_URL
-        }, { status: 500 })
+          error: `Backtest results not available: ${vmError.message}`,
+          vmUrl: BACKTEST_VM_URL,
+          backtestId
+        }, { status: 404 })
       }
     }
     
