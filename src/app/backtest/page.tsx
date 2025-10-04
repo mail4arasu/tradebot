@@ -45,7 +45,12 @@ export default function Backtest() {
     initialCapital: 100000
   })
   const [backtesting, setBacktesting] = useState(false)
-  const [backtestResults, setBacktestResults] = useState<any[]>([])\n  \n  // Debug state to see what's in backtestResults\n  useEffect(() => {\n    console.log('🐛 DEBUG: backtestResults state updated:', backtestResults)\n  }, [backtestResults])
+  const [backtestResults, setBacktestResults] = useState<any[]>([])
+  
+  // Debug state to see what's in backtestResults
+  useEffect(() => {
+    console.log('🐛 DEBUG: backtestResults state updated:', backtestResults)
+  }, [backtestResults])
   const [loadingResults, setLoadingResults] = useState(false)
   const [currentBacktestId, setCurrentBacktestId] = useState<string | null>(null)
   
