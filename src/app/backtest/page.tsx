@@ -48,6 +48,34 @@ export default function Backtest() {
   const [backtestResults, setBacktestResults] = useState<any[]>([])
   const [loadingResults, setLoadingResults] = useState(false)
   const [currentBacktestId, setCurrentBacktestId] = useState<string | null>(null)
+  
+  // Add localStorage tracking for running backtests
+  const [trackedBacktests, setTrackedBacktests] = useState<string[]>([])
+
+  // Load tracked backtests from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('trackingBacktests')
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          setTrackedBacktests(parsed)
+          console.log('📱 Loaded tracked backtests from localStorage:', parsed)
+        } catch (e) {
+          console.warn('Failed to parse stored backtests:', e)
+          localStorage.removeItem('trackingBacktests')
+        }
+      }
+    }
+  }, [])
+
+  // Save tracked backtests to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && trackedBacktests.length >= 0) {
+      localStorage.setItem('trackingBacktests', JSON.stringify(trackedBacktests))
+      console.log('💾 Saved tracked backtests to localStorage:', trackedBacktests)
+    }
+  }, [trackedBacktests])
 
   useEffect(() => {
     if (session) {
@@ -66,6 +94,93 @@ export default function Backtest() {
       return () => clearInterval(interval)
     }
   }, [currentBacktestId])
+
+  // NEW: Poll all tracked backtests for status/results
+  useEffect(() => {
+    if (trackedBacktests.length > 0) {
+      console.log(`🔄 Polling ${trackedBacktests.length} tracked backtests...`)
+      
+      const interval = setInterval(() => {
+        trackedBacktests.forEach(backtestId => {
+          checkTrackedBacktestStatus(backtestId)
+        })
+      }, 5000) // Check every 5 seconds
+
+      return () => clearInterval(interval)
+    }
+  }, [trackedBacktests])
+
+  const checkTrackedBacktestStatus = async (backtestId: string) => {
+    try {
+      console.log(`🔍 Checking tracked backtest: ${backtestId}`)
+      
+      // Try to get status first
+      const statusResponse = await fetch(`/api/backtest/${backtestId}?type=status`)
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json()
+        if (statusData.success && statusData.status) {
+          console.log(`📊 Status for ${backtestId}:`, statusData.status)
+          
+          // Update or add to results
+          setBacktestResults(prev => {
+            const existingIndex = prev.findIndex(bt => bt.id === backtestId)
+            if (existingIndex >= 0) {
+              return prev.map(bt => 
+                bt.id === backtestId ? { ...bt, ...statusData.status } : bt
+              )
+            } else {
+              return [{ id: backtestId, ...statusData.status }, ...prev]
+            }
+          })
+          
+          // If completed, try to get results and remove from tracking
+          if (statusData.status.status === 'COMPLETED') {
+            console.log(`✅ Backtest ${backtestId} completed - fetching results`)
+            
+            try {
+              const resultResponse = await fetch(`/api/backtest/${backtestId}?type=result`)
+              if (resultResponse.ok) {
+                const resultData = await resultResponse.json()
+                if (resultData.success && resultData.result) {
+                  const result = resultData.result
+                  setBacktestResults(prev => prev.map(bt => 
+                    bt.id === backtestId ? { 
+                      ...bt, 
+                      status: 'COMPLETED',
+                      result: result,
+                      hasResults: true,
+                      totalReturn: result.totalReturn || result.totalPnL || 0,
+                      totalReturnPercent: result.totalReturnPercent || 0,
+                      winRate: result.winRate || 0,
+                      totalTrades: result.totalTrades || 0,
+                      maxDrawdownPercent: result.maxDrawdownPercent || result.maxDrawdown || 0,
+                      sharpeRatio: result.sharpeRatio || 0
+                    } : bt
+                  ))
+                  console.log(`📈 Results loaded for ${backtestId}:`, result)
+                }
+              }
+            } catch (resultError) {
+              console.error(`Failed to fetch results for ${backtestId}:`, resultError)
+            }
+            
+            // Remove from tracking
+            setTrackedBacktests(prev => prev.filter(id => id !== backtestId))
+            console.log(`🗑️ Removed ${backtestId} from tracking (completed)`)
+          } else if (statusData.status.status === 'FAILED') {
+            console.log(`❌ Backtest ${backtestId} failed - removing from tracking`)
+            setTrackedBacktests(prev => prev.filter(id => id !== backtestId))
+          }
+        }
+      } else if (statusResponse.status === 404) {
+        // Backtest not found - might be completed and cleaned up
+        console.log(`🚫 Backtest ${backtestId} not found - removing from tracking`)
+        setTrackedBacktests(prev => prev.filter(id => id !== backtestId))
+      }
+    } catch (error) {
+      console.error(`Error checking tracked backtest ${backtestId}:`, error)
+    }
+  }
 
   const fetchBots = async () => {
     try {
@@ -300,7 +415,16 @@ export default function Backtest() {
       setBacktestResults(prev => [newBacktest, ...prev])
       setCurrentBacktestId(data.backtestId)
       
-      alert(`Backtest started successfully!\n\nBacktest ID: ${data.backtestId}\n\nYou can monitor the progress in the results section below.\n\nNote: This may take several minutes depending on the date range.`)
+      // NEW: Add to tracked backtests for persistent monitoring
+      setTrackedBacktests(prev => {
+        if (!prev.includes(data.backtestId)) {
+          console.log(`📱 Adding ${data.backtestId} to tracked backtests`)
+          return [...prev, data.backtestId]
+        }
+        return prev
+      })
+      
+      alert(`Backtest started successfully!\n\nBacktest ID: ${data.backtestId}\n\nYou can monitor the progress in the results section below.\n\nNote: This backtest will be tracked automatically until completion.`)
       
     } catch (error: any) {
       console.error('Backtest error:', error)
@@ -350,6 +474,11 @@ export default function Backtest() {
           <div className="flex-1">
             <h1 className="text-3xl font-bold text-gray-900">Backtest Trading Bots</h1>
             <p className="text-gray-600">Test bot performance on historical data</p>
+            {trackedBacktests.length > 0 && (
+              <div className="mt-2 text-sm text-blue-600">
+                📱 Tracking {trackedBacktests.length} backtest{trackedBacktests.length > 1 ? 's' : ''}: {trackedBacktests.join(', ')}
+              </div>
+            )}
           </div>
           <Button 
             onClick={handleRunBacktest}

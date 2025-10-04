@@ -19,6 +19,9 @@ export async function POST(request: NextRequest) {
       tests: []
     }
 
+    // Shorter timeouts to avoid "fetch failed"
+    const SHORT_TIMEOUT = 5000 // 5 seconds instead of 10-30
+
     // Test 1: Start VM backtest with minimal data range
     try {
       console.log('🔄 Starting VM backtest...')
@@ -34,7 +37,7 @@ export async function POST(request: NextRequest) {
             lotSize: 25
           }
         }),
-        signal: AbortSignal.timeout(30000)
+        signal: AbortSignal.timeout(SHORT_TIMEOUT)
       })
       
       const vmStartData = vmStartResponse.ok ? await vmStartResponse.json() : await vmStartResponse.text()
