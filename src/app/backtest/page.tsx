@@ -56,6 +56,10 @@ export default function Backtest() {
   
   // Add localStorage tracking for running backtests
   const [trackedBacktests, setTrackedBacktests] = useState<string[]>([])
+  
+  // Modal state for detailed trade view
+  const [showTradeModal, setShowTradeModal] = useState(false)
+  const [selectedBacktestDetails, setSelectedBacktestDetails] = useState<any>(null)
 
   // Load tracked backtests from localStorage on mount
   useEffect(() => {
@@ -455,20 +459,28 @@ export default function Backtest() {
             } : bt
           ))
           
-          // Also display detailed results in alert
-          const returnPercent = result.totalReturnPercent || 
-            ((result.totalReturn / (result.parameters?.initialCapital || 100000)) * 100).toFixed(2)
-          
-          alert(`🎯 Backtest Results (${backtestId})\n\n` +
-            `💰 Total Return: ₹${(result.totalReturn || 0).toLocaleString()}\n` +
-            `📈 Return %: ${returnPercent}%\n` +
-            `🎯 Win Rate: ${(result.winRate || 0).toFixed(1)}%\n` +
-            `📊 Total Trades: ${result.totalTrades || 0}\n` +
-            `✅ Winning: ${result.winningTrades || 0}\n` +
-            `❌ Losing: ${result.losingTrades || 0}\n` +
-            `📉 Max Drawdown: ${(result.maxDrawdownPercent || 0).toFixed(1)}%\n` +
-            `💼 Final Capital: ₹${(result.finalCapital || 0).toLocaleString()}\n\n` +
-            `Period: ${result.parameters?.startDate || 'N/A'} to ${result.parameters?.endDate || 'N/A'}`)
+          // Show detailed modal with trade breakdown
+          setSelectedBacktestDetails({
+            id: backtestId,
+            result: result,
+            summary: {
+              totalReturn: result.totalReturn || result.totalPnL || 0,
+              totalReturnPercent: result.totalReturnPercent || 
+                ((result.totalReturn / (result.parameters?.initialCapital || 100000)) * 100).toFixed(2),
+              winRate: result.winRate || 0,
+              totalTrades: result.totalTrades || 0,
+              winningTrades: result.winningTrades || 0,
+              losingTrades: result.losingTrades || 0,
+              maxDrawdownPercent: result.maxDrawdownPercent || result.maxDrawdown || 0,
+              sharpeRatio: result.sharpeRatio || 0,
+              finalCapital: result.finalCapital || 0,
+              initialCapital: result.parameters?.initialCapital || 100000,
+              startDate: result.parameters?.startDate,
+              endDate: result.parameters?.endDate
+            },
+            trades: result.trades || []
+          })
+          setShowTradeModal(true)
         } else {
           alert(`Failed to load backtest results: ${data.error || 'Unknown error'}`)
         }
@@ -1139,6 +1151,154 @@ export default function Backtest() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Detailed Trade Modal */}
+      {showTradeModal && selectedBacktestDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 m-4 max-w-6xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">Detailed Backtest Results</h2>
+              <button
+                onClick={() => setShowTradeModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Summary Section */}
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4">Summary</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Backtest ID</div>
+                  <div className="font-medium">{selectedBacktestDetails.id}</div>
+                </div>
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Period</div>
+                  <div className="font-medium">
+                    {selectedBacktestDetails.summary.startDate} to {selectedBacktestDetails.summary.endDate}
+                  </div>
+                </div>
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Initial Capital</div>
+                  <div className="font-medium">₹{selectedBacktestDetails.summary.initialCapital.toLocaleString()}</div>
+                </div>
+                <div className="bg-gray-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Final Capital</div>
+                  <div className="font-medium">₹{selectedBacktestDetails.summary.finalCapital.toLocaleString()}</div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="bg-green-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Total Return</div>
+                  <div className={`font-bold ${selectedBacktestDetails.summary.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    ₹{selectedBacktestDetails.summary.totalReturn.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {selectedBacktestDetails.summary.totalReturnPercent}%
+                  </div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Total Trades</div>
+                  <div className="font-bold text-blue-600">{selectedBacktestDetails.summary.totalTrades}</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Win Rate</div>
+                  <div className="font-bold text-green-600">{selectedBacktestDetails.summary.winRate.toFixed(1)}%</div>
+                  <div className="text-sm text-gray-500">
+                    {selectedBacktestDetails.summary.winningTrades}W / {selectedBacktestDetails.summary.losingTrades}L
+                  </div>
+                </div>
+                <div className="bg-red-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Max Drawdown</div>
+                  <div className="font-bold text-red-600">{selectedBacktestDetails.summary.maxDrawdownPercent.toFixed(1)}%</div>
+                </div>
+                <div className="bg-purple-50 p-3 rounded">
+                  <div className="text-sm text-gray-600">Sharpe Ratio</div>
+                  <div className="font-bold text-purple-600">{selectedBacktestDetails.summary.sharpeRatio.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Trade Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Trade Details ({selectedBacktestDetails.trades.length} trades)</h3>
+              
+              {selectedBacktestDetails.trades.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No individual trade data available</p>
+                  <p className="text-sm">Only summary results are shown above</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">Date/Time</th>
+                        <th className="px-3 py-2 text-left">Direction</th>
+                        <th className="px-3 py-2 text-right">Entry Price</th>
+                        <th className="px-3 py-2 text-right">Exit Price</th>
+                        <th className="px-3 py-2 text-right">Quantity</th>
+                        <th className="px-3 py-2 text-right">P&L</th>
+                        <th className="px-3 py-2 text-right">Capital</th>
+                        <th className="px-3 py-2 text-center">Result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedBacktestDetails.trades.map((trade: any, index: number) => (
+                        <tr key={index} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="px-3 py-2">{index + 1}</td>
+                          <td className="px-3 py-2">
+                            {trade.date ? new Date(trade.date).toLocaleString() : 'N/A'}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              trade.action === 'BUY' || trade.action === 'LONG' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {trade.action || trade.direction || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right">₹{(trade.price || trade.entryPrice || 0).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right">₹{(trade.exitPrice || trade.price || 0).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right">{trade.quantity || 25}</td>
+                          <td className={`px-3 py-2 text-right font-medium ${
+                            (trade.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {(trade.pnl || 0) >= 0 ? '+' : ''}₹{(trade.pnl || 0).toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 text-right">₹{(trade.capital || 0).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-center">
+                            {(trade.pnl || 0) >= 0 ? (
+                              <span className="text-green-600 font-bold">✓</span>
+                            ) : (
+                              <span className="text-red-600 font-bold">✗</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Close Button */}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowTradeModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
