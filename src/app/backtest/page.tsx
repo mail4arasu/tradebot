@@ -182,6 +182,66 @@ export default function Backtest() {
     }
   }
 
+  const testManualFetch = async (backtestId: string) => {
+    try {
+      console.log(`🔧 Testing manual fetch for: ${backtestId}`)
+      
+      const response = await fetch('/api/backtest/manual-result', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ backtestId })
+      })
+      
+      const data = await response.json()
+      console.log('🔍 Manual fetch result:', data)
+      
+      if (data.success && data.result) {
+        alert(`🎉 Results Found!\n\nSource: ${data.source}\nTotal Return: ₹${data.result.totalReturn?.toLocaleString() || 'N/A'}\nWin Rate: ${data.result.winRate?.toFixed(1) || 'N/A'}%\nTotal Trades: ${data.result.totalTrades || 'N/A'}\n\nCheck console for full details.`)
+        
+        // Add to results display
+        setBacktestResults(prev => {
+          const existingIndex = prev.findIndex(bt => bt.id === backtestId)
+          if (existingIndex >= 0) {
+            return prev.map(bt => 
+              bt.id === backtestId ? { 
+                ...bt, 
+                status: 'COMPLETED',
+                result: data.result,
+                hasResults: true,
+                totalReturn: data.result.totalReturn || 0,
+                totalReturnPercent: data.result.totalReturnPercent || 0,
+                winRate: data.result.winRate || 0,
+                totalTrades: data.result.totalTrades || 0,
+                maxDrawdownPercent: data.result.maxDrawdownPercent || 0
+              } : bt
+            )
+          } else {
+            return [{
+              id: backtestId,
+              status: 'COMPLETED',
+              result: data.result,
+              hasResults: true,
+              totalReturn: data.result.totalReturn || 0,
+              totalReturnPercent: data.result.totalReturnPercent || 0,
+              winRate: data.result.winRate || 0,
+              totalTrades: data.result.totalTrades || 0,
+              maxDrawdownPercent: data.result.maxDrawdownPercent || 0,
+              progress: 100
+            }, ...prev]
+          }
+        })
+      } else {
+        alert(`❌ No Results Found\n\nBacktest: ${backtestId}\nMessage: ${data.message || 'No results available'}\n\nCheck console for detailed attempts.`)
+      }
+      
+    } catch (error) {
+      console.error('Manual fetch error:', error)
+      alert(`🚨 Fetch Error\n\nError: ${error}\n\nCheck console for details.`)
+    }
+  }
+
   const fetchBots = async () => {
     try {
       setLoading(true)
@@ -479,6 +539,16 @@ export default function Backtest() {
                 📱 Tracking {trackedBacktests.length} backtest{trackedBacktests.length > 1 ? 's' : ''}: {trackedBacktests.join(', ')}
               </div>
             )}
+            <div className="mt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => testManualFetch('bt_1759574778009_3721hpGgw')}
+                className="text-xs"
+              >
+                🔧 Test Manual Fetch (Latest Completed)
+              </Button>
+            </div>
           </div>
           <Button 
             onClick={handleRunBacktest}
