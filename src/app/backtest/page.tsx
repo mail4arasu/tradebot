@@ -265,13 +265,82 @@ export default function Backtest() {
   const fetchBacktestResults = async () => {
     try {
       setLoadingResults(true)
+      console.log('📋 FETCH: Starting to fetch backtest results...')
+      
       const response = await fetch('/api/backtest?action=list')
       if (response.ok) {
         const data = await response.json()
-        setBacktestResults(data.backtests || [])
+        console.log('📋 FETCH: List API response:', data)
+        
+        if (data.success && data.backtests) {
+          console.log(`📋 FETCH: Got ${data.backtests.length} backtests from API`)
+          
+          // SMART MERGE: Don't overwrite existing results, merge them intelligently
+          setBacktestResults(prev => {
+            console.log('📋 FETCH: Current state before merge:', prev)
+            console.log('📋 FETCH: New data to merge:', data.backtests)
+            
+            // Create a map of existing results for fast lookup
+            const existingMap = new Map(prev.map(bt => [bt.id, bt]))
+            
+            // Merge new data with existing, preserving any results that exist
+            const merged = data.backtests.map((newBt: any) => {
+              const existing = existingMap.get(newBt.id)
+              
+              if (existing) {
+                // If we have existing data, merge it smartly
+                // Keep existing results if they exist and are complete
+                if (existing.result && existing.status === 'COMPLETED' && !newBt.result) {
+                  console.log(`📋 FETCH: Preserving existing results for ${newBt.id}`)
+                  return existing
+                }
+                
+                // Otherwise merge, giving priority to new data but preserving results
+                return {
+                  ...newBt,
+                  result: newBt.result || existing.result,
+                  hasResults: !!(newBt.result || existing.result),
+                  totalReturn: newBt.totalReturn || existing.totalReturn,
+                  totalReturnPercent: newBt.totalReturnPercent || existing.totalReturnPercent,
+                  winRate: newBt.winRate || existing.winRate,
+                  totalTrades: newBt.totalTrades || existing.totalTrades,
+                  maxDrawdownPercent: newBt.maxDrawdownPercent || existing.maxDrawdownPercent
+                }
+              }
+              
+              // New backtest, mark if it has results
+              return {
+                ...newBt,
+                hasResults: !!newBt.result
+              }
+            })
+            
+            // Add any existing backtests that weren't in the API response
+            prev.forEach(existing => {
+              if (!data.backtests.find((bt: any) => bt.id === existing.id)) {
+                console.log(`📋 FETCH: Preserving missing backtest ${existing.id}`)
+                merged.push(existing)
+              }
+            })
+            
+            // Sort by start time (newest first)
+            merged.sort((a, b) => {
+              const timeA = new Date(a.startTime || 0).getTime()
+              const timeB = new Date(b.startTime || 0).getTime()
+              return timeB - timeA
+            })
+            
+            console.log(`📋 FETCH: Final merged results (${merged.length} total):`, merged)
+            return merged
+          })
+        } else {
+          console.log('📋 FETCH: No backtests in response or API failed')
+        }
+      } else {
+        console.error('📋 FETCH: API response not ok:', response.status, response.statusText)
       }
     } catch (error) {
-      console.error('Error fetching backtest results:', error)
+      console.error('📋 FETCH: Error fetching backtest results:', error)
     } finally {
       setLoadingResults(false)
     }
@@ -554,14 +623,149 @@ export default function Backtest() {
                 📱 Tracking {trackedBacktests.length} backtest{trackedBacktests.length > 1 ? 's' : ''}: {trackedBacktests.join(', ')}
               </div>
             )}
-            <div className="mt-2">
+            <div className="mt-2 flex gap-2">
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => testManualFetch('bt_1759574778009_3721hpGgw')}
+                onClick={async () => {
+                  // Force inject the completed backtests we can see in console
+                  const knownCompletedBacktests = [
+                    'bt_1759591874635_u9236q362',
+                    'bt_1759574778009_3721hpGgw'
+                  ]
+                  
+                  console.log('🔧 INJECT: Force injecting known completed backtests...')
+                  const injectedResults = []
+                  
+                  for (const backtestId of knownCompletedBacktests) {
+                    try {
+                      const response = await fetch('/api/backtest/manual-result', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ backtestId })
+                      })
+                      const data = await response.json()
+                      
+                      if (data.success && data.result) {
+                        injectedResults.push({
+                          id: backtestId,
+                          status: 'COMPLETED',
+                          result: data.result,
+                          hasResults: true,
+                          totalReturn: data.result.totalReturn || 0,
+                          totalReturnPercent: data.result.totalReturnPercent || 0,
+                          winRate: data.result.winRate || 0,
+                          totalTrades: data.result.totalTrades || 0,
+                          maxDrawdownPercent: data.result.maxDrawdownPercent || 0,
+                          startTime: new Date().toISOString(),
+                          source: 'INJECTED'
+                        })
+                        console.log(`🔧 INJECT: Injected results for ${backtestId}`)
+                      }
+                    } catch (error) {
+                      console.error(`🔧 INJECT: Failed to inject ${backtestId}:`, error)
+                    }
+                  }
+                  
+                  if (injectedResults.length > 0) {
+                    setBacktestResults(prev => [...injectedResults, ...prev.filter(bt => !injectedResults.find(inj => inj.id === bt.id))])
+                    alert(`🎉 Injected ${injectedResults.length} completed backtests!\n\nThese should now be visible in the results section.`)
+                  } else {
+                    alert('❌ No results could be injected. Check console for errors.')
+                  }
+                }}
                 className="text-xs"
               >
-                🔧 Test Manual Fetch (Latest Completed)
+                🔧 Inject Known Completed Results
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  console.log('🔄 MANUAL: Force refreshing all backtest results...')
+                  
+                  // First try normal refresh
+                  await fetchBacktestResults()
+                  
+                  // If still no results, try to recover from tracked backtests
+                  if (backtestResults.length === 0 && trackedBacktests.length > 0) {
+                    console.log('🔄 RECOVERY: No results from API, trying to recover tracked backtests...')
+                    
+                    const recoveredResults = []
+                    for (const backtestId of trackedBacktests) {
+                      try {
+                        const response = await fetch('/api/backtest/manual-result', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ backtestId })
+                        })
+                        const data = await response.json()
+                        
+                        if (data.success && data.result) {
+                          recoveredResults.push({
+                            id: backtestId,
+                            status: 'COMPLETED',
+                            result: data.result,
+                            hasResults: true,
+                            totalReturn: data.result.totalReturn || 0,
+                            totalReturnPercent: data.result.totalReturnPercent || 0,
+                            winRate: data.result.winRate || 0,
+                            totalTrades: data.result.totalTrades || 0,
+                            maxDrawdownPercent: data.result.maxDrawdownPercent || 0,
+                            startTime: new Date().toISOString(),
+                            source: 'RECOVERED'
+                          })
+                          console.log(`🔄 RECOVERY: Recovered results for ${backtestId}`)
+                        }
+                      } catch (error) {
+                        console.error(`🔄 RECOVERY: Failed to recover ${backtestId}:`, error)
+                      }
+                    }
+                    
+                    if (recoveredResults.length > 0) {
+                      setBacktestResults(prev => [...recoveredResults, ...prev])
+                      alert(`🎉 Recovered ${recoveredResults.length} completed backtests!\n\nThese were tracked but not showing in the list.`)
+                    }
+                  }
+                }}
+                className="text-xs"
+              >
+                🔄 Force Refresh + Recovery
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  console.log('🔍 DEBUG: Current state:', backtestResults)
+                  console.log('🔍 DEBUG: Tracked backtests:', trackedBacktests)
+                  
+                  // Test the debug list endpoint
+                  try {
+                    const response = await fetch('/api/backtest/debug-list')
+                    const data = await response.json()
+                    console.log('🔍 DEBUG LIST RESULTS:', data)
+                    
+                    let message = `Debug Info:\n\nCurrent UI Results: ${backtestResults.length}\nTracked Backtests: ${trackedBacktests.length}\n\n`
+                    
+                    if (data.success) {
+                      message += `API Tests:\n`
+                      data.debug.attempts.forEach((attempt: any, i: number) => {
+                        message += `${i + 1}. ${attempt.endpoint}: ${attempt.success ? 'SUCCESS' : 'FAILED'}\n`
+                        if (attempt.success && attempt.data.backtests) {
+                          message += `   Found ${attempt.data.backtests.length} backtests\n`
+                        }
+                      })
+                    }
+                    
+                    alert(message + '\nCheck console for full details.')
+                  } catch (error) {
+                    console.error('Debug failed:', error)
+                    alert(`Debug Failed: ${error}\n\nCurrent Results: ${backtestResults.length}\nTracked: ${trackedBacktests.length}`)
+                  }
+                }}
+                className="text-xs"
+              >
+                🔍 Debug APIs
               </Button>
             </div>
           </div>
@@ -792,6 +996,12 @@ export default function Backtest() {
                 <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>No backtest results yet</p>
                 <p className="text-sm">Run a backtest to see results here</p>
+                <div className="mt-4 text-xs text-blue-600">
+                  <p>If you ran backtests but don't see them:</p>
+                  <p>1. Try the "Force Refresh Results" button above</p>
+                  <p>2. Check console logs for debugging info</p>
+                  <p>3. Use "Debug State" to see current state</p>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -858,7 +1068,7 @@ export default function Backtest() {
                             </div>
                           </div>
 
-                          {result.status === 'COMPLETED' && result.totalReturn !== undefined && (
+                          {result.status === 'COMPLETED' && (result.totalReturn !== undefined || result.result || result.hasResults) && (
                             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                 <div>
@@ -900,7 +1110,7 @@ export default function Backtest() {
                               className="bg-green-600 hover:bg-green-700"
                             >
                               <TrendingUp className="h-4 w-4 mr-1" />
-                              {result.totalReturn !== undefined ? 'View Details' : 'Load Results'}
+                              {(result.totalReturn !== undefined || result.result || result.hasResults) ? 'View Details' : 'Load Results'}
                             </Button>
                           )}
                           {result.status === 'RUNNING' && currentBacktestId === result.id && (

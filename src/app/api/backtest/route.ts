@@ -98,20 +98,52 @@ export async function GET(request: NextRequest) {
     }
     
     if (action === 'list') {
-      // Try VM first, fallback to local
+      console.log('📋 LIST: Fetching all backtests from both VM and local sources')
+      
+      let vmBacktests = []
+      let localBacktests = []
+      let vmError = null
+      
+      // Try VM first
       try {
-        console.log('🔗 Fetching backtests from VM')
+        console.log('🔗 LIST: Fetching backtests from VM')
         const response = await proxyToBacktestVM('/api/backtest/list')
-        const data = await response.json()
         
-        return NextResponse.json({
-          success: data.success,
-          backtests: data.backtests || [],
-          usingBacktestVM: true
-        })
-      } catch (vmError) {
-        console.log('🔄 VM inaccessible - fetching backtests from local database')
-        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('📊 LIST: VM response:', data)
+          
+          if (data.success && data.backtests) {
+            vmBacktests = data.backtests.map((bt: any) => ({
+              id: bt.id || bt.backtestId,
+              status: bt.status || 'UNKNOWN',
+              progress: bt.progress || (bt.status === 'COMPLETED' ? 100 : 0),
+              startTime: bt.startTime || bt.createdAt,
+              endTime: bt.endTime || bt.completedAt,
+              parameters: bt.parameters || {},
+              result: bt.result,
+              // Flatten result data for UI
+              totalReturn: bt.result?.totalReturn || bt.totalReturn || 0,
+              totalReturnPercent: bt.result?.totalReturnPercent || bt.totalReturnPercent || 0,
+              winRate: bt.result?.winRate || bt.winRate || 0,
+              totalTrades: bt.result?.totalTrades || bt.totalTrades || 0,
+              maxDrawdownPercent: bt.result?.maxDrawdownPercent || bt.maxDrawdown || 0,
+              sharpeRatio: bt.result?.sharpeRatio || bt.sharpeRatio || 0,
+              source: 'VM'
+            }))
+            console.log(`✅ LIST: Got ${vmBacktests.length} backtests from VM`)
+          }
+        } else {
+          throw new Error(`VM list failed: ${response.status}`)
+        }
+      } catch (error: any) {
+        vmError = error.message
+        console.log('❌ LIST: VM failed:', vmError)
+      }
+      
+      // Also try local database
+      try {
+        console.log('🔗 LIST: Fetching backtests from local database')
         const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
           method: 'GET',
           headers: {
@@ -119,15 +151,65 @@ export async function GET(request: NextRequest) {
           }
         })
         
-        const localData = await localResponse.json()
-        
-        return NextResponse.json({
-          success: localData.success,
-          backtests: localData.backtests || [],
-          usingLocalEngine: true,
-          vmError: vmError.message
-        })
+        if (localResponse.ok) {
+          const localData = await localResponse.json()
+          console.log('📊 LIST: Local response:', localData)
+          
+          if (localData.success && localData.backtests) {
+            localBacktests = localData.backtests.map((bt: any) => ({
+              id: bt.id || bt.backtestId,
+              status: bt.status || 'UNKNOWN',
+              progress: bt.progress || (bt.status === 'COMPLETED' ? 100 : 0),
+              startTime: bt.startTime || bt.createdAt,
+              endTime: bt.endTime || bt.completedAt,
+              parameters: bt.parameters || {},
+              result: bt.result,
+              // Flatten result data for UI
+              totalReturn: bt.result?.totalReturn || bt.totalReturn || 0,
+              totalReturnPercent: bt.result?.totalReturnPercent || bt.totalReturnPercent || 0,
+              winRate: bt.result?.winRate || bt.winRate || 0,
+              totalTrades: bt.result?.totalTrades || bt.totalTrades || 0,
+              maxDrawdownPercent: bt.result?.maxDrawdownPercent || bt.maxDrawdown || 0,
+              sharpeRatio: bt.result?.sharpeRatio || bt.sharpeRatio || 0,
+              source: 'Local'
+            }))
+            console.log(`✅ LIST: Got ${localBacktests.length} backtests from local`)
+          }
+        }
+      } catch (localError: any) {
+        console.log('❌ LIST: Local failed:', localError.message)
       }
+      
+      // Combine and deduplicate results (VM takes priority)
+      const allBacktests = [...vmBacktests]
+      
+      // Add local backtests that don't exist in VM results
+      localBacktests.forEach(localBt => {
+        if (!vmBacktests.find(vmBt => vmBt.id === localBt.id)) {
+          allBacktests.push(localBt)
+        }
+      })
+      
+      // Sort by creation time (newest first)
+      allBacktests.sort((a, b) => {
+        const timeA = new Date(a.startTime || 0).getTime()
+        const timeB = new Date(b.startTime || 0).getTime()
+        return timeB - timeA
+      })
+      
+      console.log(`📋 LIST: Returning ${allBacktests.length} total backtests (${vmBacktests.length} VM + ${localBacktests.length} local)`)
+      
+      return NextResponse.json({
+        success: true,
+        backtests: allBacktests,
+        summary: {
+          total: allBacktests.length,
+          fromVM: vmBacktests.length,
+          fromLocal: localBacktests.length,
+          vmError: vmError
+        },
+        usingBothSources: true
+      })
     }
     
     // Default: return available operations
