@@ -51,110 +51,59 @@ export async function GET(
     
     if (type === 'status') {
       try {
-        // Try Backtest VM first
+        // Check status from backtest-tradebot VM
+        console.log(`🔍 Checking status for backtest ${backtestId} from VM`)
+        
         const response = await proxyToBacktestVM(`/api/backtest/status/${backtestId}`)
         
         if (!response.ok) {
-          throw new Error('VM backtest not found')
+          throw new Error(`VM status check failed: ${response.status}`)
         }
         
         const data = await response.json()
+        console.log(`📊 VM status response:`, data)
         
         return NextResponse.json({
           success: true,
-          status: data.status
+          status: data.status,
+          usingBacktestVM: true
         })
-      } catch (vmError) {
-        // Fallback to local backtest
-        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
-          method: 'GET',
-          headers: {
-            'Cookie': request.headers.get('cookie') || ''
-          }
-        })
-        
-        if (!localResponse.ok) {
-          return NextResponse.json({
-            success: false,
-            error: 'Backtest not found'
-          }, { status: 404 })
-        }
-        
-        const localData = await localResponse.json()
-        
+      } catch (vmError: any) {
+        console.error(`❌ Failed to get status from VM:`, vmError.message)
         return NextResponse.json({
-          success: true,
-          status: {
-            status: localData.backtest?.status || 'UNKNOWN',
-            progress: localData.backtest?.progress || 0,
-            id: backtestId,
-            bot: localData.backtest?.parameters?.symbol || 'NIFTY',
-            capital: localData.backtest?.parameters?.initialCapital || 100000,
-            period: `${localData.backtest?.parameters?.startDate?.toISOString().split('T')[0]} - ${localData.backtest?.parameters?.endDate?.toISOString().split('T')[0]}`,
-            started: localData.backtest?.createdAt
-          },
-          usingLocalEngine: true
-        })
+          success: false,
+          error: `Failed to get backtest status: ${vmError.message}`,
+          vmUrl: BACKTEST_VM_URL
+        }, { status: 500 })
       }
     }
     
     if (type === 'result') {
       try {
-        // Try Backtest VM first
+        // Get results from backtest-tradebot VM
+        console.log(`📊 Fetching results for backtest ${backtestId} from VM`)
+        
         const response = await proxyToBacktestVM(`/api/backtest/result/${backtestId}`)
         
         if (!response.ok) {
-          throw new Error('VM backtest not found')
+          throw new Error(`VM result fetch failed: ${response.status}`)
         }
         
         const data = await response.json()
+        console.log(`📈 VM results response:`, data)
         
         return NextResponse.json({
           success: true,
-          result: data.result
+          result: data.result,
+          usingBacktestVM: true
         })
-      } catch (vmError) {
-        // Fallback to local backtest
-        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
-          method: 'GET',
-          headers: {
-            'Cookie': request.headers.get('cookie') || ''
-          }
-        })
-        
-        if (!localResponse.ok) {
-          return NextResponse.json({
-            success: false,
-            error: 'Backtest not found'
-          }, { status: 404 })
-        }
-        
-        const localData = await localResponse.json()
-        
-        const backtest = localData.backtest
-        const results = backtest?.results || {}
-        
+      } catch (vmError: any) {
+        console.error(`❌ Failed to get results from VM:`, vmError.message)
         return NextResponse.json({
-          success: true,
-          result: {
-            id: backtestId,
-            status: backtest?.status,
-            progress: backtest?.progress,
-            totalReturn: results.totalPnL || 0,
-            totalReturnPercent: results.totalPnL ? ((results.totalPnL / (backtest?.parameters?.initialCapital || 100000)) * 100).toFixed(2) : 0,
-            winRate: results.winRate || 0,
-            totalTrades: results.totalTrades || 0,
-            winningTrades: results.winningTrades || 0,
-            losingTrades: results.losingTrades || 0,
-            maxDrawdownPercent: results.maxDrawdown || 0,
-            finalCapital: results.finalCapital || backtest?.parameters?.initialCapital || 100000,
-            trades: results.trades || [],
-            parameters: backtest?.parameters,
-            createdAt: backtest?.createdAt,
-            completedAt: backtest?.completedAt
-          },
-          usingLocalEngine: true
-        })
+          success: false,
+          error: `Failed to get backtest results: ${vmError.message}`,
+          vmUrl: BACKTEST_VM_URL
+        }, { status: 500 })
       }
     }
     

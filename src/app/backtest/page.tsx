@@ -105,16 +105,62 @@ export default function Backtest() {
         const data = await response.json()
         console.log('Backtest status response:', data)
         if (data.success && data.status) {
-          // Update the backtest in our results list
-          setBacktestResults(prev => prev.map(bt => 
-            bt.id === backtestId ? { ...bt, ...data.status } : bt
-          ))
+          // Update or add backtest to results list
+          setBacktestResults(prev => {
+            const existingIndex = prev.findIndex(bt => bt.id === backtestId)
+            if (existingIndex >= 0) {
+              // Update existing
+              return prev.map(bt => 
+                bt.id === backtestId ? { ...bt, ...data.status } : bt
+              )
+            } else {
+              // Add new backtest to the list if not found
+              return [{ id: backtestId, ...data.status }, ...prev]
+            }
+          })
           
-          // If completed, stop polling and refresh results
-          if (data.status.status === 'COMPLETED' || data.status.status === 'FAILED') {
-            console.log(`Backtest ${backtestId} finished with status: ${data.status.status}`)
+          // If completed, stop polling and fetch final results
+          if (data.status.status === 'COMPLETED') {
+            console.log(`Backtest ${backtestId} COMPLETED - fetching final results`)
             setCurrentBacktestId(null)
-            fetchBacktestResults() // Refresh the full list
+            
+            // Try to fetch final results immediately
+            try {
+              const resultResponse = await fetch(`/api/backtest/${backtestId}?type=result`)
+              if (resultResponse.ok) {
+                const resultData = await resultResponse.json()
+                if (resultData.success && resultData.result) {
+                  console.log('Final backtest results:', resultData.result)
+                  const result = resultData.result
+                  setBacktestResults(prev => prev.map(bt => 
+                    bt.id === backtestId ? { 
+                      ...bt, 
+                      status: 'COMPLETED',
+                      result: result,
+                      hasResults: true,
+                      // Map result fields to expected UI fields
+                      totalReturn: result.totalReturn || result.totalPnL || 0,
+                      totalReturnPercent: result.totalReturnPercent || 0,
+                      winRate: result.winRate || 0,
+                      totalTrades: result.totalTrades || 0,
+                      maxDrawdownPercent: result.maxDrawdownPercent || result.maxDrawdown || 0,
+                      sharpeRatio: result.sharpeRatio || 0
+                    } : bt
+                  ))
+                } else {
+                  console.error('Failed to get backtest results:', resultData.error)
+                }
+              }
+            } catch (resultError) {
+              console.error('Error fetching final results:', resultError)
+            }
+            
+            // Also refresh the full list as fallback
+            fetchBacktestResults()
+          } else if (data.status.status === 'FAILED') {
+            console.log(`Backtest ${backtestId} FAILED`)
+            setCurrentBacktestId(null)
+            fetchBacktestResults()
           }
         }
       } else {
@@ -133,8 +179,24 @@ export default function Backtest() {
         const data = await response.json()
         console.log('Backtest detailed result:', data)
         if (data.success && data.result) {
-          // Display results in a more detailed format
+          // Update UI state with results
           const result = data.result
+          setBacktestResults(prev => prev.map(bt => 
+            bt.id === backtestId ? { 
+              ...bt, 
+              result: result,
+              hasResults: true,
+              // Map result fields to expected UI fields
+              totalReturn: result.totalReturn || result.totalPnL || 0,
+              totalReturnPercent: result.totalReturnPercent || 0,
+              winRate: result.winRate || 0,
+              totalTrades: result.totalTrades || 0,
+              maxDrawdownPercent: result.maxDrawdownPercent || result.maxDrawdown || 0,
+              sharpeRatio: result.sharpeRatio || 0
+            } : bt
+          ))
+          
+          // Also display detailed results in alert
           const returnPercent = result.totalReturnPercent || 
             ((result.totalReturn / (result.parameters?.initialCapital || 100000)) * 100).toFixed(2)
           
@@ -179,8 +241,12 @@ export default function Backtest() {
     try {
       console.log('Starting backtest with config:', backtestConfig)
       
-      // First, check backtest engine health
+      // Check backtest engine health (with fallback to local)
       const healthResponse = await fetch('/api/backtest?action=health')
+      if (!healthResponse.ok) {
+        throw new Error(`Health check failed: ${healthResponse.status} ${healthResponse.statusText}`)
+      }
+      
       const healthData = await healthResponse.json()
       
       if (!healthData.success) {
@@ -188,6 +254,9 @@ export default function Backtest() {
       }
       
       console.log('Backtest engine status:', healthData.backtestEngine)
+      if (healthData.usingLocalEngine) {
+        console.log('Using local backtest engine')
+      }
       
       // Start the backtest
       const response = await fetch('/api/backtest', {
@@ -617,7 +686,7 @@ export default function Backtest() {
                               className="bg-green-600 hover:bg-green-700"
                             >
                               <TrendingUp className="h-4 w-4 mr-1" />
-                              View Results
+                              {result.totalReturn !== undefined ? 'View Details' : 'Load Results'}
                             </Button>
                           )}
                           {result.status === 'RUNNING' && currentBacktestId === result.id && (

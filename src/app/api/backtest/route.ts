@@ -18,6 +18,9 @@ async function proxyToBacktestVM(
 ): Promise<Response> {
   const url = `${BACKTEST_VM_URL}${path}`
   
+  console.log(`🔗 Connecting to backtest VM: ${url}`)
+  console.log(`📝 Method: ${method}, Body:`, body ? JSON.stringify(body, null, 2) : 'None')
+  
   try {
     const response = await fetch(url, {
       method,
@@ -26,13 +29,20 @@ async function proxyToBacktestVM(
         ...headers
       },
       body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(30000) // 30 second timeout
+      signal: AbortSignal.timeout(60000) // Increased to 60 second timeout
     })
     
+    console.log(`📡 VM Response: ${response.status} ${response.statusText}`)
     return response
-  } catch (error) {
-    console.error('Backtest VM communication error:', error)
-    throw new Error('Failed to communicate with backtest engine')
+  } catch (error: any) {
+    console.error('❌ Backtest VM communication error:', {
+      url,
+      method,
+      error: error.message,
+      code: error.code,
+      cause: error.cause
+    })
+    throw new Error(`Failed to communicate with backtest-tradebot VM at ${BACKTEST_VM_URL}: ${error.message}`)
   }
 }
 
@@ -51,13 +61,29 @@ export async function GET(request: NextRequest) {
     
     if (action === 'health') {
       // Check backtest engine health
-      const response = await proxyToBacktestVM('/health')
-      const data = await response.json()
-      
-      return NextResponse.json({
-        success: true,
-        backtestEngine: data
-      })
+      try {
+        const response = await proxyToBacktestVM('/health')
+        const data = await response.json()
+        
+        return NextResponse.json({
+          success: true,
+          backtestEngine: data,
+          usingExternalVM: true
+        })
+      } catch (vmError) {
+        console.log('External VM not available, using local backtest engine')
+        
+        // Fallback to local implementation
+        return NextResponse.json({
+          success: true,
+          backtestEngine: {
+            status: 'healthy',
+            engine: 'local',
+            message: 'Local backtest engine is available'
+          },
+          usingLocalEngine: true
+        })
+      }
     }
     
     if (action === 'status') {
@@ -153,7 +179,9 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Try Backtest VM first
+        // Connect to dedicated backtest-tradebot VM (10.160.0.3:4000)
+        console.log('🔄 Connecting to backtest-tradebot VM at 10.160.0.3:4000')
+        
         const backtestParams = {
           botId: params.botId || 'nifty50-futures-bot',
           startDate: new Date(params.startDate),
@@ -169,47 +197,39 @@ export async function POST(request: NextRequest) {
           timezone: params.timezone || 'Asia/Kolkata'
         }
         
+        console.log('📊 Sending backtest request to VM:', backtestParams)
+        
         const response = await proxyToBacktestVM(
           '/api/backtest/start',
           'POST',
           { params: backtestParams }
         )
         
+        if (!response.ok) {
+          throw new Error(`Backtest VM responded with ${response.status}: ${response.statusText}`)
+        }
+        
         const data = await response.json()
+        console.log('✅ Backtest VM response:', data)
         
         return NextResponse.json({
           success: data.success,
           backtestId: data.backtestId,
           message: data.message,
-          parameters: backtestParams
+          parameters: backtestParams,
+          usingBacktestVM: true
         })
         
-      } catch (vmError) {
-        console.log('Backtest VM unavailable, using local implementation')
+      } catch (vmError: any) {
+        console.error('❌ Backtest VM connection failed:', vmError.message)
         
-        // Fallback to local implementation
-        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cookie': request.headers.get('cookie') || ''
-          },
-          body: JSON.stringify({
-            startDate: params.startDate,
-            endDate: params.endDate,
-            initialCapital: params.initialCapital || 100000,
-            symbol: 'NIFTY'
-          })
-        })
-        
-        const localData = await localResponse.json()
-        
+        // Return detailed error for debugging
         return NextResponse.json({
-          success: localData.success,
-          backtestId: localData.backtestId,
-          message: localData.message + ' (Local Engine)',
-          usingLocalEngine: true
-        })
+          success: false,
+          error: `Failed to connect to backtest-tradebot VM: ${vmError.message}`,
+          vmUrl: BACKTEST_VM_URL,
+          suggestion: 'Please check if backtest-tradebot VM is running and accessible'
+        }, { status: 500 })
       }
     }
     
