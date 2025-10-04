@@ -99,21 +99,26 @@ export default function Backtest() {
 
   const checkBacktestStatus = async (backtestId: string) => {
     try {
+      console.log(`Checking backtest status for: ${backtestId}`)
       const response = await fetch(`/api/backtest/${backtestId}?type=status`)
       if (response.ok) {
         const data = await response.json()
+        console.log('Backtest status response:', data)
         if (data.success && data.status) {
           // Update the backtest in our results list
           setBacktestResults(prev => prev.map(bt => 
             bt.id === backtestId ? { ...bt, ...data.status } : bt
           ))
           
-          // If completed, stop polling
+          // If completed, stop polling and refresh results
           if (data.status.status === 'COMPLETED' || data.status.status === 'FAILED') {
+            console.log(`Backtest ${backtestId} finished with status: ${data.status.status}`)
             setCurrentBacktestId(null)
             fetchBacktestResults() // Refresh the full list
           }
         }
+      } else {
+        console.error('Failed to fetch backtest status:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Error checking backtest status:', error)
@@ -122,17 +127,36 @@ export default function Backtest() {
 
   const viewBacktestResult = async (backtestId: string) => {
     try {
+      console.log(`Fetching detailed results for: ${backtestId}`)
       const response = await fetch(`/api/backtest/${backtestId}?type=result`)
       if (response.ok) {
         const data = await response.json()
+        console.log('Backtest detailed result:', data)
         if (data.success && data.result) {
-          // Display results in a modal or expand in place
-          console.log('Backtest Result:', data.result)
-          alert(`Backtest Results:\n\nTotal Return: ₹${data.result.totalReturn}\nWin Rate: ${data.result.winRate}%\nTotal Trades: ${data.result.totalTrades}\nMax Drawdown: ${data.result.maxDrawdownPercent}%`)
+          // Display results in a more detailed format
+          const result = data.result
+          const returnPercent = result.totalReturnPercent || 
+            ((result.totalReturn / (result.parameters?.initialCapital || 100000)) * 100).toFixed(2)
+          
+          alert(`🎯 Backtest Results (${backtestId})\n\n` +
+            `💰 Total Return: ₹${(result.totalReturn || 0).toLocaleString()}\n` +
+            `📈 Return %: ${returnPercent}%\n` +
+            `🎯 Win Rate: ${(result.winRate || 0).toFixed(1)}%\n` +
+            `📊 Total Trades: ${result.totalTrades || 0}\n` +
+            `✅ Winning: ${result.winningTrades || 0}\n` +
+            `❌ Losing: ${result.losingTrades || 0}\n` +
+            `📉 Max Drawdown: ${(result.maxDrawdownPercent || 0).toFixed(1)}%\n` +
+            `💼 Final Capital: ₹${(result.finalCapital || 0).toLocaleString()}\n\n` +
+            `Period: ${result.parameters?.startDate || 'N/A'} to ${result.parameters?.endDate || 'N/A'}`)
+        } else {
+          alert(`Failed to load backtest results: ${data.error || 'Unknown error'}`)
         }
+      } else {
+        alert(`Failed to fetch results: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
       console.error('Error fetching backtest result:', error)
+      alert(`Error loading results: ${error}`)
     }
   }
 

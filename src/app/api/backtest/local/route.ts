@@ -354,39 +354,71 @@ async function runBacktestInBackground(
   try {
     console.log(`🧪 Starting backtest ${backtestId}`)
     
-    // Connect to database
+    // Ensure database connection
     if (mongoose.connection.readyState === 0) {
+      console.log('🔗 Connecting to MongoDB for background process...')
       await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/tradebot')
+      console.log('✅ MongoDB connected for background process')
+    } else {
+      console.log(`📊 MongoDB connection state: ${mongoose.connection.readyState} (1=connected)`)
     }
     
     // Log backtest parameters
     console.log(`📊 Backtest parameters: ${startDate} to ${endDate}, Capital: ₹${initialCapital}`)
     
     // First, check what data is available in the database
-    const availableDataSample = await HistoricalData.find({
+    // Try both with and without quotes in symbol field
+    let availableDataSample = await HistoricalData.find({
       symbol: '"NIFTY"',
       timeframe: '5minute'
     }).sort({ date: 1 }).limit(5)
     
-    const totalAvailableRecords = await HistoricalData.countDocuments({
+    let totalAvailableRecords = await HistoricalData.countDocuments({
       symbol: '"NIFTY"',
       timeframe: '5minute'
     })
+    
+    // If no data found with quotes, try without quotes
+    if (totalAvailableRecords === 0) {
+      availableDataSample = await HistoricalData.find({
+        symbol: 'NIFTY',
+        timeframe: '5minute'
+      }).sort({ date: 1 }).limit(5)
+      
+      totalAvailableRecords = await HistoricalData.countDocuments({
+        symbol: 'NIFTY',
+        timeframe: '5minute'
+      })
+    }
+    
+    // If still no data, try continuous contract
+    if (totalAvailableRecords === 0) {
+      availableDataSample = await HistoricalData.find({
+        symbol: 'NIFTY_CONTINUOUS',
+        timeframe: '5minute'
+      }).sort({ date: 1 }).limit(5)
+      
+      totalAvailableRecords = await HistoricalData.countDocuments({
+        symbol: 'NIFTY_CONTINUOUS',
+        timeframe: '5minute'
+      })
+    }
     
     console.log(`📈 Available NIFTY data: ${totalAvailableRecords} total records`)
     if (availableDataSample.length > 0) {
       const firstDate = availableDataSample[0].date
       const lastSample = await HistoricalData.findOne({
-        symbol: '"NIFTY"',
+        symbol: availableDataSample[0].symbol,
         timeframe: '5minute'
       }).sort({ date: -1 })
       const lastDate = lastSample?.date
       
       console.log(`📅 Data range available: ${firstDate?.toISOString().split('T')[0]} to ${lastDate?.toISOString().split('T')[0]}`)
+      console.log(`🔍 Using symbol: ${availableDataSample[0].symbol}`)
     }
     
-    // Get historical data - note: symbol is stored as "NIFTY" with quotes from Zerodha API
-    const historicalData = await HistoricalData.find({
+    // Get historical data - try different symbol formats
+    let historicalData = await HistoricalData.find({
       symbol: '"NIFTY"',
       timeframe: '5minute',
       date: {
@@ -394,6 +426,30 @@ async function runBacktestInBackground(
         $lte: new Date(endDate)
       }
     }).sort({ date: 1 })
+    
+    // If no data found with quotes, try without quotes
+    if (historicalData.length === 0) {
+      historicalData = await HistoricalData.find({
+        symbol: 'NIFTY',
+        timeframe: '5minute',
+        date: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      }).sort({ date: 1 })
+    }
+    
+    // If still no data, try continuous contract
+    if (historicalData.length === 0) {
+      historicalData = await HistoricalData.find({
+        symbol: 'NIFTY_CONTINUOUS',
+        timeframe: '5minute',
+        date: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      }).sort({ date: 1 })
+    }
     
     if (historicalData.length === 0) {
       console.log(`❌ No historical data found for ${startDate} to ${endDate}`)
@@ -423,12 +479,13 @@ async function runBacktestInBackground(
       await strategy.processCandle(candle, previousCandles)
       
       // Update progress every 100 candles
-      if (i % 100 === 0) {
+      if (i % 100 === 0 || i === totalCandles - 1) {
         const progress = Math.round((i / totalCandles) * 100)
-        await BacktestResult.updateOne(
+        const updateResult = await BacktestResult.updateOne(
           { backtestId },
           { progress }
         )
+        console.log(`📊 Progress updated: ${progress}% (candle ${i}/${totalCandles}) - DB update: ${updateResult.modifiedCount > 0 ? 'SUCCESS' : 'FAILED'}`)
       }
     }
     
