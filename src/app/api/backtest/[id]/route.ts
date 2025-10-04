@@ -51,62 +51,96 @@ export async function GET(
     
     if (type === 'status') {
       try {
-        // Check status from backtest-tradebot VM
-        console.log(`🔍 Checking status for backtest ${backtestId} from VM`)
+        // VM is inaccessible - check local backtest status
+        console.log(`🔍 Checking status for backtest ${backtestId} from local database`)
         
-        const response = await proxyToBacktestVM(`/api/backtest/status/${backtestId}`)
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
         
-        if (!response.ok) {
-          throw new Error(`VM status check failed: ${response.status}`)
+        if (!localResponse.ok) {
+          throw new Error(`Local status check failed: ${localResponse.status}`)
         }
         
-        const data = await response.json()
-        console.log(`📊 VM status response:`, data)
+        const localData = await localResponse.json()
+        console.log(`📊 Local status response:`, localData)
         
-        return NextResponse.json({
-          success: true,
-          status: data.status,
-          usingBacktestVM: true
-        })
-      } catch (vmError: any) {
-        console.error(`❌ Failed to get status from VM:`, vmError.message)
-        // Don't return 500 - return 404 for not found status
+        if (localData.success && localData.backtest) {
+          return NextResponse.json({
+            success: true,
+            status: {
+              id: localData.backtest.id,
+              status: localData.backtest.status,
+              progress: localData.backtest.progress || 0
+            },
+            usingLocalEngine: true
+          })
+        } else {
+          throw new Error('Backtest not found in local database')
+        }
+      } catch (localError: any) {
+        console.error(`❌ Failed to get status from local:`, localError.message)
         return NextResponse.json({
           success: false,
-          error: `Backtest status not available: ${vmError.message}`,
-          vmUrl: BACKTEST_VM_URL,
-          backtestId
+          error: `Backtest status not available: ${localError.message}`,
+          backtestId,
+          usingLocalEngine: true
         }, { status: 404 })
       }
     }
     
     if (type === 'result') {
       try {
-        // Get results from backtest-tradebot VM
-        console.log(`📊 Fetching results for backtest ${backtestId} from VM`)
+        // VM is inaccessible - get results from local database
+        console.log(`📊 Fetching results for backtest ${backtestId} from local database`)
         
-        const response = await proxyToBacktestVM(`/api/backtest/result/${backtestId}`)
+        const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local?id=${backtestId}`, {
+          method: 'GET',
+          headers: {
+            'Cookie': request.headers.get('cookie') || ''
+          }
+        })
         
-        if (!response.ok) {
-          throw new Error(`VM result fetch failed: ${response.status}`)
+        if (!localResponse.ok) {
+          throw new Error(`Local result fetch failed: ${localResponse.status}`)
         }
         
-        const data = await response.json()
-        console.log(`📈 VM results response:`, data)
+        const localData = await localResponse.json()
+        console.log(`📈 Local results response:`, localData)
         
-        return NextResponse.json({
-          success: true,
-          result: data.result,
-          usingBacktestVM: true
-        })
-      } catch (vmError: any) {
-        console.error(`❌ Failed to get results from VM:`, vmError.message)
-        // Don't return 500 - return 404 for not found results
+        if (localData.success && localData.backtest && localData.backtest.status === 'COMPLETED') {
+          // Format results for frontend
+          const result = {
+            totalReturn: localData.backtest.totalPnL || 0,
+            totalReturnPercent: localData.backtest.totalPnL ? 
+              ((localData.backtest.totalPnL / (localData.backtest.initialCapital || 100000)) * 100).toFixed(2) : 0,
+            winRate: localData.backtest.winRate || 0,
+            totalTrades: localData.backtest.totalTrades || 0,
+            winningTrades: localData.backtest.winningTrades || 0,
+            losingTrades: localData.backtest.losingTrades || 0,
+            maxDrawdownPercent: localData.backtest.maxDrawdown || 0,
+            finalCapital: localData.backtest.finalCapital || 0,
+            sharpeRatio: 0 // Calculate if needed
+          }
+          
+          return NextResponse.json({
+            success: true,
+            result: result,
+            usingLocalEngine: true
+          })
+        } else {
+          throw new Error('Backtest not completed or results not available')
+        }
+      } catch (localError: any) {
+        console.error(`❌ Failed to get results from local:`, localError.message)
         return NextResponse.json({
           success: false,
-          error: `Backtest results not available: ${vmError.message}`,
-          vmUrl: BACKTEST_VM_URL,
-          backtestId
+          error: `Backtest results not available: ${localError.message}`,
+          backtestId,
+          usingLocalEngine: true
         }, { status: 404 })
       }
     }
