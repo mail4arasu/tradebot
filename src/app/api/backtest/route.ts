@@ -185,16 +185,19 @@ export async function POST(request: NextRequest) {
         console.log('🔗 Starting backtest on VM')
         
         const vmParams = {
+          action: 'start',
           startDate: params.startDate,
           endDate: params.endDate,
           initialCapital: params.initialCapital || 500000,
-          symbol: 'NIFTY'
+          symbol: 'NIFTY50-FUT',
+          timeframe: '5min',
+          strategy: 'opening_breakout'
         }
         
         console.log('📊 VM backtest params:', vmParams)
         
         const response = await proxyToBacktestVM(
-          '/api/backtest/start',
+          '/api/backtest',
           'POST',
           vmParams
         )
@@ -229,14 +232,20 @@ export async function POST(request: NextRequest) {
           
           console.log('📊 Starting local backtest:', localParams)
           
-          const localResponse = await fetch(`${request.nextUrl.origin}/api/backtest/local`, {
+          // Direct local implementation instead of internal fetch
+          const localBacktestModule = await import('./local/route')
+          const localRequest = new Request(request.url, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cookie': request.headers.get('cookie') || ''
-            },
+            headers: request.headers,
             body: JSON.stringify(localParams)
           })
+          
+          const localResponse = await localBacktestModule.POST(localRequest)
+          
+          if (!localResponse.ok) {
+            const errorText = await localResponse.text()
+            throw new Error(`Local backtest failed: ${localResponse.status} - ${errorText}`)
+          }
           
           const localData = await localResponse.json()
           console.log('✅ Local backtest response:', localData)
