@@ -33,6 +33,32 @@ export default function Dashboard() {
   const [marginUtilization, setMarginUtilization] = useState(0)
   const [holdingsCount, setHoldingsCount] = useState(0)
   const [positionsCount, setPositionsCount] = useState(0)
+  
+  // Auto-refresh states
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false)
+  const [isMarketHours, setIsMarketHours] = useState(false)
+  const [nextRefreshTime, setNextRefreshTime] = useState<Date | null>(null)
+  const [refreshingPortfolio, setRefreshingPortfolio] = useState(false)
+
+  // Check if current time is within market hours (9:00 AM - 3:30 PM IST)
+  const checkMarketHours = useCallback(() => {
+    const now = new Date()
+    // Convert to IST (UTC+5:30)
+    const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
+    const hours = istTime.getHours()
+    const minutes = istTime.getMinutes()
+    
+    // Market hours: 9:00 AM to 3:30 PM IST (weekdays only)
+    const dayOfWeek = istTime.getDay() // 0 = Sunday, 6 = Saturday
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
+    const currentTimeInMinutes = hours * 60 + minutes
+    const marketOpenTime = 9 * 60 // 9:00 AM
+    const marketCloseTime = 15 * 60 + 30 // 3:30 PM
+    
+    const isInMarketHours = isWeekday && currentTimeInMinutes >= marketOpenTime && currentTimeInMinutes <= marketCloseTime
+    setIsMarketHours(isInMarketHours)
+    return isInMarketHours
+  }, [])
 
   const fetchUserData = useCallback(async () => {
     try {
@@ -75,8 +101,42 @@ export default function Dashboard() {
     }
   }, [session, fetchUserData])
 
-  const fetchTradingData = async () => {
+  // Market hours monitoring and auto-refresh setup
+  useEffect(() => {
+    // Check market hours immediately
+    const inMarketHours = checkMarketHours()
+    setAutoRefreshEnabled(inMarketHours)
+
+    // Set up interval to check market hours every minute
+    const marketHoursInterval = setInterval(() => {
+      const inMarketHours = checkMarketHours()
+      setAutoRefreshEnabled(inMarketHours)
+    }, 60000) // Check every minute
+
+    return () => clearInterval(marketHoursInterval)
+  }, [checkMarketHours])
+
+  // Auto-refresh portfolio data every 30 seconds during market hours
+  useEffect(() => {
+    let refreshInterval: NodeJS.Timeout | null = null
+
+    if (autoRefreshEnabled && zerodhaConnected && !needsDailyLogin) {
+      refreshInterval = setInterval(() => {
+        fetchTradingData(false) // Silent refresh without loader
+      }, 30000) // 30 seconds
+    }
+
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval)
+      }
+    }
+  }, [autoRefreshEnabled, zerodhaConnected, needsDailyLogin])
+
+  const fetchTradingData = async (showLoader = false) => {
     try {
+      if (showLoader) setRefreshingPortfolio(true)
+      
       // Fetch comprehensive dashboard data
       const response = await fetch('/api/zerodha/dashboard-data')
       if (response.ok) {
@@ -102,6 +162,9 @@ export default function Dashboard() {
         // Holdings and positions count
         setHoldingsCount(data.holdingsCount || 0)
         setPositionsCount(data.positionsCount || 0)
+        
+        // Update last refresh time
+        setNextRefreshTime(new Date(Date.now() + 30000)) // Next refresh in 30 seconds
       }
     } catch (error) {
       console.error('Error fetching trading data:', error)
@@ -119,7 +182,13 @@ export default function Dashboard() {
       setMarginUtilization(0)
       setHoldingsCount(0)
       setPositionsCount(0)
+    } finally {
+      if (showLoader) setRefreshingPortfolio(false)
     }
+  }
+
+  const refreshPortfolioData = async () => {
+    await fetchTradingData(true)
   }
 
   const syncBalance = async () => {
@@ -197,7 +266,25 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>
           Welcome back, {userName || session.user?.name}!
         </h1>
-        <p style={{ color: 'var(--muted-foreground)' }}>Here&apos;s your trading overview</p>
+        <div className="flex items-center justify-between">
+          <p style={{ color: 'var(--muted-foreground)' }}>Here&apos;s your trading overview</p>
+          {zerodhaConnected && (
+            <div className="flex items-center space-x-2 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+              <span>
+                {autoRefreshEnabled 
+                  ? `Auto-refresh active (market hours)` 
+                  : isMarketHours 
+                    ? 'Auto-refresh paused' 
+                    : 'Market closed'
+                }
+              </span>
+              {autoRefreshEnabled && refreshingPortfolio && (
+                <RefreshCw className="h-3 w-3 animate-spin" />
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Zerodha Connection Status */}
@@ -310,7 +397,23 @@ export default function Dashboard() {
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Portfolio Value</CardTitle>
-            <PieChart className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            <div className="flex items-center space-x-2">
+              {zerodhaConnected && (
+                <button
+                  onClick={refreshPortfolioData}
+                  disabled={refreshingPortfolio}
+                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                  style={{ 
+                    color: 'var(--muted-foreground)',
+                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
+                  }}
+                  title="Refresh portfolio data"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              <PieChart className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{portfolioValue.toLocaleString()}</div>
@@ -331,7 +434,23 @@ export default function Dashboard() {
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Portfolio P&L</CardTitle>
-            {portfolioPnL >= 0 ? <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} /> : <TrendingDown className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />}
+            <div className="flex items-center space-x-2">
+              {zerodhaConnected && (
+                <button
+                  onClick={refreshPortfolioData}
+                  disabled={refreshingPortfolio}
+                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                  style={{ 
+                    color: 'var(--muted-foreground)',
+                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
+                  }}
+                  title="Refresh portfolio data"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              {portfolioPnL >= 0 ? <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} /> : <TrendingDown className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />}
+            </div>
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${portfolioPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -354,7 +473,23 @@ export default function Dashboard() {
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Day P&L</CardTitle>
-            {dayPnL >= 0 ? <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} /> : <TrendingDown className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />}
+            <div className="flex items-center space-x-2">
+              {zerodhaConnected && (
+                <button
+                  onClick={refreshPortfolioData}
+                  disabled={refreshingPortfolio}
+                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                  style={{ 
+                    color: 'var(--muted-foreground)',
+                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
+                  }}
+                  title="Refresh portfolio data"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              {dayPnL >= 0 ? <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} /> : <TrendingDown className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />}
+            </div>
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${dayPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -377,7 +512,23 @@ export default function Dashboard() {
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Available Margin</CardTitle>
-            <Wallet className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            <div className="flex items-center space-x-2">
+              {zerodhaConnected && (
+                <button
+                  onClick={refreshPortfolioData}
+                  disabled={refreshingPortfolio}
+                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                  style={{ 
+                    color: 'var(--muted-foreground)',
+                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
+                  }}
+                  title="Refresh margin data"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              <Wallet className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{availableMargin.toLocaleString()}</div>
@@ -395,7 +546,23 @@ export default function Dashboard() {
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Used Margin</CardTitle>
-            <Target className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            <div className="flex items-center space-x-2">
+              {zerodhaConnected && (
+                <button
+                  onClick={refreshPortfolioData}
+                  disabled={refreshingPortfolio}
+                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                  style={{ 
+                    color: 'var(--muted-foreground)',
+                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
+                  }}
+                  title="Refresh margin data"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              <Target className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{usedMargin.toLocaleString()}</div>
@@ -413,7 +580,23 @@ export default function Dashboard() {
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Monthly Trading P&L</CardTitle>
-            <BarChart3 className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            <div className="flex items-center space-x-2">
+              {zerodhaConnected && (
+                <button
+                  onClick={refreshPortfolioData}
+                  disabled={refreshingPortfolio}
+                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                  style={{ 
+                    color: 'var(--muted-foreground)',
+                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
+                  }}
+                  title="Refresh trading data"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              <BarChart3 className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            </div>
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
