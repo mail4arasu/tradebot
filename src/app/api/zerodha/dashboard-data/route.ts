@@ -33,10 +33,11 @@ export async function GET(_request: NextRequest) {
         user.zerodhaConfig.accessToken
       )
 
-      // Fetch comprehensive portfolio data
-      const [portfolioData, trades] = await Promise.all([
+      // Fetch comprehensive portfolio data including fresh balance
+      const [portfolioData, trades, margins] = await Promise.all([
         zerodhaAPI.getPortfolioData(),
-        zerodhaAPI.getTrades()
+        zerodhaAPI.getTrades(),
+        zerodhaAPI.getMargins() // Fetch fresh balance
       ])
 
       console.log('Fetched portfolio data for dashboard:', portfolioData)
@@ -65,7 +66,18 @@ export async function GET(_request: NextRequest) {
 
       // Extract portfolio data
       const portfolio = portfolioData.data || {}
-      const currentBalance = user.zerodhaConfig.balance || 0
+      
+      // Get fresh balance from margins API
+      let currentBalance = user.zerodhaConfig.balance || 0
+      if (margins && margins.data && margins.data.equity && margins.data.equity.available) {
+        currentBalance = margins.data.equity.available.cash || 0
+        
+        // Update database with fresh balance
+        await User.findByIdAndUpdate(user._id, {
+          'zerodhaConfig.balance': currentBalance,
+          'zerodhaConfig.lastSync': new Date()
+        })
+      }
 
       return NextResponse.json({
         success: true,

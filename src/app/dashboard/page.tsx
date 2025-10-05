@@ -137,10 +137,13 @@ export default function Dashboard() {
     try {
       if (showLoader) setRefreshingPortfolio(true)
       
-      // Fetch comprehensive dashboard data
+      // Fetch comprehensive dashboard data including fresh balance
       const response = await fetch('/api/zerodha/dashboard-data')
       if (response.ok) {
         const data = await response.json()
+        
+        // Available Balance (now auto-refreshed)
+        setBalance(data.balance || 0)
         
         // Monthly P&L from trades
         setTotalPnL(data.monthlyPnL || 0)
@@ -169,6 +172,7 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching trading data:', error)
       // Reset all values to 0 if unable to fetch
+      setBalance(0)
       setTotalPnL(0)
       setPnlPercentage(0)
       setPortfolioValue(0)
@@ -365,18 +369,30 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Available Balance</CardTitle>
             <div className="flex items-center space-x-2">
               {zerodhaConnected && (
-                <button
-                  onClick={syncBalance}
-                  disabled={syncing}
-                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
-                  style={{ 
-                    color: 'var(--muted-foreground)',
-                    backgroundColor: syncing ? 'var(--muted)' : 'transparent'
-                  }}
-                  title="Sync balance from Zerodha"
-                >
-                  <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
-                </button>
+                autoRefreshEnabled ? (
+                  // Show auto-refresh indicator when auto-refresh is active
+                  <div
+                    className="p-1 rounded"
+                    style={{ color: 'var(--muted-foreground)' }}
+                    title="Auto-refreshing every 30 seconds"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
+                  </div>
+                ) : (
+                  // Show manual refresh button when auto-refresh is disabled
+                  <button
+                    onClick={syncBalance}
+                    disabled={syncing}
+                    className="p-1 rounded hover:bg-muted transition-colors duration-200"
+                    style={{ 
+                      color: 'var(--muted-foreground)',
+                      backgroundColor: syncing ? 'var(--muted)' : 'transparent'
+                    }}
+                    title="Sync balance from Zerodha"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+                  </button>
+                )
               )}
               <IndianRupee className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
             </div>
@@ -384,7 +400,11 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{balance.toLocaleString()}</div>
             <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {zerodhaConnected ? (syncing ? 'Syncing...' : 'Cash available for trading') : 'Connect Zerodha to see balance'}
+              {zerodhaConnected ? (
+                syncing ? 'Syncing...' : 
+                autoRefreshEnabled ? 'Auto-refreshing • Cash available for trading' : 
+                'Cash available for trading'
+              ) : 'Connect Zerodha to see balance'}
             </p>
           </CardContent>
         </Card>
