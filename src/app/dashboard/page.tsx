@@ -13,8 +13,6 @@ export default function Dashboard() {
   const [zerodhaConnected, setZerodhaConnected] = useState(false)
   const [balance, setBalance] = useState(0)
   const [activeBots] = useState(0)
-  const [totalPnL, setTotalPnL] = useState(0)
-  const [pnlPercentage, setPnlPercentage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
@@ -145,9 +143,6 @@ export default function Dashboard() {
         // Available Balance (now auto-refreshed)
         setBalance(data.balance || 0)
         
-        // Monthly P&L from trades
-        setTotalPnL(data.monthlyPnL || 0)
-        setPnlPercentage(data.pnlPercentage || 0)
         
         // Portfolio data
         setPortfolioValue(data.portfolioValue || 0)
@@ -173,8 +168,6 @@ export default function Dashboard() {
       console.error('Error fetching trading data:', error)
       // Reset all values to 0 if unable to fetch
       setBalance(0)
-      setTotalPnL(0)
-      setPnlPercentage(0)
       setPortfolioValue(0)
       setTotalInvestmentValue(0)
       setPortfolioPnL(0)
@@ -522,8 +515,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Margin & Trading Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      {/* Margin Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <Card className="card hover:shadow-lg transition-all duration-300" 
               style={{ 
                 backgroundColor: 'var(--card)',
@@ -592,44 +585,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="card hover:shadow-lg transition-all duration-300" 
-              style={{ 
-                backgroundColor: 'var(--card)',
-                borderColor: 'var(--border)',
-                color: 'var(--card-foreground)'
-              }}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Monthly Trading P&L</CardTitle>
-            <div className="flex items-center space-x-2">
-              {zerodhaConnected && (
-                <button
-                  onClick={refreshPortfolioData}
-                  disabled={refreshingPortfolio}
-                  className="p-1 rounded hover:bg-muted transition-colors duration-200"
-                  style={{ 
-                    color: 'var(--muted-foreground)',
-                    backgroundColor: refreshingPortfolio ? 'var(--muted)' : 'transparent'
-                  }}
-                  title="Refresh trading data"
-                >
-                  <RefreshCw className={`h-3 w-3 ${refreshingPortfolio ? 'animate-spin' : ''}`} />
-                </button>
-              )}
-              <BarChart3 className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              {totalPnL >= 0 ? '+' : ''}₹{totalPnL.toLocaleString()}
-            </div>
-            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {zerodhaConnected 
-                ? (pnlPercentage !== 0 ? `${pnlPercentage >= 0 ? '+' : ''}${pnlPercentage.toFixed(1)}% this month` : 'No trades this month')
-                : 'Connect Zerodha to see trading P&L'
-              }
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* System Status & Bots */}

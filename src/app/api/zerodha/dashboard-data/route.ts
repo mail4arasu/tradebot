@@ -20,8 +20,6 @@ export async function GET(_request: NextRequest) {
     if (!user?.zerodhaConfig?.apiKey || !user?.zerodhaConfig?.apiSecret || !user?.zerodhaConfig?.accessToken) {
       return NextResponse.json({ 
         error: 'Zerodha not connected',
-        monthlyPnL: 0,
-        pnlPercentage: 0,
         trades: []
       }, { status: 400 })
     }
@@ -42,27 +40,6 @@ export async function GET(_request: NextRequest) {
 
       console.log('Fetched portfolio data for dashboard:', portfolioData)
 
-      // Calculate monthly P&L from trades
-      const currentMonth = new Date().getMonth()
-      const currentYear = new Date().getFullYear()
-      
-      let monthlyPnL = 0
-      let monthlyTrades = 0
-      
-      if (trades.data && Array.isArray(trades.data)) {
-        trades.data.forEach((trade: Record<string, any>) => {
-          const tradeDate = new Date(trade.trade_date || trade.fill_timestamp)
-          if (tradeDate.getMonth() === currentMonth && tradeDate.getFullYear() === currentYear) {
-            // Calculate P&L for this trade
-            // For sell trades, profit = sell_value - (buy_value + charges)
-            // This is a simplified calculation - Zerodha provides more detailed P&L in positions
-            if (trade.transaction_type === 'SELL') {
-              monthlyPnL += (trade.price * trade.quantity) - (trade.average_price * trade.quantity)
-            }
-            monthlyTrades++
-          }
-        })
-      }
 
       // Extract portfolio data
       const portfolio = portfolioData.data || {}
@@ -98,9 +75,6 @@ export async function GET(_request: NextRequest) {
         marginUtilization: portfolio.marginUtilization || 0,
         
         // Trading Data
-        monthlyPnL: Math.round(monthlyPnL * 100) / 100,
-        pnlPercentage: currentBalance > 0 ? Math.round((monthlyPnL / currentBalance) * 10000) / 100 : 0,
-        monthlyTrades,
         totalTrades: trades.data?.length || 0,
         
         // Holdings and Positions count
@@ -112,8 +86,6 @@ export async function GET(_request: NextRequest) {
       console.error('Zerodha API error:', zerodhaError)
       return NextResponse.json({ 
         error: 'Failed to fetch trading data',
-        monthlyPnL: 0,
-        pnlPercentage: 0,
         trades: []
       }, { status: 400 })
     }

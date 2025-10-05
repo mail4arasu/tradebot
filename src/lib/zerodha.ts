@@ -177,13 +177,15 @@ export class ZerodhaAPI {
         totalDayPnL += position.pnl || 0
       })
 
-      // Extract margin details
+      // Extract margin details from Zerodha
       const equity = margins.equity || {}
       const commodity = margins.commodity || {}
       
+      // Use Zerodha's direct margin values where available
       const availableMargin = (equity.available?.cash || 0) + (commodity.available?.cash || 0)
-      const usedMargin = (equity.used?.total || 0) + (commodity.used?.total || 0)
-      const totalMargin = availableMargin + usedMargin
+      const usedMargin = (equity.utilised?.debits || 0) + (commodity.utilised?.debits || 0)
+      // Try to use Zerodha's direct total margin, fallback to calculation
+      const totalMargin = (equity.net || 0) + (commodity.net || 0) || (availableMargin + usedMargin)
 
       return {
         status: 'success',
