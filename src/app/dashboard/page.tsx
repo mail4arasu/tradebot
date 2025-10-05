@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { IndianRupee, TrendingUp, Bot, Activity, Settings, AlertCircle, RefreshCw, Clock } from 'lucide-react'
+import { IndianRupee, TrendingUp, Bot, Activity, Settings, AlertCircle, RefreshCw, Clock, PieChart, Wallet, Target, BarChart3, TrendingDown } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -20,6 +20,19 @@ export default function Dashboard() {
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [needsDailyLogin, setNeedsDailyLogin] = useState(false)
   const [refreshingToken, setRefreshingToken] = useState(false)
+  
+  // Enhanced portfolio data
+  const [portfolioValue, setPortfolioValue] = useState(0)
+  const [totalInvestmentValue, setTotalInvestmentValue] = useState(0)
+  const [portfolioPnL, setPortfolioPnL] = useState(0)
+  const [portfolioPnLPercentage, setPortfolioPnLPercentage] = useState(0)
+  const [dayPnL, setDayPnL] = useState(0)
+  const [availableMargin, setAvailableMargin] = useState(0)
+  const [usedMargin, setUsedMargin] = useState(0)
+  const [totalMargin, setTotalMargin] = useState(0)
+  const [marginUtilization, setMarginUtilization] = useState(0)
+  const [holdingsCount, setHoldingsCount] = useState(0)
+  const [positionsCount, setPositionsCount] = useState(0)
 
   const fetchUserData = useCallback(async () => {
     try {
@@ -64,18 +77,48 @@ export default function Dashboard() {
 
   const fetchTradingData = async () => {
     try {
-      // Fetch trades from this month to calculate P&L
+      // Fetch comprehensive dashboard data
       const response = await fetch('/api/zerodha/dashboard-data')
       if (response.ok) {
         const data = await response.json()
+        
+        // Monthly P&L from trades
         setTotalPnL(data.monthlyPnL || 0)
         setPnlPercentage(data.pnlPercentage || 0)
+        
+        // Portfolio data
+        setPortfolioValue(data.portfolioValue || 0)
+        setTotalInvestmentValue(data.totalInvestmentValue || 0)
+        setPortfolioPnL(data.totalPnL || 0)
+        setPortfolioPnLPercentage(data.totalPnLPercentage || 0)
+        setDayPnL(data.dayPnL || 0)
+        
+        // Margin data
+        setAvailableMargin(data.availableMargin || 0)
+        setUsedMargin(data.usedMargin || 0)
+        setTotalMargin(data.totalMargin || 0)
+        setMarginUtilization(data.marginUtilization || 0)
+        
+        // Holdings and positions count
+        setHoldingsCount(data.holdingsCount || 0)
+        setPositionsCount(data.positionsCount || 0)
       }
     } catch (error) {
       console.error('Error fetching trading data:', error)
-      // Set to 0 if unable to fetch
+      // Reset all values to 0 if unable to fetch
       setTotalPnL(0)
       setPnlPercentage(0)
+      setPortfolioValue(0)
+      setTotalInvestmentValue(0)
+      setPortfolioPnL(0)
+      setPortfolioPnLPercentage(0)
+      setDayPnL(0)
+      setAvailableMargin(0)
+      setUsedMargin(0)
+      setTotalMargin(0)
+      setMarginUtilization(0)
+      setHoldingsCount(0)
+      setPositionsCount(0)
     }
   }
 
@@ -223,7 +266,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Overview Cards */}
+      {/* Portfolio Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card className="card hover:shadow-lg transition-all duration-300" 
               style={{ 
@@ -254,7 +297,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{balance.toLocaleString()}</div>
             <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {zerodhaConnected ? (syncing ? 'Syncing...' : 'Click refresh to sync latest balance') : 'Connect Zerodha to see balance'}
+              {zerodhaConnected ? (syncing ? 'Syncing...' : 'Cash available for trading') : 'Connect Zerodha to see balance'}
             </p>
           </CardContent>
         </Card>
@@ -266,16 +309,37 @@ export default function Dashboard() {
                 color: 'var(--card-foreground)'
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Total P&L</CardTitle>
-            <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Portfolio Value</CardTitle>
+            <PieChart className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-              ₹{totalPnL.toLocaleString()}
+            <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{portfolioValue.toLocaleString()}</div>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {zerodhaConnected 
+                ? `${holdingsCount} holdings • ${positionsCount} positions`
+                : 'Connect Zerodha to see portfolio'
+              }
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="card hover:shadow-lg transition-all duration-300" 
+              style={{ 
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)',
+                color: 'var(--card-foreground)'
+              }}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Portfolio P&L</CardTitle>
+            {portfolioPnL >= 0 ? <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} /> : <TrendingDown className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />}
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${portfolioPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {portfolioPnL >= 0 ? '+' : ''}₹{portfolioPnL.toLocaleString()}
             </div>
             <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
               {zerodhaConnected 
-                ? (pnlPercentage !== 0 ? `${pnlPercentage >= 0 ? '+' : ''}${pnlPercentage.toFixed(1)}% this month` : 'No trades this month')
+                ? `${portfolioPnLPercentage >= 0 ? '+' : ''}${portfolioPnLPercentage.toFixed(2)}% overall returns`
                 : 'Connect Zerodha to see P&L'
               }
             </p>
@@ -289,7 +353,92 @@ export default function Dashboard() {
                 color: 'var(--card-foreground)'
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Active Bots</CardTitle>
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Day P&L</CardTitle>
+            {dayPnL >= 0 ? <TrendingUp className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} /> : <TrendingDown className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />}
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${dayPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {dayPnL >= 0 ? '+' : ''}₹{dayPnL.toLocaleString()}
+            </div>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {zerodhaConnected ? 'Today\'s performance' : 'Connect Zerodha to see day P&L'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Margin & Trading Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <Card className="card hover:shadow-lg transition-all duration-300" 
+              style={{ 
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)',
+                color: 'var(--card-foreground)'
+              }}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Available Margin</CardTitle>
+            <Wallet className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{availableMargin.toLocaleString()}</div>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {zerodhaConnected ? 'Free margin for trading' : 'Connect Zerodha to see margin'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="card hover:shadow-lg transition-all duration-300" 
+              style={{ 
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)',
+                color: 'var(--card-foreground)'
+              }}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Used Margin</CardTitle>
+            <Target className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{usedMargin.toLocaleString()}</div>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {zerodhaConnected ? `${marginUtilization.toFixed(1)}% utilization` : 'Connect Zerodha to see usage'}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="card hover:shadow-lg transition-all duration-300" 
+              style={{ 
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)',
+                color: 'var(--card-foreground)'
+              }}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Monthly Trading P&L</CardTitle>
+            <BarChart3 className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {totalPnL >= 0 ? '+' : ''}₹{totalPnL.toLocaleString()}
+            </div>
+            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+              {zerodhaConnected 
+                ? (pnlPercentage !== 0 ? `${pnlPercentage >= 0 ? '+' : ''}${pnlPercentage.toFixed(1)}% this month` : 'No trades this month')
+                : 'Connect Zerodha to see trading P&L'
+              }
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* System Status & Bots */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <Card className="card hover:shadow-lg transition-all duration-300" 
+              style={{ 
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)',
+                color: 'var(--card-foreground)'
+              }}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Active Trading Bots</CardTitle>
             <Bot className="h-4 w-4" style={{ color: 'var(--muted-foreground)' }} />
           </CardHeader>
           <CardContent>

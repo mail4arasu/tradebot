@@ -33,11 +33,15 @@ export async function GET(_request: NextRequest) {
         user.zerodhaConfig.accessToken
       )
 
-      // Fetch trades from current month
-      const trades = await zerodhaAPI.getTrades()
-      console.log('Fetched trades for dashboard:', trades)
+      // Fetch comprehensive portfolio data
+      const [portfolioData, trades] = await Promise.all([
+        zerodhaAPI.getPortfolioData(),
+        zerodhaAPI.getTrades()
+      ])
 
-      // Calculate monthly P&L
+      console.log('Fetched portfolio data for dashboard:', portfolioData)
+
+      // Calculate monthly P&L from trades
       const currentMonth = new Date().getMonth()
       const currentYear = new Date().getFullYear()
       
@@ -59,16 +63,37 @@ export async function GET(_request: NextRequest) {
         })
       }
 
-      // Calculate percentage (simplified - based on current balance)
+      // Extract portfolio data
+      const portfolio = portfolioData.data || {}
       const currentBalance = user.zerodhaConfig.balance || 0
-      const pnlPercentage = currentBalance > 0 ? (monthlyPnL / currentBalance) * 100 : 0
 
       return NextResponse.json({
         success: true,
-        monthlyPnL: Math.round(monthlyPnL * 100) / 100, // Round to 2 decimal places
-        pnlPercentage: Math.round(pnlPercentage * 100) / 100,
+        // Current balance
+        balance: currentBalance,
+        
+        // Portfolio Summary
+        portfolioValue: portfolio.totalCurrentValue || 0,
+        totalInvestmentValue: portfolio.totalInvestmentValue || 0,
+        totalPnL: portfolio.totalPnL || 0,
+        totalPnLPercentage: portfolio.totalPnLPercentage || 0,
+        dayPnL: portfolio.totalDayPnL || 0,
+        
+        // Margin Information
+        availableMargin: portfolio.availableMargin || 0,
+        usedMargin: portfolio.usedMargin || 0,
+        totalMargin: portfolio.totalMargin || 0,
+        marginUtilization: portfolio.marginUtilization || 0,
+        
+        // Trading Data
+        monthlyPnL: Math.round(monthlyPnL * 100) / 100,
+        pnlPercentage: currentBalance > 0 ? Math.round((monthlyPnL / currentBalance) * 10000) / 100 : 0,
         monthlyTrades,
-        totalTrades: trades.data?.length || 0
+        totalTrades: trades.data?.length || 0,
+        
+        // Holdings and Positions count
+        holdingsCount: portfolio.holdings?.data?.length || 0,
+        positionsCount: (portfolio.positions?.data?.net?.length || 0) + (portfolio.positions?.data?.day?.length || 0)
       })
 
     } catch (zerodhaError) {

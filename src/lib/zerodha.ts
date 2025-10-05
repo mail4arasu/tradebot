@@ -111,6 +111,108 @@ export class ZerodhaAPI {
     }
   }
 
+  async getHoldings() {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/portfolio/holdings`, {
+        headers: {
+          'Authorization': `token ${this.apiKey}:${this.accessToken}`,
+          'X-Kite-Version': '3'
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(`Failed to fetch holdings: ${error}`)
+      }
+      
+      return await response.json()
+    } catch (error) {
+      console.error('Error fetching holdings:', error)
+      throw error
+    }
+  }
+
+  async getPortfolioData() {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      // Fetch holdings, positions, and margins in parallel for comprehensive portfolio data
+      const [holdingsResponse, positionsResponse, marginsResponse] = await Promise.all([
+        this.getHoldings(),
+        this.getPositions(),
+        this.getMargins()
+      ])
+
+      // Calculate portfolio summary
+      const holdings = holdingsResponse.data || []
+      const positions = positionsResponse.data || {}
+      const margins = marginsResponse.data || {}
+
+      // Calculate total portfolio value
+      let totalInvestmentValue = 0
+      let totalCurrentValue = 0
+      let totalPnL = 0
+      let totalDayPnL = 0
+
+      // Holdings calculations
+      holdings.forEach((holding: any) => {
+        const investmentValue = holding.average_price * holding.quantity
+        const currentValue = holding.last_price * holding.quantity
+        const pnl = currentValue - investmentValue
+        
+        totalInvestmentValue += investmentValue
+        totalCurrentValue += currentValue
+        totalPnL += pnl
+      })
+
+      // Positions calculations (net positions for day trading)
+      const netPositions = positions.net || []
+      netPositions.forEach((position: any) => {
+        totalDayPnL += position.pnl || 0
+      })
+
+      // Extract margin details
+      const equity = margins.equity || {}
+      const commodity = margins.commodity || {}
+      
+      const availableMargin = (equity.available?.cash || 0) + (commodity.available?.cash || 0)
+      const usedMargin = (equity.used?.total || 0) + (commodity.used?.total || 0)
+      const totalMargin = availableMargin + usedMargin
+
+      return {
+        status: 'success',
+        data: {
+          // Portfolio Summary
+          totalInvestmentValue: Math.round(totalInvestmentValue * 100) / 100,
+          totalCurrentValue: Math.round(totalCurrentValue * 100) / 100,
+          totalPnL: Math.round(totalPnL * 100) / 100,
+          totalPnLPercentage: totalInvestmentValue > 0 ? Math.round((totalPnL / totalInvestmentValue) * 10000) / 100 : 0,
+          totalDayPnL: Math.round(totalDayPnL * 100) / 100,
+          
+          // Margin Information
+          availableMargin: Math.round(availableMargin * 100) / 100,
+          usedMargin: Math.round(usedMargin * 100) / 100,
+          totalMargin: Math.round(totalMargin * 100) / 100,
+          marginUtilization: totalMargin > 0 ? Math.round((usedMargin / totalMargin) * 10000) / 100 : 0,
+          
+          // Raw Data
+          holdings: holdingsResponse,
+          positions: positionsResponse,
+          margins: marginsResponse
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio data:', error)
+      throw error
+    }
+  }
+
   async getOrders() {
     if (!this.accessToken) {
       throw new Error('Access token required. Please complete OAuth flow first.')
