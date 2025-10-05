@@ -120,7 +120,7 @@ export default function DataSyncPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Please sign in to access admin panel</h1>
-          <Link href="/auth/signin">
+          <Link href="/signin">
             <Button>Sign In</Button>
           </Link>
         </div>
