@@ -52,11 +52,6 @@ export default function Navbar() {
                 <span>Bots</span>
               </Link>
               
-              <Link href="/backtest" className="flex items-center space-x-1 text-gray-700 hover:text-blue-600">
-                <TrendingUp size={20} />
-                <span>Backtest</span>
-              </Link>
-              
               <Link href="/settings" className="flex items-center space-x-1 text-gray-700 hover:text-blue-600">
                 <Settings size={20} />
                 <span>Settings</span>

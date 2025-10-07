@@ -252,7 +252,7 @@ export default function Bots() {
       </div>
 
       {/* Quick Navigation */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -289,22 +289,6 @@ export default function Bots() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Backtesting
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600 mb-4">
-              Test bot strategies with historical data
-            </p>
-            <Link href="/backtest">
-              <Button className="w-full" variant="outline">Start Backtesting</Button>
-            </Link>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
