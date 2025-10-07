@@ -167,6 +167,13 @@ export default function AdminDashboard() {
   }
 
   const getStatusBadge = (status: string) => {
+    // Add null/undefined check
+    if (!status) return (
+      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">
+        Unknown
+      </span>
+    )
+
     const colors: Record<string, string> = {
       active: 'bg-green-100 text-green-800',
       suspended: 'bg-red-100 text-red-800',
@@ -180,6 +187,13 @@ export default function AdminDashboard() {
   }
 
   const getRoleBadge = (role: string) => {
+    // Add null/undefined check
+    if (!role) return (
+      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">
+        Unknown
+      </span>
+    )
+    
     return role === 'admin' ? 
       <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Admin</span> :
       <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">User</span>
@@ -336,13 +350,13 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {users.filter(user => user && user._id).map((user) => (
                   <tr key={user._id} className="border-b transition-colors duration-200" 
                       style={{ borderColor: 'var(--border)' }}>
                     <td className="p-2">
                       <div>
-                        <div className="font-medium" style={{ color: 'var(--foreground)' }}>{user.name}</div>
-                        <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{user.email}</div>
+                        <div className="font-medium" style={{ color: 'var(--foreground)' }}>{String(user.name) || 'Unknown'}</div>
+                        <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{String(user.email) || 'Unknown'}</div>
                       </div>
                     </td>
                     <td className="p-2">{getRoleBadge(user.role)}</td>
@@ -354,21 +368,21 @@ export default function AdminDashboard() {
                       }
                     </td>
                     <td className="p-2">
-                      {user.botAllocations && user.botAllocations.length > 0 ? (
+                      {(user.botAllocations || []).length > 0 ? (
                         <div className="space-y-1">
-                          {user.botAllocations
-                            .filter(bot => bot.isActive)
+                          {(user.botAllocations || [])
+                            .filter(bot => bot && bot.isActive)
                             .map((bot, index) => (
                             <div key={index} className="text-xs">
-                              <span className={bot.isActive ? "px-2 py-1 rounded bg-blue-100 text-blue-800" : "px-2 py-1 rounded bg-gray-100 text-gray-800"}>
-                                {bot.botName}
+                              <span className={(bot.isActive || false) ? "px-2 py-1 rounded bg-blue-100 text-blue-800" : "px-2 py-1 rounded bg-gray-100 text-gray-800"}>
+                                {String(bot.botName) || 'Unknown Bot'}
                               </span>
                               <div className="text-gray-500">
-                                ₹{(bot.allocatedAmount || 0).toLocaleString()} • {bot.strategy || 'Unknown'}
+                                ₹{(bot.allocatedAmount || 0).toLocaleString()} • {String(bot.strategy) || 'Unknown'}
                               </div>
                             </div>
                           ))}
-                          {user.botAllocations.filter(bot => bot.isActive).length === 0 && (
+                          {(user.botAllocations || []).filter(bot => bot && bot.isActive).length === 0 && (
                             <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Active Bots</span>
                           )}
                         </div>
@@ -377,7 +391,7 @@ export default function AdminDashboard() {
                       )}
                     </td>
                     <td className="p-2">
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                     </td>
                     <td className="p-2">
                       <div className="flex space-x-2">
