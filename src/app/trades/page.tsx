@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -135,7 +135,8 @@ interface Holding {
   day_change_percentage: number
 }
 
-export default function Trades() {
+// Component to handle search params with Suspense
+function TradesContent() {
   const { data: session, status } = useSession()
   const searchParams = useSearchParams()
   const [trades, setTrades] = useState<Trade[]>([])
@@ -1920,4 +1921,22 @@ export default function Trades() {
       </div>
     )
   }
+}
+
+// Main component with Suspense wrapper
+export default function Trades() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Loading trades...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <TradesContent />
+    </Suspense>
+  )
 }
