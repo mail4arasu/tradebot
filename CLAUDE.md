@@ -4,7 +4,7 @@
 
 **TradeBot Portal** is a Next.js 15 web application for managing automated trading strategies, specifically designed for Indian stock markets with Zerodha integration. The application provides a complete trading dashboard, bot management, trade history, backtesting capabilities, and comprehensive historical data management.
 
-## Current Project Status (October 2, 2025)
+## Current Project Status (October 7, 2025)
 
 ### ✅ **Completed Features:**
 - **Dashboard**: Real-time trading overview with authentic Zerodha data
@@ -27,7 +27,18 @@
 - **GitHub Repository**: https://github.com/mail4arasu/tradebot
 - **Domain**: https://niveshawealth.in (SSL configured)
 
-## 🚀 **Recent Major Improvements (October 2, 2025)**
+## 🚀 **Recent Major Improvements (October 7, 2025)**
+
+### **🔧 Options Trading Simulator Fix (October 7, 2025)**
+- **Critical Issue Resolved**: Fixed expiry date selection logic in Options Trading Simulator
+- **Problem**: Simulator was selecting weekly expiry (Oct 20) instead of monthly expiry (Oct 31)
+- **Root Cause**: Artificial limitation of returning only 2 expiry dates from Zerodha API
+- **Solution**: Removed `slice(0, 2)` limitation to allow full expiry dataset for month-end selection
+- **Impact**: Both simulator and live bot now correctly select monthly expiries using 5-day safety rule
+- **Files Modified**: `src/utils/zerodhaOptions.ts`, `src/utils/optionsAnalysis.ts`
+- **Enhanced Logging**: Added comprehensive debugging for expiry selection process
+
+## 🚀 **Previous Major Improvements (October 2, 2025)**
 
 ### **📊 Historical Data Management System**
 - **Complete Zerodha Integration**: Real-time sync of Nifty50 futures historical data
@@ -509,6 +520,11 @@ pm2 restart tradebot-portal
 - Monitor API rate limits and error responses
 - Ensure proper form encoding for order placement
 
+### **Options Trading Simulator Issues:**
+- **Wrong Expiry Selection**: If simulator selects weekly expiry instead of monthly, check console logs for "📅 Returning X available expiry dates" - should show ALL expiries, not just 2
+- **Missing Monthly Expiry**: Verify `fetchNiftyExpiryDates()` is not artificially limiting results with `slice(0, 2)`
+- **5-Day Rule Not Working**: Ensure `selectExpiry()` has access to complete expiry dataset for proper month-end selection
+
 ### **Position Management Issues:**
 - Check intraday scheduler status in admin panel
 - Verify position validation is working correctly
@@ -587,7 +603,40 @@ pm2 restart tradebot-portal
 - **Real-time Monitoring**: Live status tracking and system health monitoring
 - **Scalable Architecture**: Designed to handle multiple users and concurrent operations
 
-## 🔥 **Critical Issues Faced & Solutions Implemented (October 2, 2025)**
+## 🔥 **Critical Issues Faced & Solutions Implemented (October 7, 2025)**
+
+### **5. Options Trading Simulator Expiry Selection Bug (October 7, 2025)**
+**Issue**: Options Trading Simulator was selecting incorrect expiry dates, choosing weekly expiries instead of proper monthly expiries for options trading.
+
+**Root Problems**:
+- ❌ Artificial limitation in `fetchNiftyExpiryDates()` returning only first 2 expiry dates
+- ❌ Missing monthly expiry (Oct 31) from selection pool
+- ❌ Simulator selecting Oct 20 (weekly) instead of Oct 31 (monthly)
+- ❌ Poor month-end expiry selection logic due to limited dataset
+
+**Solutions Implemented**:
+✅ **Removed Artificial Data Limitation**:
+- Eliminated `expiryDates.slice(0, 2)` in `fetchNiftyExpiryDates()`
+- Now returns ALL available expiry dates for proper selection
+- `selectExpiry()` function can now access complete dataset
+
+✅ **Enhanced Expiry Selection Logic**:
+- Month-end selection algorithm now has access to all weekly AND monthly expiries
+- 5-day safety rule works correctly with full expiry dataset
+- Proper monthly expiry (last Thursday) selection implemented
+
+✅ **Comprehensive Debugging & Logging**:
+```typescript
+console.log(`📅 Returning ${expiryDates.length} available expiry dates for selectExpiry()`)
+console.log(`📋 All available expiry dates: ${expiryDates.map(e => `${e.date} (${e.daysToExpiry}d)`).join(', ')}`)
+```
+
+✅ **Consistent Behavior Across Systems**:
+- Both Options Trading Simulator AND live Options Bot use identical logic
+- Same `selectExpiry()` function ensures consistent behavior
+- Production deployment ensures live trading matches simulation
+
+## 🔥 **Previous Critical Issues Faced & Solutions Implemented (October 2, 2025)**
 
 ### **1. Historical Data Population Challenge**
 **Issue**: Initial request to "populate database with maximum available data from Zerodha" revealed multiple technical barriers.
@@ -813,6 +862,6 @@ Focus on enhancing the backtesting capabilities and adding more sophisticated tr
 
 ---
 
-*Last Updated: October 2, 2025*
-*Project Status: Advanced Production System with Complete Historical Data*
-*Version: 3.0.0 - Historical Data Management & Local Backtest Engine*
+*Last Updated: October 7, 2025*
+*Project Status: Advanced Production System with Complete Historical Data & Fixed Options Trading*
+*Version: 3.1.0 - Options Trading Simulator Fix & Enhanced Expiry Selection*
