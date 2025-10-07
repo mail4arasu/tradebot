@@ -99,42 +99,6 @@ export default function Bots() {
         </div>
       </div>
 
-      {/* Main Action Card */}
-      <Card className="mb-8 border-blue-200 bg-blue-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-900">
-            <Users className="h-6 w-6" />
-            Manage Your Trading Bots
-          </CardTitle>
-          <CardDescription className="text-blue-700">
-            {isAdmin 
-              ? "Enable/disable bots, set position sizes, configure trading hours, and monitor performance"
-              : "Enable or disable trading bots and configure your position sizes and trading preferences"
-            }
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex-1">
-              <p className="text-sm text-blue-800 mb-2">
-                • Enable or disable any available trading bot
-              </p>
-              <p className="text-sm text-blue-800 mb-2">
-                • Set your position quantities and daily trade limits
-              </p>
-              <p className="text-sm text-blue-800 mb-2">
-                • Configure your trading hours and monitor performance
-              </p>
-            </div>
-            <Link href="/bots/manage">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                <Users className="h-5 w-5 mr-2" />
-                Manage Your Bots
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Available Bots */}
       <div className="mb-6">
@@ -251,26 +215,9 @@ export default function Bots() {
         </div>
       </div>
 
-      {/* Quick Navigation */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Bot Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600 mb-4">
-              Enable/disable bots and configure position sizes
-            </p>
-            <Link href="/bots/manage">
-              <Button className="w-full">Manage Bots</Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        {isAdmin && (
+      {/* Admin Quick Navigation */}
+      {isAdmin && (
+        <div className="grid grid-cols-1 gap-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -280,16 +227,15 @@ export default function Bots() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-4">
-                Set up TradingView webhook integrations
+                Set up TradingView webhook integrations for automated trading
               </p>
               <Link href="/bots/webhooks">
                 <Button className="w-full" variant="outline">Configure Webhooks</Button>
               </Link>
             </CardContent>
           </Card>
-        )}
-
-      </div>
+        </div>
+      )}
     </div>
   )
 }
