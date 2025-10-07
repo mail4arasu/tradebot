@@ -236,6 +236,7 @@ export function selectExpiry(expiryDates: ExpiryDate[]): ExpiryDate | null {
   
   console.log(`📅 EXPIRY SELECTION - NEW MONTH-END LOGIC`)
   console.log(`📊 Total expiry dates available: ${expiryDates.length}`)
+  console.log(`📋 All available expiry dates: ${expiryDates.map(e => `${e.date} (${e.daysToExpiry}d)`).join(', ')}`)
   
   const today = new Date()
   const currentMonth = today.getMonth()
@@ -254,6 +255,9 @@ export function selectExpiry(expiryDates: ExpiryDate[]): ExpiryDate | null {
     const expiryDate = new Date(expiry.date)
     return expiryDate.getMonth() === nextMonth && expiryDate.getFullYear() === nextYear
   })
+  
+  console.log(`📅 Current month (${currentMonth + 1}/${currentYear}) expiries found: ${currentMonthExpiries.map(e => `${e.date} (${e.daysToExpiry}d)`).join(', ')}`)
+  console.log(`📅 Next month (${nextMonth + 1}/${nextYear}) expiries found: ${nextMonthExpiries.map(e => `${e.date} (${e.daysToExpiry}d)`).join(', ')}`)
   
   // Get last (month-end) expiry of current month
   const lastExpiryCurrentMonth = currentMonthExpiries.length > 0 

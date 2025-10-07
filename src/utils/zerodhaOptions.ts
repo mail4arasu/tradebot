@@ -107,7 +107,12 @@ export async function fetchNiftyExpiryDates(apiKey: string, accessToken: string)
       .filter(expiry => expiry.daysToExpiry > 0) // Only future expiries
       .sort((a, b) => a.daysToExpiry - b.daysToExpiry) // Sort by nearest first
     
-    return expiryDates.slice(0, 2) // Return only next 2 expiries
+    // Return all available expiry dates instead of limiting to 2
+    // Let selectExpiry() function choose the appropriate monthly expiry
+    console.log(`📅 Returning ${expiryDates.length} available expiry dates for selectExpiry() to choose from`)
+    console.log(`📊 Available expiries: ${expiryDates.slice(0, 10).map(e => e.date).join(', ')}${expiryDates.length > 10 ? '...' : ''}`)
+    
+    return expiryDates
     
   } catch (error) {
     console.error('Error fetching NIFTY expiry dates:', error)
