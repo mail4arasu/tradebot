@@ -573,36 +573,32 @@ export default function BotManagement() {
                         </div>
 
                         <div>
-                          <Label>
-                            <input
-                              type="checkbox"
+                          <div className="flex items-center space-x-2">
+                            <Switch
                               checked={bot.autoSquareOff || false}
-                              onChange={(e) => {
-                                updateBotConfig(bot._id, { autoSquareOff: e.target.checked })
+                              onCheckedChange={(checked) => {
+                                updateBotConfig(bot._id, { autoSquareOff: checked })
                               }}
                               disabled={saving === bot._id}
-                              className="mr-2"
                             />
-                            Auto Square-off
-                          </Label>
+                            <Label>Auto Square-off</Label>
+                          </div>
                           <p className="text-xs text-gray-500 mt-1">
                             Automatically close positions at scheduled time
                           </p>
                         </div>
 
                         <div>
-                          <Label>
-                            <input
-                              type="checkbox"
+                          <div className="flex items-center space-x-2">
+                            <Switch
                               checked={bot.allowMultiplePositions || false}
-                              onChange={(e) => {
-                                updateBotConfig(bot._id, { allowMultiplePositions: e.target.checked })
+                              onCheckedChange={(checked) => {
+                                updateBotConfig(bot._id, { allowMultiplePositions: checked })
                               }}
                               disabled={saving === bot._id}
-                              className="mr-2"
                             />
-                            Allow Multiple Positions
-                          </Label>
+                            <Label>Allow Multiple Positions</Label>
+                          </div>
                           <p className="text-xs text-gray-500 mt-1">
                             Allow multiple open positions simultaneously
                           </p>
