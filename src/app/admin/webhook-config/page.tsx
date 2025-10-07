@@ -76,8 +76,8 @@ export default function WebhookConfigPage() {
 
   const generateTradingViewPayload = (bot: BotInfo, action: string) => {
     const payload = payloadType === 'withBotId' 
-      ? { ...bot.tradingViewPayloads.withBotId, action }
-      : { ...bot.tradingViewPayloads.withoutBotId, action }
+      ? { ...bot.tradingViewPayloads?.withBotId, action }
+      : { ...bot.tradingViewPayloads?.withoutBotId, action }
     
     return JSON.stringify(payload, null, 2)
       .replace('"18500"', '{{close}}')
@@ -86,17 +86,17 @@ export default function WebhookConfigPage() {
 
   const generatePineScriptAlert = (bot: BotInfo) => {
     const basePayload = payloadType === 'withBotId' 
-      ? bot.tradingViewPayloads.withBotId 
-      : bot.tradingViewPayloads.withoutBotId
+      ? bot.tradingViewPayloads?.withBotId 
+      : bot.tradingViewPayloads?.withoutBotId
 
     return `{
-  ${payloadType === 'withBotId' ? `"botId": "${bot._id}",` : ''}
-  "symbol": "${bot.symbol}",
+  ${payloadType === 'withBotId' ? `"botId": "${String(bot._id || '')}",` : ''}
+  "symbol": "${String(bot.symbol || '')}",
   "action": "{{strategy.order.action}}",
   "price": {{close}},
-  "strategy": "${bot.strategy}",
-  "exchange": "${bot.exchange}",
-  "instrumentType": "${bot.instrumentType}",
+  "strategy": "${String(bot.strategy || '')}",
+  "exchange": "${String(bot.exchange || '')}",
+  "instrumentType": "${String(bot.instrumentType || '')}",
   "timestamp": "{{time}}",
   "comment": "{{strategy.order.comment}}"
 }`
@@ -156,7 +156,7 @@ export default function WebhookConfigPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {bots.map((bot) => (
+                {bots.filter(bot => bot && bot._id).map((bot) => (
                   <div 
                     key={bot._id}
                     className={`p-3 border rounded cursor-pointer transition-colors ${
@@ -166,12 +166,12 @@ export default function WebhookConfigPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium">{bot.name}</div>
-                        <div className="text-sm text-gray-600">{bot.symbol} - {bot.strategy}</div>
+                        <div className="font-medium">{String(bot.name || '')}</div>
+                        <div className="text-sm text-gray-600">{String(bot.symbol || '')} - {String(bot.strategy || '')}</div>
                       </div>
                       <div className="flex gap-1">
-                        <Badge variant={bot.isActive && !bot.emergencyStop ? 'default' : 'secondary'}>
-                          {bot.emergencyStop ? 'Stopped' : bot.isActive ? 'Active' : 'Inactive'}
+                        <Badge variant={(bot.isActive || false) && !(bot.emergencyStop || false) ? 'default' : 'secondary'}>
+                          {(bot.emergencyStop || false) ? 'Stopped' : (bot.isActive || false) ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
                     </div>
@@ -225,10 +225,10 @@ export default function WebhookConfigPage() {
                 {selectedBot && (
                   <div className="mt-4 p-3 bg-gray-50 rounded">
                     <div className="text-sm">
-                      <div><strong>Bot ID:</strong> {selectedBot._id}</div>
-                      <div><strong>Symbol:</strong> {selectedBot.symbol}</div>
-                      <div><strong>Strategy:</strong> {selectedBot.strategy}</div>
-                      <div><strong>Exchange:</strong> {selectedBot.exchange}</div>
+                      <div><strong>Bot ID:</strong> {String(selectedBot._id || '')}</div>
+                      <div><strong>Symbol:</strong> {String(selectedBot.symbol || '')}</div>
+                      <div><strong>Strategy:</strong> {String(selectedBot.strategy || '')}</div>
+                      <div><strong>Exchange:</strong> {String(selectedBot.exchange || '')}</div>
                     </div>
                   </div>
                 )}
@@ -267,7 +267,7 @@ export default function WebhookConfigPage() {
                     <div className="flex gap-2 mt-1">
                       <Input
                         id="webhookUrl"
-                        value={selectedBot.webhookUrl}
+                        value={String(selectedBot.webhookUrl || '')}
                         readOnly
                         className="font-mono text-xs"
                       />
