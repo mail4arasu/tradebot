@@ -248,11 +248,11 @@ export default function BotManagement() {
                       <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
                           <Bot className="h-5 w-5" />
-                          {allocation.botName || 'Unknown Bot'}
+                          {String(allocation.botName) || 'Unknown Bot'}
                         </CardTitle>
                         <div className="flex items-center gap-2">
                           <Badge className={getRiskColor(allocation.botRiskLevel)}>
-                            {allocation.botRiskLevel || 'Unknown'} Risk
+                            {String(allocation.botRiskLevel) || 'Unknown'} Risk
                           </Badge>
                           <div className="flex items-center gap-3">
                             <Switch
@@ -276,7 +276,7 @@ export default function BotManagement() {
                         </div>
                       </div>
                       <CardDescription>
-                        Strategy: {allocation.botStrategy || 'Unknown Strategy'}
+                        Strategy: {String(allocation.botStrategy) || 'Unknown Strategy'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -455,23 +455,23 @@ export default function BotManagement() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Bot className="h-5 w-5" />
-                        {bot.name || 'Unknown Bot'}
+                        {String(bot.name) || 'Unknown Bot'}
                       </CardTitle>
                       <CardDescription>
-                        {bot.description || 'No description available'}
+                        {String(bot.description) || 'No description available'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500">Strategy:</span>
-                          <span className="text-sm font-medium">{bot.strategy || 'Unknown Strategy'}</span>
+                          <span className="text-sm font-medium">{String(bot.strategy) || 'Unknown Strategy'}</span>
                         </div>
                         
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500">Risk Level:</span>
                           <Badge className={getRiskColor(bot.riskLevel)}>
-                            {bot.riskLevel || 'Unknown'}
+                            {String(bot.riskLevel) || 'Unknown'}
                           </Badge>
                         </div>
                         
@@ -527,14 +527,14 @@ export default function BotManagement() {
                     <div className="flex items-center justify-between">
                       <CardTitle className="flex items-center gap-2">
                         <Settings className="h-5 w-5" />
-                        {bot.name || 'Unknown Bot'} Configuration
+                        {String(bot.name) || 'Unknown Bot'} Configuration
                       </CardTitle>
                       <Badge className={getRiskColor(bot.riskLevel)}>
-                        {bot.riskLevel || 'Unknown'} Risk
+                        {String(bot.riskLevel) || 'Unknown'} Risk
                       </Badge>
                     </div>
                     <CardDescription>
-                      Configure trading type and auto-exit settings for {bot.strategy || 'this strategy'}
+                      Configure trading type and auto-exit settings for {String(bot.strategy) || 'this strategy'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
