@@ -2,12 +2,13 @@
 
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download, Clock, Target, Shield } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download, Clock, Target, Shield, PieChart } from 'lucide-react'
 import Link from 'next/link'
 
 interface Trade {
@@ -111,8 +112,32 @@ interface BotPosition {
   pnlPercentage: number
 }
 
+interface Holding {
+  tradingsymbol: string
+  exchange: string
+  instrument_token: string
+  isin: string
+  product: string
+  quantity: number
+  t1_quantity: number
+  realised_quantity: number
+  authorised_quantity: number
+  authorised_date: string
+  opening_quantity: number
+  collateral_quantity: number
+  collateral_type: string
+  discrepancy: boolean
+  average_price: number
+  last_price: number
+  close_price: number
+  pnl: number
+  day_change: number
+  day_change_percentage: number
+}
+
 export default function Trades() {
   const { data: session, status } = useSession()
+  const searchParams = useSearchParams()
   const [trades, setTrades] = useState<Trade[]>([])
   const [positions, setPositions] = useState<{net: Position[], day: Position[]}>({net: [], day: []})
   const [orders, setOrders] = useState<Order[]>([])
@@ -122,7 +147,7 @@ export default function Trades() {
   const [error, setError] = useState('')
   const [positionsError, setPositionsError] = useState('')
   const [ordersError, setOrdersError] = useState('')
-  const [activeTab, setActiveTab] = useState<'bot-positions' | 'positions' | 'orders' | 'trades' | 'equity'>('bot-positions')
+  const [activeTab, setActiveTab] = useState<'bot-positions' | 'positions' | 'orders' | 'trades' | 'equity' | 'holdings'>('bot-positions')
   
   // Bot positions state
   const [botPositions, setBotPositions] = useState<BotPosition[]>([])
@@ -159,6 +184,25 @@ export default function Trades() {
     cancelled: 0,
     totalValue: 0
   })
+  
+  // Holdings state
+  const [holdings, setHoldings] = useState<Holding[]>([])
+  const [holdingsLoading, setHoldingsLoading] = useState(true)
+  const [holdingsError, setHoldingsError] = useState('')
+  const [holdingsSummary, setHoldingsSummary] = useState({
+    totalValue: 0,
+    totalPnl: 0,
+    totalDayChange: 0,
+    count: 0
+  })
+
+  // Set initial tab from URL parameter
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as typeof activeTab
+    if (tabParam && ['bot-positions', 'positions', 'orders', 'trades', 'equity', 'holdings'].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (session) {
@@ -167,6 +211,7 @@ export default function Trades() {
       fetchOrders()
       fetchSyncStatus()
       fetchBotPositions()
+      fetchHoldings()
     }
   }, [session])
 
@@ -183,6 +228,27 @@ export default function Trades() {
       fetchTrades()
     }
   }, [tradeFilters, session])
+
+  // Auto-refresh holdings every 30 seconds when holdings tab is active
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+    
+    if (session && activeTab === 'holdings') {
+      // Refresh immediately when tab becomes active
+      fetchHoldings()
+      
+      // Set up 30-second interval
+      interval = setInterval(() => {
+        fetchHoldings()
+      }, 30000)
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
+  }, [session, activeTab])
 
   const fetchTrades = async () => {
     try {
@@ -372,8 +438,52 @@ export default function Trades() {
     }
   }
 
+  const fetchHoldings = async () => {
+    try {
+      setHoldingsLoading(true)
+      setHoldingsError('')
+      
+      const response = await fetch('/api/zerodha/holdings')
+      if (response.ok) {
+        const data = await response.json()
+        const holdingsData = data.data || []
+        setHoldings(holdingsData)
+        
+        // Calculate summary
+        let totalValue = 0
+        let totalPnl = 0
+        let totalDayChange = 0
+        
+        holdingsData.forEach((holding: Holding) => {
+          totalValue += (holding.last_price || 0) * (holding.quantity || 0)
+          totalPnl += holding.pnl || 0
+          totalDayChange += holding.day_change || 0
+        })
+        
+        setHoldingsSummary({
+          totalValue,
+          totalPnl,
+          totalDayChange,
+          count: holdingsData.length
+        })
+      } else {
+        const errorData = await response.json()
+        setHoldingsError(errorData.error || 'Failed to fetch holdings')
+        setHoldings([])
+        setHoldingsSummary({ totalValue: 0, totalPnl: 0, totalDayChange: 0, count: 0 })
+      }
+    } catch (error) {
+      console.error('Error fetching holdings:', error)
+      setHoldingsError('Error fetching holdings')
+      setHoldings([])
+      setHoldingsSummary({ totalValue: 0, totalPnl: 0, totalDayChange: 0, count: 0 })
+    } finally {
+      setHoldingsLoading(false)
+    }
+  }
+
   const refreshAll = async () => {
-    await Promise.all([fetchTrades(), fetchPositions(), fetchOrders(), fetchBotPositions()])
+    await Promise.all([fetchTrades(), fetchPositions(), fetchOrders(), fetchBotPositions(), fetchHoldings()])
   }
 
   const calculateEquityCurve = (tradesData: Trade[]) => {
@@ -632,6 +742,17 @@ export default function Trades() {
             >
               <TrendingUp className="h-4 w-4 inline mr-2" />
               Equity Curve
+            </button>
+            <button
+              onClick={() => setActiveTab('holdings')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'holdings'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <PieChart className="h-4 w-4 inline mr-2" />
+              Holdings ({holdingsSummary.count})
             </button>
           </nav>
         </div>
@@ -1623,6 +1744,158 @@ export default function Trades() {
               </CardContent>
             </Card>
           </div>
+        </>
+      )}
+
+      {activeTab === 'holdings' && (
+        <>
+          {/* Holdings Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Total Holdings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">{holdingsSummary.count}</div>
+                <p className="text-xs text-gray-500">Securities owned</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Total Value</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-900">{formatCurrency(holdingsSummary.totalValue)}</div>
+                <p className="text-xs text-gray-500">Current market value</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Total P&L</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center">
+                  <span className={`text-2xl font-bold ${holdingsSummary.totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(holdingsSummary.totalPnl)}
+                  </span>
+                  {holdingsSummary.totalPnl >= 0 ? (
+                    <TrendingUp className="h-5 w-5 text-green-600 ml-2" />
+                  ) : (
+                    <TrendingDown className="h-5 w-5 text-red-600 ml-2" />
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">Unrealized gains/losses</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Day Change</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center">
+                  <span className={`text-2xl font-bold ${holdingsSummary.totalDayChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(holdingsSummary.totalDayChange)}
+                  </span>
+                  {holdingsSummary.totalDayChange >= 0 ? (
+                    <TrendingUp className="h-5 w-5 text-green-600 ml-2" />
+                  ) : (
+                    <TrendingDown className="h-5 w-5 text-red-600 ml-2" />
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">Today's change</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Holdings Table */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Holdings Portfolio</CardTitle>
+                  <CardDescription>
+                    Your current equity holdings {activeTab === 'holdings' && '(Auto-refreshes every 30 seconds)'}
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={fetchHoldings} 
+                  disabled={holdingsLoading}
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${holdingsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {holdingsError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                  {holdingsError}
+                </div>
+              )}
+
+              {holdingsLoading ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+                  <p>Loading holdings...</p>
+                </div>
+              ) : holdings.length === 0 ? (
+                <div className="text-center py-8">
+                  <PieChart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No holdings found</h3>
+                  <p className="text-gray-600">You don't have any equity holdings at the moment.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-2">Symbol</th>
+                        <th className="text-right py-3 px-2">Quantity</th>
+                        <th className="text-right py-3 px-2">Avg Price</th>
+                        <th className="text-right py-3 px-2">LTP</th>
+                        <th className="text-right py-3 px-2">Value</th>
+                        <th className="text-right py-3 px-2">P&L</th>
+                        <th className="text-right py-3 px-2">Day Change</th>
+                        <th className="text-right py-3 px-2">Day Change %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {holdings.map((holding, index) => (
+                        <tr key={index} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-2">
+                            <div>
+                              <div className="font-medium">{holding.tradingsymbol}</div>
+                              <div className="text-xs text-gray-500">{holding.exchange}</div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-right font-mono">{holding.quantity}</td>
+                          <td className="py-3 px-2 text-right font-mono">{formatCurrency(holding.average_price)}</td>
+                          <td className="py-3 px-2 text-right font-mono">{formatCurrency(holding.last_price)}</td>
+                          <td className="py-3 px-2 text-right font-mono font-medium">
+                            {formatCurrency(holding.last_price * holding.quantity)}
+                          </td>
+                          <td className={`py-3 px-2 text-right font-mono ${holding.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {holding.pnl >= 0 ? '+' : ''}{formatCurrency(holding.pnl)}
+                          </td>
+                          <td className={`py-3 px-2 text-right font-mono ${holding.day_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {holding.day_change >= 0 ? '+' : ''}{formatCurrency(holding.day_change)}
+                          </td>
+                          <td className={`py-3 px-2 text-right font-mono ${holding.day_change_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {holding.day_change_percentage >= 0 ? '+' : ''}{holding.day_change_percentage?.toFixed(2)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

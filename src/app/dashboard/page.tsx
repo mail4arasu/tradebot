@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { IndianRupee, TrendingUp, Bot, Activity, Settings, AlertCircle, RefreshCw, Clock, PieChart, Wallet, Target, BarChart3, TrendingDown } from 'lucide-react'
+import { IndianRupee, TrendingUp, Bot, Activity, Settings, AlertCircle, RefreshCw, Clock, PieChart, Wallet, Target, BarChart3, TrendingDown, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -512,12 +512,24 @@ export default function Dashboard() {
               title={zerodhaConnected && !needsDailyLogin ? "Click to view holdings and positions" : undefined}
             >
               <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{portfolioValue.toLocaleString()}</div>
-              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-                {zerodhaConnected 
-                  ? `${holdingsCount} holdings • ${positionsCount} positions ${holdingsCount > 0 || positionsCount > 0 ? '(click to view)' : ''}`
-                  : 'Connect Zerodha to see portfolio'
-                }
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                  {zerodhaConnected 
+                    ? `${holdingsCount} holdings • ${positionsCount} positions`
+                    : 'Connect Zerodha to see portfolio'
+                  }
+                </p>
+                {zerodhaConnected && !needsDailyLogin && (holdingsCount > 0 || positionsCount > 0) && (
+                  <div className="flex items-center text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    <span className="mr-1">click to expand</span>
+                    {showPortfolioDropdown ? (
+                      <ChevronUp className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Portfolio Dropdown */}
@@ -543,10 +555,16 @@ export default function Dashboard() {
                     {/* Holdings */}
                     {holdingsData.length > 0 && (
                       <div className="mb-4">
-                        <h5 className="font-medium text-xs text-gray-700 dark:text-gray-300 mb-2">Holdings ({holdingsData.length})</h5>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="font-medium text-xs text-gray-700 dark:text-gray-300">Holdings ({holdingsData.length})</h5>
+                          <Link href="/trades?tab=holdings" className="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                            <span>View All</span>
+                            <ExternalLink className="h-3 w-3 ml-1" />
+                          </Link>
+                        </div>
                         <div className="space-y-1 max-h-32 overflow-y-auto">
                           {holdingsData.slice(0, 5).map((holding: any, index: number) => (
-                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                               <span className="font-medium">{holding.tradingsymbol || holding.instrument_token}</span>
                               <div className="text-right">
                                 <div className="font-medium">₹{(holding.last_price || 0).toLocaleString()}</div>
@@ -568,15 +586,21 @@ export default function Dashboard() {
                     {/* Positions */}
                     {positionsData.length > 0 && (
                       <div>
-                        <h5 className="font-medium text-xs text-gray-700 dark:text-gray-300 mb-2">Positions ({positionsData.length})</h5>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="font-medium text-xs text-gray-700 dark:text-gray-300">Positions ({positionsData.length})</h5>
+                          <Link href="/trades?tab=positions" className="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                            <span>View All</span>
+                            <ExternalLink className="h-3 w-3 ml-1" />
+                          </Link>
+                        </div>
                         <div className="space-y-1 max-h-32 overflow-y-auto">
                           {positionsData.slice(0, 5).map((position: any, index: number) => (
-                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                               <span className="font-medium">{position.tradingsymbol || position.instrument_token}</span>
                               <div className="text-right">
-                                <div className="font-medium">Qty: {position.quantity || 0}</div>
-                                <div className={`text-xs ${(position.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {(position.pnl || 0) >= 0 ? '+' : ''}₹{(position.pnl || 0).toFixed(2)}
+                                <div className="font-medium">Qty: {Math.abs(position.quantity || position.net_quantity || 0)}</div>
+                                <div className={`text-xs ${(position.pnl || position.m2m || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {(position.pnl || position.m2m || 0) >= 0 ? '+' : ''}₹{(position.pnl || position.m2m || 0).toFixed(2)}
                                 </div>
                               </div>
                             </div>
