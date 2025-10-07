@@ -171,6 +171,9 @@ export default function BotManagement() {
   }
 
   const getRiskColor = (risk: string) => {
+    // Add null/undefined check
+    if (!risk) return 'bg-gray-100 text-gray-800'
+    
     switch (risk.toUpperCase()) {
       case 'LOW': return 'bg-green-100 text-green-800'
       case 'MEDIUM': return 'bg-yellow-100 text-yellow-800'
@@ -238,11 +241,11 @@ export default function BotManagement() {
                       <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
                           <Bot className="h-5 w-5" />
-                          {allocation.botName}
+                          {allocation.botName || 'Unknown Bot'}
                         </CardTitle>
                         <div className="flex items-center gap-2">
                           <Badge className={getRiskColor(allocation.botRiskLevel)}>
-                            {allocation.botRiskLevel} Risk
+                            {allocation.botRiskLevel || 'Unknown'} Risk
                           </Badge>
                           <div className="flex items-center gap-3">
                             <Switch
@@ -266,7 +269,7 @@ export default function BotManagement() {
                         </div>
                       </div>
                       <CardDescription>
-                        Strategy: {allocation.botStrategy}
+                        Strategy: {allocation.botStrategy || 'Unknown Strategy'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -348,11 +351,11 @@ export default function BotManagement() {
                             <Input
                               id={`startTime-${allocation._id}`}
                               type="time"
-                              value={allocation.enabledHours.start}
+                              value={allocation.enabledHours?.start || '09:15'}
                               onChange={(e) => {
                                 updateAllocation(allocation._id, {
                                   enabledHours: {
-                                    ...allocation.enabledHours,
+                                    ...(allocation.enabledHours || { start: '09:15', end: '15:30' }),
                                     start: e.target.value
                                   }
                                 })
@@ -366,11 +369,11 @@ export default function BotManagement() {
                             <Input
                               id={`endTime-${allocation._id}`}
                               type="time"
-                              value={allocation.enabledHours.end}
+                              value={allocation.enabledHours?.end || '15:30'}
                               onChange={(e) => {
                                 updateAllocation(allocation._id, {
                                   enabledHours: {
-                                    ...allocation.enabledHours,
+                                    ...(allocation.enabledHours || { start: '09:15', end: '15:30' }),
                                     end: e.target.value
                                   }
                                 })
@@ -388,40 +391,40 @@ export default function BotManagement() {
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Today's Trades:</span>
                               <span className="font-medium">
-                                {allocation.currentDayTrades}/{allocation.maxTradesPerDay}
+                                {allocation.currentDayTrades || 0}/{allocation.maxTradesPerDay || 0}
                               </span>
                             </div>
                             
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Total Trades:</span>
-                              <span className="font-medium">{allocation.totalTrades}</span>
+                              <span className="font-medium">{allocation.totalTrades || 0}</span>
                             </div>
                             
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Success Rate:</span>
                               <span className="font-medium">
-                                {getSuccessRate(allocation.totalTrades, allocation.successfulTrades)}%
+                                {getSuccessRate(allocation.totalTrades || 0, allocation.successfulTrades || 0)}%
                               </span>
                             </div>
                             
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Total P&L:</span>
-                              <span className={`font-medium ${allocation.totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                ₹{allocation.totalPnl.toLocaleString('en-IN')}
+                              <span className={`font-medium ${(allocation.totalPnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                ₹{(allocation.totalPnl || 0).toLocaleString('en-IN')}
                               </span>
                             </div>
                             
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Allocated Amount:</span>
                               <span className="font-medium">
-                                ₹{allocation.allocatedAmount.toLocaleString('en-IN')}
+                                ₹{(allocation.allocatedAmount || 0).toLocaleString('en-IN')}
                               </span>
                             </div>
                             
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-500">Risk Per Trade:</span>
                               <span className="font-medium">
-                                {allocation.riskPercentage}%
+                                {allocation.riskPercentage || 0}%
                               </span>
                             </div>
                           </div>
@@ -445,29 +448,29 @@ export default function BotManagement() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Bot className="h-5 w-5" />
-                        {bot.name}
+                        {bot.name || 'Unknown Bot'}
                       </CardTitle>
                       <CardDescription>
-                        {bot.description}
+                        {bot.description || 'No description available'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500">Strategy:</span>
-                          <span className="text-sm font-medium">{bot.strategy}</span>
+                          <span className="text-sm font-medium">{bot.strategy || 'Unknown Strategy'}</span>
                         </div>
                         
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500">Risk Level:</span>
                           <Badge className={getRiskColor(bot.riskLevel)}>
-                            {bot.riskLevel}
+                            {bot.riskLevel || 'Unknown'}
                           </Badge>
                         </div>
                         
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500">Market:</span>
-                          <span className="text-sm font-medium">{bot.symbol} ({bot.exchange})</span>
+                          <span className="text-sm font-medium">{bot.symbol || 'Unknown'} ({bot.exchange || 'Unknown'})</span>
                         </div>
 
                         <div className="flex justify-between items-center">
@@ -517,14 +520,14 @@ export default function BotManagement() {
                     <div className="flex items-center justify-between">
                       <CardTitle className="flex items-center gap-2">
                         <Settings className="h-5 w-5" />
-                        {bot.name} Configuration
+                        {bot.name || 'Unknown Bot'} Configuration
                       </CardTitle>
                       <Badge className={getRiskColor(bot.riskLevel)}>
-                        {bot.riskLevel} Risk
+                        {bot.riskLevel || 'Unknown'} Risk
                       </Badge>
                     </div>
                     <CardDescription>
-                      Configure trading type and auto-exit settings for {bot.strategy}
+                      Configure trading type and auto-exit settings for {bot.strategy || 'this strategy'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -537,7 +540,7 @@ export default function BotManagement() {
                           <Label htmlFor={`tradingType-${bot._id}`}>Trading Type</Label>
                           <select
                             id={`tradingType-${bot._id}`}
-                            value={bot.tradingType}
+                            value={bot.tradingType || 'INTRADAY'}
                             onChange={(e) => {
                               updateBotConfig(bot._id, { 
                                 tradingType: e.target.value as 'INTRADAY' | 'POSITIONAL'
@@ -558,7 +561,7 @@ export default function BotManagement() {
                           <Label>
                             <input
                               type="checkbox"
-                              checked={bot.autoSquareOff}
+                              checked={bot.autoSquareOff || false}
                               onChange={(e) => {
                                 updateBotConfig(bot._id, { autoSquareOff: e.target.checked })
                               }}
@@ -576,7 +579,7 @@ export default function BotManagement() {
                           <Label>
                             <input
                               type="checkbox"
-                              checked={bot.allowMultiplePositions}
+                              checked={bot.allowMultiplePositions || false}
                               onChange={(e) => {
                                 updateBotConfig(bot._id, { allowMultiplePositions: e.target.checked })
                               }}
@@ -602,7 +605,7 @@ export default function BotManagement() {
                           <Input
                             id={`exitTime-${bot._id}`}
                             type="time"
-                            value={bot.intradayExitTime}
+                            value={bot.intradayExitTime || '15:15'}
                             onChange={(e) => {
                               updateBotConfig(bot._id, { intradayExitTime: e.target.value })
                             }}
@@ -622,7 +625,7 @@ export default function BotManagement() {
                             type="number"
                             min="1"
                             max="30"
-                            value={bot.maxPositionHoldDays}
+                            value={bot.maxPositionHoldDays || 5}
                             onChange={(e) => {
                               const days = parseInt(e.target.value)
                               if (days > 0 && days <= 30) {
@@ -659,7 +662,7 @@ export default function BotManagement() {
                           <div className="flex justify-between">
                             <span className="text-gray-500">Exit Time:</span>
                             <span className="font-medium">
-                              {bot.tradingType === 'INTRADAY' ? bot.intradayExitTime : 'N/A'}
+                              {(bot.tradingType || 'INTRADAY') === 'INTRADAY' ? (bot.intradayExitTime || '15:15') : 'N/A'}
                             </span>
                           </div>
                           
@@ -673,7 +676,7 @@ export default function BotManagement() {
                           <div className="flex justify-between">
                             <span className="text-gray-500">Max Hold:</span>
                             <span className="font-medium">
-                              {bot.tradingType === 'POSITIONAL' ? `${bot.maxPositionHoldDays} days` : '1 day'}
+                              {(bot.tradingType || 'INTRADAY') === 'POSITIONAL' ? `${bot.maxPositionHoldDays || 5} days` : '1 day'}
                             </span>
                           </div>
                         </div>
