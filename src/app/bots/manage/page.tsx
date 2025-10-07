@@ -530,7 +530,7 @@ export default function BotManagement() {
                         {String(bot.name) || 'Unknown Bot'} Configuration
                       </CardTitle>
                       <Badge className={getRiskColor(bot.riskLevel)}>
-                        {String(bot.riskLevel) || 'Unknown'} Risk
+                        {bot.riskLevel ? String(bot.riskLevel).charAt(0).toUpperCase() + String(bot.riskLevel).slice(1).toLowerCase() : 'Medium'} Risk
                       </Badge>
                     </div>
                     <CardDescription>
@@ -573,15 +573,16 @@ export default function BotManagement() {
                         </div>
 
                         <div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-3">
                             <Switch
                               checked={bot.autoSquareOff || false}
                               onCheckedChange={(checked) => {
                                 updateBotConfig(bot._id, { autoSquareOff: checked })
                               }}
                               disabled={saving === bot._id}
+                              className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300"
                             />
-                            <Label>Auto Square-off</Label>
+                            <Label className="text-sm font-medium">Auto Square-off</Label>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
                             Automatically close positions at scheduled time
@@ -589,15 +590,16 @@ export default function BotManagement() {
                         </div>
 
                         <div>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-3">
                             <Switch
                               checked={bot.allowMultiplePositions || false}
                               onCheckedChange={(checked) => {
                                 updateBotConfig(bot._id, { allowMultiplePositions: checked })
                               }}
                               disabled={saving === bot._id}
+                              className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300"
                             />
-                            <Label>Allow Multiple Positions</Label>
+                            <Label className="text-sm font-medium">Allow Multiple Positions</Label>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
                             Allow multiple open positions simultaneously
