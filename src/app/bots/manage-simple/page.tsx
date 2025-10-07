@@ -118,10 +118,10 @@ export default function SimpleBotManagement() {
                   <Card key={allocation._id}>
                     <CardHeader>
                       <CardTitle>
-                        {allocation.botName || 'Unknown Bot'}
+                        {String(allocation.botName) || 'Unknown Bot'}
                       </CardTitle>
                       <CardDescription>
-                        Strategy: {allocation.botStrategy || 'Unknown Strategy'}
+                        Strategy: {String(allocation.botStrategy) || 'Unknown Strategy'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -145,25 +145,25 @@ export default function SimpleBotManagement() {
               {availableBots.map((bot) => (
                 <Card key={bot._id}>
                   <CardHeader>
-                    <CardTitle>{bot.name || 'Unknown Bot'}</CardTitle>
-                    <CardDescription>{bot.description || 'No description available'}</CardDescription>
+                    <CardTitle>{String(bot.name) || 'Unknown Bot'}</CardTitle>
+                    <CardDescription>{String(bot.description) || 'No description available'}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-500">Strategy:</span>
-                        <span className="text-sm font-medium">{bot.strategy || 'Unknown Strategy'}</span>
+                        <span className="text-sm font-medium">{String(bot.strategy) || 'Unknown Strategy'}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-500">Trading Type:</span>
                         <Badge variant="default">
-                          {bot.tradingType || 'INTRADAY'}
+                          {String(bot.tradingType) || 'INTRADAY'}
                         </Badge>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-500">Status:</span>
-                        <Badge variant={bot.isActive ? 'default' : 'secondary'}>
-                          {bot.isActive ? 'Active' : 'Inactive'}
+                        <Badge variant={Boolean(bot.isActive) ? 'default' : 'secondary'}>
+                          {Boolean(bot.isActive) ? 'Active' : 'Inactive'}
                         </Badge>
                       </div>
                     </div>
