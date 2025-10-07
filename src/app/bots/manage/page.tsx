@@ -545,20 +545,28 @@ export default function BotManagement() {
                         
                         <div>
                           <Label htmlFor={`tradingType-${bot._id}`}>Trading Type</Label>
-                          <select
-                            id={`tradingType-${bot._id}`}
-                            value={bot.tradingType || 'INTRADAY'}
-                            onChange={(e) => {
-                              updateBotConfig(bot._id, { 
-                                tradingType: e.target.value as 'INTRADAY' | 'POSITIONAL'
-                              })
-                            }}
-                            disabled={saving === bot._id}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                          >
-                            <option value="INTRADAY">Intraday</option>
-                            <option value="POSITIONAL">Positional</option>
-                          </select>
+                          <div className="mt-1">
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant={(bot.tradingType || 'INTRADAY') === 'INTRADAY' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => updateBotConfig(bot._id, { tradingType: 'INTRADAY' })}
+                                disabled={saving === bot._id}
+                              >
+                                Intraday
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={(bot.tradingType || 'INTRADAY') === 'POSITIONAL' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => updateBotConfig(bot._id, { tradingType: 'POSITIONAL' })}
+                                disabled={saving === bot._id}
+                              >
+                                Positional
+                              </Button>
+                            </div>
+                          </div>
                           <p className="text-xs text-gray-500 mt-1">
                             Intraday: Positions auto-close same day | Positional: Hold for multiple days
                           </p>
