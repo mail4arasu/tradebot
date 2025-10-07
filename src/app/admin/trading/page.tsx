@@ -98,7 +98,8 @@ export default function TradingAdminDashboard() {
     price: 18500,
     strategy: 'Opening Breakout',
     exchange: 'NFO',
-    instrumentType: 'FUTURES'
+    instrumentType: 'FUTURES',
+    botId: ''
   })
   const [testLoading, setTestLoading] = useState(false)
   
@@ -172,6 +173,31 @@ export default function TradingAdminDashboard() {
       }
     } catch (error) {
       alert('Failed to toggle emergency stop')
+    }
+  }
+
+  const toggleBotActive = async (botId: string) => {
+    try {
+      const bot = emergencyStatus?.bots.find(b => b._id === botId)
+      const response = await fetch('/api/admin/bots', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botId,
+          isActive: !bot?.isActive
+        })
+      })
+
+      if (response.ok) {
+        fetchData() // Refresh data
+        const result = await response.json()
+        alert(result.message || `Bot ${!bot?.isActive ? 'activated' : 'deactivated'} successfully`)
+      } else {
+        const error = await response.json()
+        alert(`Error: ${error.error}`)
+      }
+    } catch (error) {
+      alert('Failed to toggle bot status')
     }
   }
 
@@ -358,11 +384,25 @@ export default function TradingAdminDashboard() {
                         {bot.emergencyStop ? 'Stopped' : bot.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </div>
-                    <Switch
-                      checked={!bot.emergencyStop}
-                      onCheckedChange={() => toggleEmergencyStop(bot._id)}
-                      disabled={!bot.isActive}
-                    />
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-center gap-1">
+                        <Switch
+                          checked={bot.isActive}
+                          onCheckedChange={() => toggleBotActive(bot._id)}
+                          className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-300"
+                        />
+                        <span className="text-xs text-gray-500">Bot Active</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <Switch
+                          checked={!bot.emergencyStop}
+                          onCheckedChange={() => toggleEmergencyStop(bot._id)}
+                          disabled={!bot.isActive}
+                          className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-red-300"
+                        />
+                        <span className="text-xs text-gray-500">Emergency</span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -383,7 +423,22 @@ export default function TradingAdminDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div>
+              <Label htmlFor="bot">Target Bot</Label>
+              <select
+                className="w-full p-2 border rounded"
+                value={testSignal.botId}
+                onChange={(e) => setTestSignal(prev => ({ ...prev, botId: e.target.value }))}
+              >
+                <option value="">Select Bot (All if empty)</option>
+                {emergencyStatus?.bots.map((bot) => (
+                  <option key={bot._id} value={bot._id}>
+                    {bot.name} ({bot.isActive ? 'Active' : 'Inactive'})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <Label htmlFor="symbol">Symbol</Label>
               <Input
