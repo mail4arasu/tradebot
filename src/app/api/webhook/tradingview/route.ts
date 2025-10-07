@@ -409,10 +409,12 @@ async function processExitSignal(allocation: any, bot: any, payload: TradingView
         // Calculate exit quantity (for now, exit full position)
         const exitQuantity = position.currentQuantity
         
-        // Create exit trade execution
+        // Create exit trade execution with proper side handling
         const exitPayload = {
           ...payload,
-          action: 'SELL' // Convert EXIT to SELL for execution
+          // For LONG positions: SELL to exit
+          // For SHORT positions: BUY to cover/exit
+          action: position.side === 'LONG' ? 'SELL' : 'BUY'
         }
         
         const executionResult = await executeTradeForUser(allocation, bot, exitPayload, signalId, db)
@@ -521,9 +523,8 @@ async function executeTradeForUser(allocation: any, bot: any, payload: TradingVi
     const executionResult = await db.collection('tradeexecutions').insertOne(tradeExecution)
     console.log('📋 Trade execution record created:', executionResult.insertedId)
 
-    // Here you would integrate with Zerodha API
-    // For now, simulate the execution
-    const zerodhaResult = await simulateZerodhaExecution(tradeExecution, allocation)
+    // Real Zerodha API integration
+    const zerodhaResult = await executeRealZerodhaOrder(tradeExecution, allocation, db)
 
     // Update execution record with results
     await db.collection('tradeexecutions').updateOne(
@@ -593,12 +594,14 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
       throw new Error(`Invalid options bot config: ${configValidation.error}`)
     }
 
-    // Prepare signal for options bot
+    // Prepare signal for options bot with side information
+    const side = determinePositionSide(payload)
     const optionsSignal = {
-      action: payload.action as 'BUY' | 'SELL',
+      action: payload.action as 'BUY' | 'SELL' | 'SHORT' | 'SELL_SHORT' | 'LONG',
       price: payload.price || 19500, // Default NIFTY price if not provided
       symbol: 'NIFTY',
-      timestamp: new Date()
+      timestamp: new Date(),
+      side: side  // Pass the determined side
     }
 
     // Execute sophisticated options analysis
@@ -713,8 +716,260 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
   }
 }
 
+/**
+ * Execute real Zerodha order with proper order type handling
+ */
+async function executeRealZerodhaOrder(tradeExecution: any, allocation: any, db: any) {
+  try {
+    console.log(`🚀 Executing real Zerodha ${tradeExecution.orderType} for user ${allocation.userId}`)
+    
+    // Get user's Zerodha credentials
+    const user = await db.collection('users').findOne({ _id: allocation.userId })
+    if (!user?.zerodhaConfig?.accessToken) {
+      throw new Error('User Zerodha configuration not found or access token missing')
+    }
+    
+    // Import encryption utilities
+    const { decrypt } = await import('@/lib/encryption')
+    
+    // Decrypt credentials
+    const apiKey = decrypt(user.zerodhaConfig.apiKey)
+    const apiSecret = decrypt(user.zerodhaConfig.apiSecret) 
+    const accessToken = decrypt(user.zerodhaConfig.accessToken)
+    
+    // Initialize Zerodha API
+    const { ZerodhaAPI } = await import('@/lib/zerodha')
+    const zerodha = new ZerodhaAPI(apiKey, apiSecret, accessToken)
+    
+    // Determine order type based on signal and bot configuration
+    const orderType = determineOrderType(tradeExecution, allocation)
+    
+    // Prepare order parameters
+    const orderParams = {
+      exchange: tradeExecution.exchange,
+      tradingsymbol: tradeExecution.symbol,
+      transaction_type: tradeExecution.orderType === 'BUY' || tradeExecution.orderType === 'ENTRY' ? 'BUY' : 'SELL',
+      quantity: tradeExecution.quantity,
+      order_type: orderType, // 'MARKET' or 'LIMIT'
+      product: tradeExecution.instrumentType === 'FUTURES' ? 'MIS' : 'CNC', // Intraday for futures, delivery for equity
+      validity: 'DAY',
+      tag: `TRADEBOT_${allocation.botId}_${Date.now()}`
+    }
+    
+    // Add price for limit orders
+    if (orderType === 'LIMIT' && tradeExecution.requestedPrice) {
+      orderParams.price = tradeExecution.requestedPrice
+    }
+    
+    console.log(`📋 Order parameters:`, {
+      ...orderParams,
+      tag: orderParams.tag
+    })
+    
+    // Place the order with retry logic
+    const orderResponse = await placeOrderWithRetry(zerodha, orderParams, 3)
+    
+    if (orderResponse.status === 'success') {
+      // For market orders, they execute immediately
+      // For limit orders, we need to check status
+      const orderId = orderResponse.data.order_id
+      
+      // Wait a moment for execution (market orders execute quickly)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Get order status to check execution
+      const orders = await zerodha.getOrders()
+      const executedOrder = orders.data?.find((order: any) => order.order_id === orderId)
+      
+      if (executedOrder && executedOrder.status === 'COMPLETE') {
+        return {
+          success: true,
+          orderId: orderId,
+          tradeId: `TRD_${orderId}`,
+          executedPrice: executedOrder.average_price || executedOrder.price,
+          executedQuantity: executedOrder.filled_quantity,
+          error: null,
+          response: {
+            ...orderResponse,
+            order_details: executedOrder,
+            execution_timestamp: new Date().toISOString()
+          }
+        }
+      } else if (executedOrder && executedOrder.status === 'OPEN') {
+        // Order is pending (limit order not filled yet)
+        return {
+          success: true,
+          orderId: orderId,
+          tradeId: `TRD_${orderId}`,
+          executedPrice: null, // Not executed yet
+          executedQuantity: 0,
+          error: null,
+          response: {
+            ...orderResponse,
+            order_details: executedOrder,
+            status: 'PENDING',
+            message: 'Order placed but not executed yet'
+          }
+        }
+      } else {
+        // Order failed or rejected
+        return {
+          success: false,
+          orderId: orderId,
+          tradeId: null,
+          executedPrice: null,
+          executedQuantity: null,
+          error: executedOrder?.status_message || 'Order execution failed',
+          response: {
+            ...orderResponse,
+            order_details: executedOrder
+          }
+        }
+      }
+    } else {
+      throw new Error(orderResponse.message || 'Order placement failed')
+    }
+    
+  } catch (error) {
+    console.error(`❌ Real Zerodha execution error:`, error)
+    
+    // Fallback to simulation in case of API issues (configurable)
+    const enableFallback = process.env.ZERODHA_FALLBACK_TO_SIMULATION === 'true'
+    
+    if (enableFallback) {
+      console.log(`🔄 Falling back to simulation due to error: ${error.message}`)
+      return await simulateZerodhaExecution(tradeExecution, allocation)
+    }
+    
+    return {
+      success: false,
+      orderId: null,
+      tradeId: null,
+      executedPrice: null,
+      executedQuantity: null,
+      error: error.message || 'Unknown execution error',
+      response: null
+    }
+  }
+}
+
+/**
+ * Determine order type (MARKET vs LIMIT) based on configuration
+ */
+function determineOrderType(tradeExecution: any, allocation: any): 'MARKET' | 'LIMIT' {
+  // Check if price is specified (indicates limit order preference)
+  if (tradeExecution.requestedPrice && tradeExecution.requestedPrice > 0) {
+    return 'LIMIT'
+  }
+  
+  // Check allocation-level preference
+  if (allocation.preferredOrderType) {
+    return allocation.preferredOrderType.toUpperCase()
+  }
+  
+  // Default to MARKET for immediate execution
+  return 'MARKET'
+}
+
+/**
+ * Place order with retry logic and exponential backoff
+ */
+async function placeOrderWithRetry(zerodha: any, orderParams: any, maxRetries: number = 3): Promise<any> {
+  let lastError: any = null
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`📤 Order placement attempt ${attempt}/${maxRetries}`)
+      
+      const response = await zerodha.placeOrder('regular', orderParams)
+      
+      if (response.status === 'success') {
+        console.log(`✅ Order placed successfully on attempt ${attempt}`)
+        return response
+      } else {
+        throw new Error(response.message || 'Order placement failed')
+      }
+      
+    } catch (error: any) {
+      lastError = error
+      console.error(`❌ Attempt ${attempt} failed:`, error.message)
+      
+      // Check if error is retryable
+      if (!isRetryableError(error)) {
+        console.log(`🚫 Non-retryable error, stopping attempts`)
+        throw error
+      }
+      
+      // Exponential backoff: wait 1s, 2s, 4s, etc.
+      if (attempt < maxRetries) {
+        const waitTime = Math.pow(2, attempt - 1) * 1000
+        console.log(`⏳ Waiting ${waitTime}ms before retry...`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+      }
+    }
+  }
+  
+  // All retries exhausted
+  console.error(`❌ All ${maxRetries} attempts failed. Last error:`, lastError?.message)
+  throw lastError || new Error('Order placement failed after all retries')
+}
+
+/**
+ * Determine if an error is retryable
+ */
+function isRetryableError(error: any): boolean {
+  const errorMessage = error.message?.toLowerCase() || ''
+  
+  // Network/connection errors - retryable
+  if (errorMessage.includes('timeout') ||
+      errorMessage.includes('network') ||
+      errorMessage.includes('econnreset') ||
+      errorMessage.includes('enotfound') ||
+      errorMessage.includes('socket')) {
+    return true
+  }
+  
+  // Zerodha API rate limiting - retryable
+  if (errorMessage.includes('rate limit') ||
+      errorMessage.includes('too many requests') ||
+      errorMessage.includes('429')) {
+    return true
+  }
+  
+  // Temporary server errors - retryable
+  if (errorMessage.includes('500') ||
+      errorMessage.includes('502') ||
+      errorMessage.includes('503') ||
+      errorMessage.includes('504')) {
+    return true
+  }
+  
+  // Market data related temporary errors - retryable
+  if (errorMessage.includes('market data') ||
+      errorMessage.includes('price not available')) {
+    return true
+  }
+  
+  // Non-retryable errors
+  if (errorMessage.includes('insufficient funds') ||
+      errorMessage.includes('invalid symbol') ||
+      errorMessage.includes('invalid quantity') ||
+      errorMessage.includes('unauthorized') ||
+      errorMessage.includes('forbidden') ||
+      errorMessage.includes('400') ||
+      errorMessage.includes('401') ||
+      errorMessage.includes('403')) {
+    return false
+  }
+  
+  // Default to retryable for unknown errors
+  return true
+}
+
+/**
+ * Fallback simulation function (kept for compatibility and testing)
+ */
 async function simulateZerodhaExecution(tradeExecution: any, allocation: any) {
-  // This simulates Zerodha API integration
   console.log(`🔄 Simulating Zerodha ${tradeExecution.orderType} for user ${allocation.userId}`)
   
   // Simulate processing time
@@ -728,13 +983,14 @@ async function simulateZerodhaExecution(tradeExecution: any, allocation: any) {
       success: true,
       orderId: `SIM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       tradeId: `TRD_${Date.now()}`,
-      executedPrice: tradeExecution.requestedPrice || 18500, // Default Nifty price
+      executedPrice: tradeExecution.requestedPrice || 18500,
       executedQuantity: tradeExecution.quantity,
       error: null,
       response: {
         status: 'COMPLETE',
         order_timestamp: new Date().toISOString(),
-        average_price: tradeExecution.requestedPrice || 18500
+        average_price: tradeExecution.requestedPrice || 18500,
+        simulation: true
       }
     }
   } else {

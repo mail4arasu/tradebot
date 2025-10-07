@@ -291,23 +291,45 @@ export function determineSignalType(payload: any): 'ENTRY' | 'EXIT' | 'UNKNOWN' 
 }
 
 /**
- * Determines position side from signal
+ * Determines position side from signal - Enhanced to support both LONG and SHORT trades
  */
 export function determinePositionSide(payload: any): 'LONG' | 'SHORT' {
   if (!payload.action) return 'LONG'
   
   const action = payload.action.toUpperCase()
   
-  // For now, assume all entries are LONG positions
-  // This can be enhanced later based on signal data
-  if (action === 'BUY' || action === 'ENTRY') {
+  // Enhanced logic to support both LONG and SHORT positions
+  
+  // LONG Position Signals (Buy low, sell high)
+  if (action === 'BUY' || action === 'ENTRY' || action === 'LONG') {
     return 'LONG'
   }
   
-  if (action === 'SELL_SHORT' || action === 'SHORT') {
+  // SHORT Position Signals (Sell high, buy low)
+  if (action === 'SELL_SHORT' || action === 'SHORT' || action === 'SELL_ENTRY') {
     return 'SHORT'
   }
   
+  // For EXIT signals, determine side from signal metadata or assume LONG
+  if (action === 'EXIT' || action === 'SELL') {
+    // Check if payload contains side information
+    if (payload.side) {
+      return payload.side.toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG'
+    }
+    // Check if this is a short covering exit (BUY to exit SHORT)
+    if (payload.exitSide === 'BUY' || payload.coverShort === true) {
+      return 'SHORT'  // This is covering a short position
+    }
+    // Default to LONG for standard exits
+    return 'LONG'
+  }
+  
+  // Explicit side specification in payload
+  if (payload.side) {
+    return payload.side.toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG'
+  }
+  
+  // Default to LONG if unclear
   return 'LONG'
 }
 

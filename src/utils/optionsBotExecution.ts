@@ -25,10 +25,11 @@ export interface OptionsBotConfig {
 }
 
 export interface OptionsBotSignal {
-  action: 'BUY' | 'SELL'
+  action: 'BUY' | 'SELL' | 'SHORT' | 'SELL_SHORT' | 'LONG'
   price: number
   symbol: string
   timestamp: Date
+  side?: 'LONG' | 'SHORT'  // Explicit side specification
 }
 
 export interface OptionsBotResult {
@@ -88,9 +89,9 @@ export async function executeOptionsBotTrade(
     }
     console.log(`📅 Selected expiry: ${selectedExpiry.date} (${selectedExpiry.daysToExpiry} days)`)
 
-    // Step 5: Determine option type based on action
-    const optionType = getOptionType(signal.action)
-    console.log(`🎛️ Option type: ${optionType} (action: ${signal.action})`)
+    // Step 5: Determine option type based on action and side
+    const optionType = getOptionType(signal.action, signal.side)
+    console.log(`🎛️ Option type: ${optionType} (action: ${signal.action}, side: ${signal.side || 'auto'})`)
 
     // Step 6: Find actual NIFTY options contracts from Zerodha instruments
     const expiryDate = new Date(selectedExpiry.date)

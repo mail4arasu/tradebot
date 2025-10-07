@@ -177,8 +177,49 @@ export function calculatePositionSize(
 /**
  * Determine option type based on action
  */
-export function getOptionType(action: string): 'CE' | 'PE' {
-  return action.toLowerCase() === 'buy' ? 'CE' : 'PE'
+/**
+ * Determine option type based on action and strategy
+ * Enhanced to support both LONG and SHORT option strategies
+ */
+export function getOptionType(action: string, side?: string): 'CE' | 'PE' {
+  const actionUpper = action.toUpperCase()
+  const sideUpper = side?.toUpperCase()
+  
+  // Handle explicit option type specification
+  if (actionUpper.includes('CALL') || actionUpper.includes('CE')) {
+    return 'CE'
+  }
+  if (actionUpper.includes('PUT') || actionUpper.includes('PE')) {
+    return 'PE'
+  }
+  
+  // Strategy-based logic for LONG and SHORT positions
+  
+  // LONG Strategies (buying options)
+  if (actionUpper === 'BUY' || actionUpper === 'LONG') {
+    // For LONG positions, typically buy calls for bullish view
+    return 'CE'
+  }
+  
+  // SHORT Strategies (selling/writing options)
+  if (actionUpper === 'SELL_SHORT' || actionUpper === 'SHORT' || 
+      actionUpper === 'SELL_ENTRY' || sideUpper === 'SHORT') {
+    // For SHORT positions, can sell calls (bearish) or puts (bullish)
+    // Default to selling calls for bearish outlook
+    return 'CE'  // Sell calls = bearish strategy
+  }
+  
+  // Standard BUY/SELL logic
+  if (actionUpper === 'BUY' || actionUpper === 'ENTRY') {
+    return 'CE'  // Buy calls = bullish
+  }
+  
+  if (actionUpper === 'SELL') {
+    return 'PE'  // Default to puts for sell signals
+  }
+  
+  // Default fallback
+  return 'CE'
 }
 
 /**
