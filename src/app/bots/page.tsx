@@ -142,7 +142,7 @@ export default function Bots() {
                   <span className="text-gray-700">TradingView Webhook</span>
                 </div>
                 <Link href="/bots/manage">
-                  <Button className="w-full">
+                  <Button className="w-full bg-green-600 hover:bg-green-700">
                     <Users className="h-4 w-4 mr-2" />
                     Enable/Configure
                   </Button>
