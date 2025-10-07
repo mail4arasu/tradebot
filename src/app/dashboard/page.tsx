@@ -12,7 +12,7 @@ export default function Dashboard() {
   const [userName, setUserName] = useState('')
   const [zerodhaConnected, setZerodhaConnected] = useState(false)
   const [balance, setBalance] = useState(0)
-  const [activeBots] = useState(0)
+  const [activeBots, setActiveBots] = useState(0)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
@@ -37,6 +37,12 @@ export default function Dashboard() {
   const [isMarketHours, setIsMarketHours] = useState(false)
   const [nextRefreshTime, setNextRefreshTime] = useState<Date | null>(null)
   const [refreshingPortfolio, setRefreshingPortfolio] = useState(false)
+  
+  // Portfolio dropdown state
+  const [showPortfolioDropdown, setShowPortfolioDropdown] = useState(false)
+  const [holdingsData, setHoldingsData] = useState<any[]>([])
+  const [positionsData, setPositionsData] = useState<any[]>([])
+  const [loadingPortfolioDetails, setLoadingPortfolioDetails] = useState(false)
 
   // Check if current time is within market hours (9:00 AM - 3:30 PM IST)
   const checkMarketHours = useCallback(() => {
@@ -58,6 +64,56 @@ export default function Dashboard() {
     return isInMarketHours
   }, [])
 
+  const fetchActiveBots = async () => {
+    try {
+      const response = await fetch('/api/bots/allocations')
+      if (response.ok) {
+        const data = await response.json()
+        const activeBotsCount = data.allocations?.filter((allocation: any) => allocation.isActive).length || 0
+        setActiveBots(activeBotsCount)
+      }
+    } catch (error) {
+      console.error('Error fetching active bots:', error)
+    }
+  }
+
+  const fetchPortfolioDetails = async () => {
+    if (!zerodhaConnected || needsDailyLogin) return
+    
+    try {
+      setLoadingPortfolioDetails(true)
+      const [holdingsResponse, positionsResponse] = await Promise.all([
+        fetch('/api/zerodha/holdings'),
+        fetch('/api/zerodha/positions')
+      ])
+      
+      if (holdingsResponse.ok) {
+        const holdingsResult = await holdingsResponse.json()
+        setHoldingsData(holdingsResult.data || [])
+      }
+      
+      if (positionsResponse.ok) {
+        const positionsResult = await positionsResponse.json()
+        const allPositions = [
+          ...(positionsResult.data?.net || []),
+          ...(positionsResult.data?.day || [])
+        ]
+        setPositionsData(allPositions)
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio details:', error)
+    } finally {
+      setLoadingPortfolioDetails(false)
+    }
+  }
+
+  const togglePortfolioDropdown = async () => {
+    if (!showPortfolioDropdown && (holdingsData.length === 0 || positionsData.length === 0)) {
+      await fetchPortfolioDetails()
+    }
+    setShowPortfolioDropdown(!showPortfolioDropdown)
+  }
+
   const fetchUserData = useCallback(async () => {
     try {
       setLoading(true)
@@ -72,10 +128,18 @@ export default function Dashboard() {
         const lastSyncDate = data.zerodhaConfig?.lastSync ? new Date(data.zerodhaConfig.lastSync) : null
         setLastSync(lastSyncDate)
         
-        // Check if last sync was more than 24 hours ago
+        // Check if token needs refresh based on 08:00 AM IST reset
         if (data.zerodhaConfig?.isConnected && lastSyncDate) {
-          const hoursAgo = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60)
-          setNeedsDailyLogin(hoursAgo > 24)
+          const now = new Date()
+          const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
+          
+          // Create 08:00 AM IST today
+          const today8AM = new Date(istNow)
+          today8AM.setHours(8, 0, 0, 0)
+          
+          // If it's past 08:00 AM today and last sync was before today's 08:00 AM, need refresh
+          const needsRefresh = istNow > today8AM && lastSyncDate < today8AM
+          setNeedsDailyLogin(needsRefresh)
         } else {
           setNeedsDailyLogin(data.zerodhaConfig?.isConnected || false)
         }
@@ -84,6 +148,9 @@ export default function Dashboard() {
         if (data.zerodhaConfig?.isConnected) {
           await fetchTradingData()
         }
+        
+        // Fetch active bots count
+        await fetchActiveBots()
       }
     } catch (error) {
       console.error('Error fetching user data:', error)
@@ -265,22 +332,32 @@ export default function Dashboard() {
         </h1>
         <div className="flex items-center justify-between">
           <p style={{ color: 'var(--muted-foreground)' }}>Here&apos;s your trading overview</p>
-          {zerodhaConnected && (
+          <div className="flex items-center space-x-4">
+            {/* API Connection Status */}
             <div className="flex items-center space-x-2 text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              <div className={`w-2 h-2 rounded-full ${autoRefreshEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+              <div className={`w-2 h-2 rounded-full ${zerodhaConnected && !needsDailyLogin ? 'bg-green-500' : 'bg-red-500'}`}></div>
               <span>
-                {autoRefreshEnabled 
-                  ? `Auto-refresh active (market hours)` 
-                  : isMarketHours 
-                    ? 'Auto-refresh paused' 
-                    : 'Market closed'
-                }
+                {zerodhaConnected && !needsDailyLogin ? 'API Connected' : 'API Disconnected'}
               </span>
-              {autoRefreshEnabled && refreshingPortfolio && (
-                <RefreshCw className="h-3 w-3 animate-spin" />
-              )}
             </div>
-          )}
+            
+            {/* Market Hours & Auto-refresh Status */}
+            {zerodhaConnected && (
+              <div className="flex items-center space-x-2 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                <div className={`w-2 h-2 rounded-full ${isMarketHours ? 'bg-green-500' : 'bg-gray-400'} ${autoRefreshEnabled ? 'animate-pulse' : ''}`}></div>
+                <span>
+                  {isMarketHours 
+                    ? 'Market Open'
+                    : 'Market Closed'
+                  }
+                  {autoRefreshEnabled && ' • Auto-refresh active'}
+                </span>
+                {autoRefreshEnabled && refreshingPortfolio && (
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -324,8 +401,8 @@ export default function Dashboard() {
               <CardTitle className="text-orange-800 dark:text-orange-300">Daily Token Refresh Required</CardTitle>
             </div>
             <CardDescription className="text-orange-700 dark:text-orange-400">
-              Zerodha requires daily authentication for security. Your token {lastSync ? 
-                `was last refreshed ${Math.round((Date.now() - lastSync.getTime()) / (1000 * 60 * 60))} hours ago` : 
+              Zerodha resets access tokens daily at 08:00 AM IST. Your token {lastSync ? 
+                `was last refreshed on ${lastSync.toLocaleDateString()} at ${lastSync.toLocaleTimeString()}` : 
                 'needs to be refreshed'} to continue automated trading.
             </CardDescription>
           </CardHeader>
@@ -402,7 +479,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="card hover:shadow-lg transition-all duration-300" 
+        <Card className="card hover:shadow-lg transition-all duration-300 relative" 
               style={{ 
                 backgroundColor: 'var(--card)',
                 borderColor: 'var(--border)',
@@ -429,13 +506,97 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{portfolioValue.toLocaleString()}</div>
-            <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
-              {zerodhaConnected 
-                ? `${holdingsCount} holdings • ${positionsCount} positions`
-                : 'Connect Zerodha to see portfolio'
-              }
-            </p>
+            <div 
+              className="cursor-pointer hover:opacity-75 transition-opacity"
+              onClick={zerodhaConnected && !needsDailyLogin ? togglePortfolioDropdown : undefined}
+              title={zerodhaConnected && !needsDailyLogin ? "Click to view holdings and positions" : undefined}
+            >
+              <div className="text-2xl font-bold" style={{ color: 'var(--foreground)' }}>₹{portfolioValue.toLocaleString()}</div>
+              <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                {zerodhaConnected 
+                  ? `${holdingsCount} holdings • ${positionsCount} positions ${holdingsCount > 0 || positionsCount > 0 ? '(click to view)' : ''}`
+                  : 'Connect Zerodha to see portfolio'
+                }
+              </p>
+            </div>
+            
+            {/* Portfolio Dropdown */}
+            {showPortfolioDropdown && (
+              <div className="absolute top-full left-0 right-0 z-10 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+                {loadingPortfolioDetails ? (
+                  <div className="p-4 text-center">
+                    <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-2" />
+                    <p className="text-sm text-gray-600">Loading portfolio details...</p>
+                  </div>
+                ) : (
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-semibold text-sm">Portfolio Details</h4>
+                      <button 
+                        onClick={() => setShowPortfolioDropdown(false)}
+                        className="text-gray-400 hover:text-gray-600 p-1"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    
+                    {/* Holdings */}
+                    {holdingsData.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="font-medium text-xs text-gray-700 dark:text-gray-300 mb-2">Holdings ({holdingsData.length})</h5>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {holdingsData.slice(0, 5).map((holding: any, index: number) => (
+                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                              <span className="font-medium">{holding.tradingsymbol || holding.instrument_token}</span>
+                              <div className="text-right">
+                                <div className="font-medium">₹{(holding.last_price || 0).toLocaleString()}</div>
+                                <div className={`text-xs ${(holding.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {(holding.pnl || 0) >= 0 ? '+' : ''}₹{(holding.pnl || 0).toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {holdingsData.length > 5 && (
+                            <div className="text-xs text-gray-500 text-center py-1">
+                              +{holdingsData.length - 5} more holdings
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Positions */}
+                    {positionsData.length > 0 && (
+                      <div>
+                        <h5 className="font-medium text-xs text-gray-700 dark:text-gray-300 mb-2">Positions ({positionsData.length})</h5>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {positionsData.slice(0, 5).map((position: any, index: number) => (
+                            <div key={index} className="flex justify-between items-center text-xs p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                              <span className="font-medium">{position.tradingsymbol || position.instrument_token}</span>
+                              <div className="text-right">
+                                <div className="font-medium">Qty: {position.quantity || 0}</div>
+                                <div className={`text-xs ${(position.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {(position.pnl || 0) >= 0 ? '+' : ''}₹{(position.pnl || 0).toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {positionsData.length > 5 && (
+                            <div className="text-xs text-gray-500 text-center py-1">
+                              +{positionsData.length - 5} more positions
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {holdingsData.length === 0 && positionsData.length === 0 && (
+                      <p className="text-xs text-gray-500 text-center py-4">No holdings or positions found</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -485,7 +646,7 @@ export default function Dashboard() {
                 color: 'var(--card-foreground)'
               }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Day P&L</CardTitle>
+            <CardTitle className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>P&L</CardTitle>
             <div className="flex items-center space-x-2">
               {zerodhaConnected && (
                 <button
@@ -627,7 +788,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="card hover:shadow-lg transition-all duration-300" 
               style={{ 
                 backgroundColor: 'var(--card)',
@@ -676,34 +837,6 @@ export default function Dashboard() {
                        backgroundColor: 'transparent'
                      }}>
                 View Trades
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="card hover:shadow-lg transition-all duration-300" 
-              style={{ 
-                backgroundColor: 'var(--card)',
-                borderColor: 'var(--border)',
-                color: 'var(--card-foreground)'
-              }}>
-          <CardHeader>
-            <CardTitle style={{ color: 'var(--foreground)' }}>Backtest Strategies</CardTitle>
-            <CardDescription style={{ color: 'var(--muted-foreground)' }}>
-              Test trading strategies on historical data
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/backtest">
-              <Button className="w-full transition-colors duration-200" 
-                     variant="outline"
-                     style={{
-                       borderColor: 'var(--border)',
-                       color: 'var(--foreground)',
-                       backgroundColor: 'transparent'
-                     }}>
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Start Backtest
               </Button>
             </Link>
           </CardContent>

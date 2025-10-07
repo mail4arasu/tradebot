@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { AlertCircle, CheckCircle, ExternalLink, Key, Shield, Link as LinkIcon, Clock, RefreshCw } from 'lucide-react'
+import { AlertCircle, CheckCircle, ExternalLink, Key, Shield, Link as LinkIcon, Clock, RefreshCw, Unlink } from 'lucide-react'
 
 export default function Settings() {
   const { data: session, status } = useSession()
@@ -22,6 +22,7 @@ export default function Settings() {
   const [lastSync, setLastSync] = useState<Date | null>(null)
   const [needsDailyLogin, setNeedsDailyLogin] = useState(false)
   const [refreshingToken, setRefreshingToken] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
 
   useEffect(() => {
     if (session) {
@@ -61,10 +62,18 @@ export default function Settings() {
         const lastSyncDate = data.zerodhaConfig?.lastSync ? new Date(data.zerodhaConfig.lastSync) : null
         setLastSync(lastSyncDate)
         
-        // Check if last sync was more than 24 hours ago
+        // Check if token needs refresh based on 08:00 AM IST reset
         if (data.zerodhaConfig?.isConnected && lastSyncDate) {
-          const hoursAgo = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60)
-          setNeedsDailyLogin(hoursAgo > 24)
+          const now = new Date()
+          const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
+          
+          // Create 08:00 AM IST today
+          const today8AM = new Date(istNow)
+          today8AM.setHours(8, 0, 0, 0)
+          
+          // If it's past 08:00 AM today and last sync was before today's 08:00 AM, need refresh
+          const needsRefresh = istNow > today8AM && lastSyncDate < today8AM
+          setNeedsDailyLogin(needsRefresh)
         } else {
           setNeedsDailyLogin(data.zerodhaConfig?.isConnected || false)
         }
@@ -196,6 +205,39 @@ export default function Settings() {
     }
   }
 
+  const handleDisconnectZerodha = async () => {
+    if (!confirm('Are you sure you want to disconnect your Zerodha account? This will stop all automated trading activities.')) {
+      return
+    }
+
+    try {
+      setDisconnecting(true)
+      const response = await fetch('/api/zerodha/disconnect', {
+        method: 'POST'
+      })
+      
+      const result = await response.json()
+      
+      if (response.ok) {
+        setIsConnected(false)
+        setHasCredentials(false)
+        setBalance(0)
+        setNeedsDailyLogin(false)
+        setLastSync(null)
+        setApiKey('')
+        setApiSecret('')
+        alert('Zerodha account disconnected successfully!')
+      } else {
+        alert(result.error || 'Failed to disconnect account')
+      }
+    } catch (error) {
+      console.error('Error disconnecting Zerodha:', error)
+      alert('Error disconnecting account')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
   if (status === 'loading') {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>
   }
@@ -262,8 +304,8 @@ export default function Settings() {
                 <div className="flex-1">
                   <p className="font-medium text-orange-800">Daily Token Refresh Required</p>
                   <p className="text-sm text-orange-600 mt-1">
-                    Zerodha requires daily authentication for security. Your token {lastSync ? 
-                      `was last refreshed ${Math.round((Date.now() - lastSync.getTime()) / (1000 * 60 * 60))} hours ago` : 
+                    Zerodha resets access tokens daily at 08:00 AM IST. Your token {lastSync ? 
+                      `was last refreshed on ${lastSync.toLocaleDateString()} at ${lastSync.toLocaleTimeString()}` : 
                       'needs to be refreshed'} to continue automated trading.
                   </p>
                   <div className="mt-3">
@@ -331,15 +373,28 @@ export default function Settings() {
                 )}
 
                 {isConnected && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleTestConnection}
-                    disabled={testingConnection}
-                    className="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {testingConnection ? 'Testing...' : 'Test Connection'}
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={handleTestConnection}
+                      disabled={testingConnection}
+                      className="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-6 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {testingConnection ? 'Testing...' : 'Test Connection'}
+                    </Button>
+                    
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleDisconnectZerodha}
+                      disabled={disconnecting}
+                      className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-md shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      <Unlink className="h-4 w-4" />
+                      <span>{disconnecting ? 'Disconnecting...' : 'Disconnect'}</span>
+                    </Button>
+                  </>
                 )}
               </div>
             </form>
