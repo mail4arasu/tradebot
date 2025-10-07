@@ -178,15 +178,13 @@ export default function AdminDashboard() {
         Unknown
       </span>
     )
-    
-    const styles = {
+    const colors: Record<string, string> = {
       active: 'bg-green-100 text-green-800',
       suspended: 'bg-red-100 text-red-800',
       restricted: 'bg-yellow-100 text-yellow-800'
     }
-    const style = styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-800'
     return (
-      <span className={`px-2 py-1 text-xs rounded ${style}`}>
+      <span className={`px-2 py-1 text-xs rounded ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     )
@@ -194,7 +192,11 @@ export default function AdminDashboard() {
 
   const getRoleBadge = (role: string) => {
     // Add null/undefined check
-    if (!role) return <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Unknown</span>
+    if (!role) return (
+      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">
+        Unknown
+      </span>
+    )
     
     return role === 'admin' ? 
       <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Admin</span> :
@@ -324,16 +326,12 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => {
-                  // Add null check for user object
-                  if (!user || !user._id) return null
-                  
-                  return (
+                {users.filter(user => user && user._id).map((user) => (
                   <tr key={user._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{user.name || 'Unknown'}</div>
-                        <div className="text-sm text-gray-500">{user.email || 'No email'}</div>
+                        <div className="text-sm font-medium text-gray-900">{String(user.name) || 'Unknown'}</div>
+                        <div className="text-sm text-gray-500">{String(user.email) || 'Unknown'}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -350,21 +348,21 @@ export default function AdminDashboard() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {user.botAllocations && user.botAllocations.length > 0 ? (
+                      {(user.botAllocations || []).length > 0 ? (
                         <div className="space-y-1">
-                          {user.botAllocations
+                          {(user.botAllocations || [])
                             .filter(bot => bot && bot.isActive === true)
                             .map((bot, index) => (
                               <div key={index} className="text-xs">
                                 <span className="px-2 py-1 rounded bg-blue-100 text-blue-800">
-                                  {bot.botName || 'Unknown Bot'}
+                                  {String(bot.botName) || 'Unknown Bot'}
                                 </span>
                                 <div className="text-gray-500">
-                                  ₹{(bot.allocatedAmount || 0).toLocaleString()}
+                                  ₹{(bot.allocatedAmount || 0).toLocaleString()} • {String(bot.strategy) || 'Unknown'}
                                 </div>
                               </div>
                             ))}
-                          {user.botAllocations.filter(bot => bot && bot.isActive === true).length === 0 && (
+                          {(user.botAllocations || []).filter(bot => bot && bot.isActive === true).length === 0 && (
                             <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Active Bots</span>
                           )}
                         </div>
@@ -414,8 +412,7 @@ export default function AdminDashboard() {
                       </div>
                     </td>
                   </tr>
-                  )
-                })}
+                ))}
               </tbody>
             </table>
           </div>
