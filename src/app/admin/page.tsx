@@ -10,8 +10,6 @@ interface UserStats {
   activeUsers: number
   suspendedUsers: number
   restrictedUsers: number
-  adminUsers: number
-  recentRegistrations: number
   zerodhaConnectedUsers: number
 }
 
@@ -20,7 +18,6 @@ interface BotAllocation {
   strategy: string
   allocatedAmount: number
   isActive: boolean
-  totalPnl: number
 }
 
 interface User {
@@ -30,7 +27,6 @@ interface User {
   role: 'user' | 'admin'
   status: 'active' | 'suspended' | 'restricted'
   createdAt: string
-  lastLoginAt?: string
   zerodhaConfig?: {
     isConnected: boolean
   }
@@ -50,74 +46,81 @@ interface UserListResponse {
 export default function AdminDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  
+  // State variables
   const [stats, setStats] = useState<UserStats | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [impersonating, setImpersonating] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<string>('')
 
+  // Authentication check
   useEffect(() => {
     if (status === 'loading') return
     if (!session) {
       router.push('/signin')
       return
     }
-    
-    fetchData()
+    loadData()
   }, [session, status, router, currentPage])
 
-  const fetchData = async () => {
+  const loadData = async () => {
     try {
       setLoading(true)
       
-      // Fetch stats
-      const statsResponse = await fetch('/api/admin/users?action=stats')
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json()
+      // Load stats
+      const statsRes = await fetch('/api/admin/users?action=stats')
+      if (statsRes.ok) {
+        const statsData = await statsRes.json()
         setStats(statsData)
       }
 
-      // Fetch users
-      const usersResponse = await fetch(`/api/admin/users?page=${currentPage}&limit=10`)
-      if (usersResponse.ok) {
-        const usersData: UserListResponse = await usersResponse.json()
-        setUsers(usersData.users)
-        setTotalPages(usersData.pagination.pages)
+      // Load users
+      const usersRes = await fetch(`/api/admin/users?page=${currentPage}&limit=10`)
+      if (usersRes.ok) {
+        const usersData: UserListResponse = await usersRes.json()
+        setUsers(usersData.users || [])
+        setTotalPages(usersData.pagination?.pages || 1)
       }
     } catch (error) {
-      console.error('Error fetching admin data:', error)
+      console.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const updateUserStatus = async (userId: string, status: string) => {
+  const handleUserStatusChange = async (userId: string, newStatus: string) => {
     try {
+      setActionLoading(userId)
       const response = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, action: 'updateStatus', status })
+        body: JSON.stringify({ userId, action: 'updateStatus', status: newStatus })
       })
 
       if (response.ok) {
-        fetchData() // Refresh data
+        await loadData()
+        alert('User status updated successfully')
       } else {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        alert(`Error: ${error.error || 'Failed to update status'}`)
       }
     } catch (error) {
       console.error('Error updating user status:', error)
       alert('Error updating user status')
+    } finally {
+      setActionLoading('')
     }
   }
 
-  const deleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Are you sure you want to delete user: ${userEmail}? This action cannot be undone.`)) {
       return
     }
 
     try {
+      setActionLoading(userId)
       const response = await fetch('/api/admin/users', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -125,24 +128,27 @@ export default function AdminDashboard() {
       })
 
       if (response.ok) {
-        fetchData() // Refresh data
+        await loadData()
+        alert('User deleted successfully')
       } else {
         const error = await response.json()
-        alert(`Error: ${error.error}`)
+        alert(`Error: ${error.error || 'Failed to delete user'}`)
       }
     } catch (error) {
       console.error('Error deleting user:', error)
       alert('Error deleting user')
+    } finally {
+      setActionLoading('')
     }
   }
 
-  const impersonateUser = async (userId: string, userEmail: string) => {
-    if (!confirm(`Are you sure you want to login as ${userEmail}? This action will be logged for audit purposes.`)) {
+  const handleImpersonateUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Login as ${userEmail}? This action will be logged.`)) {
       return
     }
 
     try {
-      setImpersonating(userId)
+      setActionLoading(userId)
       const response = await fetch('/api/admin/impersonate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,34 +158,44 @@ export default function AdminDashboard() {
       const result = await response.json()
 
       if (response.ok) {
-        alert(result.message + '\n\nRedirecting to dashboard to view as the impersonated user...')
-        // Redirect to dashboard to see the user's view
+        alert(result.message + ' Redirecting to dashboard...')
         window.location.href = '/dashboard'
       } else {
-        alert(`Error: ${result.error}`)
+        alert(`Error: ${result.error || 'Impersonation failed'}`)
       }
     } catch (error) {
       console.error('Error impersonating user:', error)
       alert('Error starting impersonation')
     } finally {
-      setImpersonating(null)
+      setActionLoading('')
     }
   }
 
   const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
+    // Add null/undefined check
+    if (!status) return (
+      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">
+        Unknown
+      </span>
+    )
+    
+    const styles = {
       active: 'bg-green-100 text-green-800',
       suspended: 'bg-red-100 text-red-800',
       restricted: 'bg-yellow-100 text-yellow-800'
     }
+    const style = styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-800'
     return (
-      <span className={`px-2 py-1 text-xs rounded ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`px-2 py-1 text-xs rounded ${style}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     )
   }
 
   const getRoleBadge = (role: string) => {
+    // Add null/undefined check
+    if (!role) return <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Unknown</span>
+    
     return role === 'admin' ? 
       <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">Admin</span> :
       <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">User</span>
@@ -187,188 +203,168 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">Loading admin dashboard...</div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg font-medium text-gray-900">Loading Admin Dashboard...</div>
+          <div className="text-sm text-gray-500 mt-2">Please wait</div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8" style={{ backgroundColor: 'var(--background)', color: 'var(--foreground)' }}>
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--foreground)' }}>Admin Dashboard</h1>
-            <p style={{ color: 'var(--muted-foreground)' }}>Manage users and monitor platform statistics</p>
-          </div>
-          <div className="flex gap-4">
-            <Link href="/admin/trading">
-              <button className="px-4 py-2 rounded transition-colors duration-200"
-                      style={{
-                        backgroundColor: 'var(--primary)',
-                        color: 'var(--primary-foreground)'
-                      }}>
-                Trading Control
-              </button>
-            </Link>
-            <Link href="/admin/intraday-scheduler">
-              <button className="px-4 py-2 rounded transition-colors duration-200 border"
-                      style={{
-                        backgroundColor: 'var(--secondary)',
-                        color: 'var(--secondary-foreground)',
-                        borderColor: 'var(--border)'
-                      }}>
-                ⏰ Intraday Scheduler
-              </button>
-            </Link>
-            <Link href="/admin/announcements">
-              <button className="px-4 py-2 rounded transition-colors duration-200 border"
-                      style={{
-                        backgroundColor: 'var(--secondary)',
-                        color: 'var(--secondary-foreground)',
-                        borderColor: 'var(--border)'
-                      }}>
-                📢 Announcements
-              </button>
-            </Link>
-            <Link href="/admin/data-sync">
-              <button className="px-4 py-2 rounded transition-colors duration-200 border"
-                      style={{
-                        backgroundColor: 'var(--secondary)',
-                        color: 'var(--secondary-foreground)',
-                        borderColor: 'var(--border)'
-                      }}>
-                📊 Historical Data
-              </button>
-            </Link>
-            <Link href="/admin/cleanup">
-              <button className="px-4 py-2 rounded transition-colors duration-200 border"
-                      style={{
-                        backgroundColor: 'var(--destructive)',
-                        color: 'var(--destructive-foreground)',
-                        borderColor: 'var(--border)'
-                      }}>
-                🧹 Database Cleanup
-              </button>
-            </Link>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* Header */}
+        <div className="mb-8">
+          <div className="sm:flex sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="mt-1 text-sm text-gray-600">Manage users and monitor platform statistics</p>
+            </div>
+            
+            {/* Admin Navigation */}
+            <div className="mt-4 sm:mt-0">
+              <div className="flex flex-wrap gap-2">
+                <Link href="/admin/trading" 
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                  Trading Control
+                </Link>
+                <Link href="/admin/intraday-scheduler" 
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                  ⏰ Scheduler
+                </Link>
+                <Link href="/admin/announcements" 
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                  📢 Announcements
+                </Link>
+                <Link href="/admin/data-sync" 
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                  📊 Data Sync
+                </Link>
+                <Link href="/admin/cleanup" 
+                      className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100">
+                  🧹 Cleanup
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Statistics Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Total Users</div>
+        {/* Statistics Cards */}
+        {stats && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-500 truncate">Total Users</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.totalUsers || 0}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="text-2xl font-bold mt-2" style={{ color: 'var(--foreground)' }}>{stats.totalUsers || 0}</div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-500 truncate">Active Users</p>
+                    <p className="text-2xl font-semibold text-green-600">{stats.activeUsers || 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-500 truncate">Suspended/Restricted</p>
+                    <p className="text-2xl font-semibold text-red-600">
+                      {(stats.suspendedUsers || 0) + (stats.restrictedUsers || 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-500 truncate">Zerodha Connected</p>
+                    <p className="text-2xl font-semibold text-blue-600">{stats.zerodhaConnectedUsers || 0}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+        )}
 
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Active Users</div>
-            </div>
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{stats.activeUsers || 0}</div>
+        {/* User Management Table */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+          <div className="px-4 py-5 sm:px-6">
+            <h2 className="text-lg font-medium text-gray-900">User Management</h2>
+            <p className="mt-1 text-sm text-gray-500">View and manage all registered users</p>
           </div>
-
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Suspended/Restricted</div>
-            </div>
-            <div className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-              {(stats.suspendedUsers || 0) + (stats.restrictedUsers || 0)}
-            </div>
-          </div>
-
-          <div className="card p-6 rounded-lg shadow hover:shadow-lg transition-all duration-300"
-               style={{ 
-                 backgroundColor: 'var(--card)', 
-                 borderColor: 'var(--border)',
-                 color: 'var(--card-foreground)'
-               }}>
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium" style={{ color: 'var(--muted-foreground)' }}>Zerodha Connected</div>
-            </div>
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-2">{stats.zerodhaConnectedUsers || 0}</div>
-          </div>
-        </div>
-      )}
-
-      {/* User Management Table */}
-      <div className="card rounded-lg shadow transition-all duration-300"
-           style={{ 
-             backgroundColor: 'var(--card)', 
-             borderColor: 'var(--border)',
-             color: 'var(--card-foreground)'
-           }}>
-        <div className="p-6 border-b" style={{ borderColor: 'var(--border)' }}>
-          <h2 className="text-xl font-semibold" style={{ color: 'var(--foreground)' }}>User Management</h2>
-          <p className="mt-1" style={{ color: 'var(--muted-foreground)' }}>View and manage all registered users</p>
-        </div>
-        <div className="p-6">
+          
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>User</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Role</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Status</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Zerodha</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Active Bots</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Joined</th>
-                  <th className="text-left p-2" style={{ color: 'var(--foreground)' }}>Actions</th>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zerodha</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active Bots</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user._id} className="border-b transition-colors duration-200" 
-                      style={{ borderColor: 'var(--border)' }}>
-                    <td className="p-2">
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.map((user) => {
+                  // Add null check for user object
+                  if (!user || !user._id) return null
+                  
+                  return (
+                  <tr key={user._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="font-medium" style={{ color: 'var(--foreground)' }}>{user.name}</div>
-                        <div className="text-xs" style={{ color: 'var(--muted-foreground)' }}>{user.email}</div>
+                        <div className="text-sm font-medium text-gray-900">{user.name || 'Unknown'}</div>
+                        <div className="text-sm text-gray-500">{user.email || 'No email'}</div>
                       </div>
                     </td>
-                    <td className="p-2">{getRoleBadge(user.role)}</td>
-                    <td className="p-2">{getStatusBadge(user.status)}</td>
-                    <td className="p-2">
-                      {user.zerodhaConfig?.isConnected ? 
-                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Connected</span> :
-                        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Not Connected</span>
-                      }
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getRoleBadge(user.role)}
                     </td>
-                    <td className="p-2">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(user.status)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {user.zerodhaConfig?.isConnected ? (
+                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Connected</span>
+                      ) : (
+                        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Not Connected</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {user.botAllocations && user.botAllocations.length > 0 ? (
                         <div className="space-y-1">
                           {user.botAllocations
-                            .filter(bot => bot.isActive)
+                            .filter(bot => bot && bot.isActive === true)
                             .map((bot, index) => (
-                            <div key={index} className="text-xs">
-                              <span className={bot.isActive ? "px-2 py-1 rounded bg-blue-100 text-blue-800" : "px-2 py-1 rounded bg-gray-100 text-gray-800"}>
-                                {bot.botName}
-                              </span>
-                              <div className="text-gray-500">
-                                ₹{(bot.allocatedAmount || 0).toLocaleString()} • {bot.strategy || 'Unknown'}
+                              <div key={index} className="text-xs">
+                                <span className="px-2 py-1 rounded bg-blue-100 text-blue-800">
+                                  {bot.botName || 'Unknown Bot'}
+                                </span>
+                                <div className="text-gray-500">
+                                  ₹{(bot.allocatedAmount || 0).toLocaleString()}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                          {user.botAllocations.filter(bot => bot.isActive).length === 0 && (
+                            ))}
+                          {user.botAllocations.filter(bot => bot && bot.isActive === true).length === 0 && (
                             <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Active Bots</span>
                           )}
                         </div>
@@ -376,89 +372,76 @@ export default function AdminDashboard() {
                         <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Bots</span>
                       )}
                     </td>
-                    <td className="p-2">
-                      {new Date(user.createdAt).toLocaleDateString()}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                     </td>
-                    <td className="p-2">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <button
-                          className="px-3 py-1 text-xs border rounded transition-colors duration-200 text-blue-600 border-blue-300 hover:bg-blue-50"
-                          onClick={() => impersonateUser(user._id, user.email)}
-                          disabled={impersonating === user._id || user.role === 'admin'}
-                          title={user.role === 'admin' ? 'Cannot impersonate other admins' : 'Login as this user for troubleshooting'}
+                          className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                          onClick={() => handleImpersonateUser(user._id, user.email || 'No email')}
+                          disabled={actionLoading === user._id || user.role === 'admin'}
+                          title={user.role === 'admin' ? 'Cannot impersonate other admins' : 'Login as this user'}
                         >
-                          {impersonating === user._id ? 'Starting...' : 'Login as User'}
+                          {actionLoading === user._id ? 'Loading...' : 'Login as User'}
                         </button>
                         
                         {user.status === 'active' ? (
                           <button
-                            className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                            style={{
-                              borderColor: 'var(--border)',
-                              color: 'var(--foreground)',
-                              backgroundColor: 'transparent'
-                            }}
-                            onClick={() => updateUserStatus(user._id, 'suspended')}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            onClick={() => handleUserStatusChange(user._id, 'suspended')}
+                            disabled={actionLoading === user._id}
                           >
                             Suspend
                           </button>
                         ) : (
                           <button
-                            className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                            style={{
-                              borderColor: 'var(--border)',
-                              color: 'var(--foreground)',
-                              backgroundColor: 'transparent'
-                            }}
-                            onClick={() => updateUserStatus(user._id, 'active')}
+                            className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                            onClick={() => handleUserStatusChange(user._id, 'active')}
+                            disabled={actionLoading === user._id}
                           >
                             Activate
                           </button>
                         )}
+                        
                         <button
-                          className="px-3 py-1 text-xs border rounded transition-colors duration-200 border-red-300 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          onClick={() => deleteUser(user._id)}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                          onClick={() => handleDeleteUser(user._id, user.email || 'No email')}
+                          disabled={actionLoading === user._id}
                         >
                           Delete
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Pagination */}
-          <div className="flex justify-between items-center mt-4">
-            <div className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
-              Page {currentPage} of {totalPages}
-            </div>
-            <div className="flex space-x-2">
-              <button
-                className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                style={{
-                  borderColor: 'var(--border)',
-                  color: 'var(--foreground)',
-                  backgroundColor: 'transparent'
-                }}
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <button
-                className="px-3 py-1 text-xs border rounded transition-colors duration-200"
-                style={{
-                  borderColor: 'var(--border)',
-                  color: 'var(--foreground)',
-                  backgroundColor: 'transparent'
-                }}
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
+          <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <button
+                  className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>

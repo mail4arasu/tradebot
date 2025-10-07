@@ -3,6 +3,16 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --border: #e4e4e7;
+  --muted-foreground: #71717a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #171717;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
 }
 
 @theme inline {
@@ -16,6 +26,16 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --card: #1a1a1a;
+    --card-foreground: #ededed;
+    --border: #27272a;
+    --muted-foreground: #a1a1aa;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --secondary: #27272a;
+    --secondary-foreground: #ededed;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
   }
 }
 

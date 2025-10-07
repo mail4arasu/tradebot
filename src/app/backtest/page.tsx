@@ -64,15 +64,21 @@ export default function Backtest() {
   // Load tracked backtests from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('trackingBacktests')
-      if (stored) {
-        try {
+      try {
+        const stored = localStorage.getItem('trackingBacktests')
+        if (stored) {
           const parsed = JSON.parse(stored)
-          setTrackedBacktests(parsed)
-          console.log('📱 Loaded tracked backtests from localStorage:', parsed)
-        } catch (e) {
-          console.warn('Failed to parse stored backtests:', e)
+          if (Array.isArray(parsed)) {
+            setTrackedBacktests(parsed)
+            console.log('📱 Loaded tracked backtests from localStorage:', parsed)
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse stored backtests:', e)
+        try {
           localStorage.removeItem('trackingBacktests')
+        } catch (cleanupError) {
+          console.warn('Failed to cleanup localStorage:', cleanupError)
         }
       }
     }
@@ -80,16 +86,24 @@ export default function Backtest() {
 
   // Save tracked backtests to localStorage whenever it changes
   useEffect(() => {
-    if (typeof window !== 'undefined' && trackedBacktests.length >= 0) {
-      localStorage.setItem('trackingBacktests', JSON.stringify(trackedBacktests))
-      console.log('💾 Saved tracked backtests to localStorage:', trackedBacktests)
+    if (typeof window !== 'undefined' && trackedBacktests.length > 0) {
+      try {
+        localStorage.setItem('trackingBacktests', JSON.stringify(trackedBacktests))
+        console.log('💾 Saved tracked backtests to localStorage:', trackedBacktests)
+      } catch (e) {
+        console.warn('Failed to save tracked backtests to localStorage:', e)
+      }
     }
   }, [trackedBacktests])
 
   useEffect(() => {
     if (session) {
-      fetchBots()
-      fetchBacktestResults()
+      try {
+        fetchBots()
+        fetchBacktestResults()
+      } catch (error) {
+        console.error('Error in initial data fetch:', error)
+      }
     }
   }, [session])
 
@@ -97,7 +111,11 @@ export default function Backtest() {
   useEffect(() => {
     if (currentBacktestId) {
       const interval = setInterval(() => {
-        checkBacktestStatus(currentBacktestId)
+        try {
+          checkBacktestStatus(currentBacktestId)
+        } catch (error) {
+          console.error('Error checking backtest status:', error)
+        }
       }, 5000) // Check every 5 seconds
 
       return () => clearInterval(interval)
@@ -110,9 +128,13 @@ export default function Backtest() {
       console.log(`🔄 Polling ${trackedBacktests.length} tracked backtests...`)
       
       const interval = setInterval(() => {
-        trackedBacktests.forEach(backtestId => {
-          checkTrackedBacktestStatus(backtestId)
-        })
+        try {
+          trackedBacktests.forEach(backtestId => {
+            checkTrackedBacktestStatus(backtestId)
+          })
+        } catch (error) {
+          console.error('Error checking tracked backtest status:', error)
+        }
       }, 5000) // Check every 5 seconds
 
       return () => clearInterval(interval)
