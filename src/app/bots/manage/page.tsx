@@ -256,7 +256,7 @@ export default function BotManagement() {
                           </Badge>
                           <div className="flex items-center gap-3">
                             <Switch
-                              checked={allocation.isActive}
+                              checked={allocation.isActive || false}
                               onCheckedChange={(checked) => 
                                 updateAllocation(allocation._id, { isActive: checked })
                               }
@@ -265,12 +265,12 @@ export default function BotManagement() {
                             />
                             <Button
                               size="sm"
-                              variant={allocation.isActive ? "destructive" : "default"}
-                              onClick={() => updateAllocation(allocation._id, { isActive: !allocation.isActive })}
+                              variant={(allocation.isActive || false) ? "destructive" : "default"}
+                              onClick={() => updateAllocation(allocation._id, { isActive: !(allocation.isActive || false) })}
                               disabled={saving === allocation._id}
                               className="min-w-[80px]"
                             >
-                              {saving === allocation._id ? 'Saving...' : allocation.isActive ? 'Disable' : 'Enable'}
+                              {saving === allocation._id ? 'Saving...' : (allocation.isActive || false) ? 'Disable' : 'Enable'}
                             </Button>
                           </div>
                         </div>
@@ -291,7 +291,7 @@ export default function BotManagement() {
                               id={`quantity-${allocation._id}`}
                               type="number"
                               min="1"
-                              value={allocation.quantity}
+                              value={allocation.quantity || 1}
                               onChange={(e) => {
                                 const quantity = parseInt(e.target.value)
                                 if (quantity > 0) {
@@ -312,7 +312,7 @@ export default function BotManagement() {
                               type="number"
                               min="1"
                               max="10"
-                              value={allocation.maxTradesPerDay}
+                              value={allocation.maxTradesPerDay || 1}
                               onChange={(e) => {
                                 const maxTrades = parseInt(e.target.value)
                                 if (maxTrades > 0 && maxTrades <= 10) {
@@ -334,7 +334,7 @@ export default function BotManagement() {
                               min="0.1"
                               max="50"
                               step="0.1"
-                              value={allocation.riskPercentage}
+                              value={allocation.riskPercentage || 2}
                               onChange={(e) => {
                                 const riskPercentage = parseFloat(e.target.value)
                                 if (riskPercentage > 0 && riskPercentage <= 50) {
@@ -483,11 +483,11 @@ export default function BotManagement() {
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500">Status:</span>
                           <div className="flex items-center gap-1">
-                            {bot.emergencyStop && (
+                            {(bot.emergencyStop || false) && (
                               <AlertTriangle className="h-4 w-4 text-red-500" />
                             )}
-                            <Badge variant={bot.isActive && !bot.emergencyStop ? 'default' : 'secondary'}>
-                              {bot.emergencyStop ? 'Emergency Stop' : bot.isActive ? 'Active' : 'Inactive'}
+                            <Badge variant={(bot.isActive || false) && !(bot.emergencyStop || false) ? 'default' : 'secondary'}>
+                              {(bot.emergencyStop || false) ? 'Emergency Stop' : (bot.isActive || false) ? 'Active' : 'Inactive'}
                             </Badge>
                           </div>
                         </div>
@@ -495,7 +495,7 @@ export default function BotManagement() {
                         <Button
                           className="w-full mt-4"
                           onClick={() => enableBot(bot._id)}
-                          disabled={!bot.isActive || bot.emergencyStop || saving === bot._id}
+                          disabled={!(bot.isActive || false) || (bot.emergencyStop || false) || saving === bot._id}
                         >
                           <TrendingUp className="h-4 w-4 mr-2" />
                           {saving === bot._id ? 'Enabling...' : 'Enable Bot'}
@@ -654,15 +654,15 @@ export default function BotManagement() {
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-gray-500">Type:</span>
-                            <Badge variant={bot.tradingType === 'INTRADAY' ? 'default' : 'secondary'}>
-                              {bot.tradingType}
+                            <Badge variant={(bot.tradingType || 'INTRADAY') === 'INTRADAY' ? 'default' : 'secondary'}>
+                              {bot.tradingType || 'INTRADAY'}
                             </Badge>
                           </div>
                           
                           <div className="flex justify-between">
                             <span className="text-gray-500">Auto Exit:</span>
-                            <span className={bot.autoSquareOff ? 'text-green-600' : 'text-gray-400'}>
-                              {bot.autoSquareOff ? 'Enabled' : 'Disabled'}
+                            <span className={(bot.autoSquareOff || false) ? 'text-green-600' : 'text-gray-400'}>
+                              {(bot.autoSquareOff || false) ? 'Enabled' : 'Disabled'}
                             </span>
                           </div>
                           
@@ -675,8 +675,8 @@ export default function BotManagement() {
                           
                           <div className="flex justify-between">
                             <span className="text-gray-500">Multiple Positions:</span>
-                            <span className={bot.allowMultiplePositions ? 'text-blue-600' : 'text-gray-400'}>
-                              {bot.allowMultiplePositions ? 'Allowed' : 'Single Only'}
+                            <span className={(bot.allowMultiplePositions || false) ? 'text-blue-600' : 'text-gray-400'}>
+                              {(bot.allowMultiplePositions || false) ? 'Allowed' : 'Single Only'}
                             </span>
                           </div>
                           
