@@ -170,15 +170,22 @@ export default function BotManagement() {
     }
   }
 
-  const getRiskColor = (risk: string) => {
-    // Add null/undefined check
-    if (!risk) return 'bg-gray-100 text-gray-800'
+  const getRiskColor = (risk: string | undefined | null) => {
+    // Add comprehensive null/undefined/empty check
+    if (!risk || typeof risk !== 'string' || risk.trim() === '') {
+      return 'bg-gray-100 text-gray-800'
+    }
     
-    switch (risk.toUpperCase()) {
-      case 'LOW': return 'bg-green-100 text-green-800'
-      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800'
-      case 'HIGH': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+    try {
+      switch (risk.toUpperCase()) {
+        case 'LOW': return 'bg-green-100 text-green-800'
+        case 'MEDIUM': return 'bg-yellow-100 text-yellow-800'
+        case 'HIGH': return 'bg-red-100 text-red-800'
+        default: return 'bg-gray-100 text-gray-800'
+      }
+    } catch (error) {
+      console.error('Error in getRiskColor:', error, 'risk:', risk)
+      return 'bg-gray-100 text-gray-800'
     }
   }
 
@@ -235,7 +242,7 @@ export default function BotManagement() {
             <div>
               <h2 className="text-2xl font-bold mb-4">Your Active Bots</h2>
               <div className="space-y-4">
-                {allocations.map((allocation) => (
+                {allocations.filter(allocation => allocation && allocation._id).map((allocation) => (
                   <Card key={allocation._id}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
@@ -442,7 +449,7 @@ export default function BotManagement() {
             <h2 className="text-2xl font-bold mb-4">Available Bots</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {availableBots
-                .filter(bot => !allocations.some(alloc => alloc.botId === bot._id))
+                .filter(bot => bot && bot._id && !allocations.some(alloc => alloc && alloc.botId === bot._id))
                 .map((bot) => (
                   <Card key={bot._id}>
                     <CardHeader>
@@ -499,7 +506,7 @@ export default function BotManagement() {
                 ))}
             </div>
 
-            {availableBots.filter(bot => !allocations.some(alloc => alloc.botId === bot._id)).length === 0 && (
+            {availableBots.filter(bot => bot && bot._id && !allocations.some(alloc => alloc && alloc.botId === bot._id)).length === 0 && (
               <Card>
                 <CardContent className="py-8 text-center">
                   <Settings className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -514,7 +521,7 @@ export default function BotManagement() {
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-4">Bot Configuration (Admin)</h2>
             <div className="space-y-4">
-              {availableBots.map((bot) => (
+              {availableBots.filter(bot => bot && bot._id).map((bot) => (
                 <Card key={`config-${bot._id}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
