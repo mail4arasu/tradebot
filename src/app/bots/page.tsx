@@ -66,7 +66,7 @@ export default function Bots() {
           </div>
           <div className="flex gap-2">
             <Link href="/bots/manage">
-              <Button>
+              <Button variant="outline">
                 <Users className="h-4 w-4 mr-2" />
                 Manage Your Bots
               </Button>
@@ -215,27 +215,6 @@ export default function Bots() {
         </div>
       </div>
 
-      {/* Admin Quick Navigation */}
-      {isAdmin && (
-        <div className="grid grid-cols-1 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Webhook className="h-5 w-5" />
-                Webhook Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 mb-4">
-                Set up TradingView webhook integrations for automated trading
-              </p>
-              <Link href="/bots/webhooks">
-                <Button className="w-full" variant="outline">Configure Webhooks</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }
