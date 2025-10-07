@@ -534,7 +534,7 @@ export default function BotManagement() {
                       </Badge>
                     </div>
                     <CardDescription>
-                      Configure trading type and auto-exit settings for {String(bot.strategy) || 'this strategy'}
+                      Configure trading type and auto-exit settings for {(typeof bot.strategy === 'object' && bot.strategy?.name) ? bot.strategy.name : (typeof bot.strategy === 'string' ? bot.strategy : 'this strategy')}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -601,6 +601,47 @@ export default function BotManagement() {
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
                             Allow multiple open positions simultaneously
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label htmlFor={`riskLevel-${bot._id}`}>Risk Level</Label>
+                          <div className="mt-1">
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant={(bot.riskLevel || 'MEDIUM') === 'LOW' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => updateBotConfig(bot._id, { riskLevel: 'LOW' })}
+                                disabled={saving === bot._id}
+                                className={(bot.riskLevel || 'MEDIUM') === 'LOW' ? 'bg-green-600 hover:bg-green-700' : ''}
+                              >
+                                Low
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={(bot.riskLevel || 'MEDIUM') === 'MEDIUM' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => updateBotConfig(bot._id, { riskLevel: 'MEDIUM' })}
+                                disabled={saving === bot._id}
+                                className={(bot.riskLevel || 'MEDIUM') === 'MEDIUM' ? 'bg-yellow-600 hover:bg-yellow-700' : ''}
+                              >
+                                Medium
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={(bot.riskLevel || 'MEDIUM') === 'HIGH' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => updateBotConfig(bot._id, { riskLevel: 'HIGH' })}
+                                disabled={saving === bot._id}
+                                className={(bot.riskLevel || 'MEDIUM') === 'HIGH' ? 'bg-red-600 hover:bg-red-700' : ''}
+                              >
+                                High
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Set the risk level for this trading bot
                           </p>
                         </div>
                       </div>
