@@ -279,11 +279,14 @@ export function determineSignalType(payload: any): 'ENTRY' | 'EXIT' | 'UNKNOWN' 
   
   const action = payload.action.toUpperCase()
   
-  if (action === 'ENTRY' || action === 'BUY') {
+  // ENTRY signals (both LONG and SHORT)
+  if (action === 'ENTRY' || action === 'BUY' || 
+      action === 'SELL_SHORT' || action === 'SHORT' || action === 'SELL_ENTRY') {
     return 'ENTRY'
   }
   
-  if (action === 'EXIT' || action === 'SELL') {
+  // EXIT signals (both LONG and SHORT)
+  if (action === 'EXIT' || action === 'SELL' || action === 'BUY_TO_COVER') {
     return 'EXIT'
   }
   
@@ -311,7 +314,11 @@ export function determinePositionSide(payload: any): 'LONG' | 'SHORT' {
   }
   
   // For EXIT signals, determine side from signal metadata or assume LONG
-  if (action === 'EXIT' || action === 'SELL') {
+  if (action === 'EXIT' || action === 'SELL' || action === 'BUY_TO_COVER') {
+    // BUY_TO_COVER is specifically for SHORT position exits
+    if (action === 'BUY_TO_COVER') {
+      return 'SHORT'
+    }
     // Check if payload contains side information
     if (payload.side) {
       return payload.side.toUpperCase() === 'SHORT' ? 'SHORT' : 'LONG'

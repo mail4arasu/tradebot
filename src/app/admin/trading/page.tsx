@@ -419,7 +419,10 @@ export default function TradingAdminDashboard() {
             Test Signal
           </CardTitle>
           <CardDescription>
-            Send a test signal to the webhook endpoint to verify system functionality
+            Send a test signal to the webhook endpoint to verify system functionality.
+            <br />
+            <span className="text-blue-600 font-medium">✨ Enhanced with SHORT trading support:</span>
+            <span className="text-sm text-gray-600"> Long positions (buy low, sell high) and Short positions (sell high, buy low to cover)</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -454,10 +457,18 @@ export default function TradingAdminDashboard() {
                 value={testSignal.action}
                 onChange={(e) => setTestSignal(prev => ({ ...prev, action: e.target.value }))}
               >
-                <option value="BUY">BUY</option>
-                <option value="SELL">SELL</option>
-                <option value="EXIT">EXIT</option>
-                <option value="ENTRY">ENTRY</option>
+                <optgroup label="Long Trading">
+                  <option value="BUY">BUY (Long Entry)</option>
+                  <option value="ENTRY">ENTRY (Long Entry)</option>
+                  <option value="SELL">SELL (Long Exit)</option>
+                  <option value="EXIT">EXIT (Long Exit)</option>
+                </optgroup>
+                <optgroup label="Short Trading">
+                  <option value="SELL_SHORT">SELL SHORT (Short Entry)</option>
+                  <option value="SHORT">SHORT (Short Entry)</option>
+                  <option value="SELL_ENTRY">SELL ENTRY (Short Entry)</option>
+                  <option value="BUY_TO_COVER">BUY TO COVER (Short Exit)</option>
+                </optgroup>
               </select>
             </div>
             <div>
