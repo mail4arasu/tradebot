@@ -65,7 +65,7 @@ export interface OptionsBotResult {
 export async function executeOptionsBotTrade(
   signal: OptionsBotSignal,
   config: OptionsBotConfig,
-  zerodhaConfig: { apiKey: string; accessToken: string }
+  zerodhaConfig: { apiKey: string; apiSecret: string; accessToken: string }
 ): Promise<OptionsBotResult> {
   try {
     console.log(`🤖 NIFTY50 OPTIONS BOT EXECUTION STARTED`)
@@ -174,8 +174,7 @@ export async function executeOptionsBotTrade(
     const apiSecret = decrypt(zerodhaConfig.apiSecret) 
     const accessToken = decrypt(zerodhaConfig.accessToken)
     
-    const zerodha = new ZerodhaAPI(apiKey, apiSecret)
-    zerodha.setAccessToken(accessToken)
+    const zerodha = new ZerodhaAPI(apiKey, apiSecret, accessToken)
     
     // Prepare order parameters for options
     const orderParams = {

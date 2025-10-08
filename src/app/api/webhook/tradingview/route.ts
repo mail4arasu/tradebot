@@ -773,6 +773,7 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
       optionsConfig,
       {
         apiKey: user.zerodhaConfig.apiKey,
+        apiSecret: user.zerodhaConfig.apiSecret,
         accessToken: user.zerodhaConfig.accessToken
       }
     )
