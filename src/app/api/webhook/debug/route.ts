@@ -1,5 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export async function GET(request: NextRequest) {
+  return NextResponse.json({
+    success: true,
+    message: 'Webhook Debug Endpoint',
+    description: 'This endpoint analyzes TradingView webhook payloads for JSON parsing issues',
+    usage: {
+      method: 'POST',
+      contentType: 'application/json',
+      example: {
+        url: 'https://niveshawealth.in/api/webhook/debug',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: '{"symbol": "NIFTY50", "action": "BUY", "price": 18500}'
+      }
+    },
+    features: [
+      'Raw payload analysis',
+      'Character-by-character inspection',
+      'JSON error pattern detection',
+      'ASCII code analysis for special characters',
+      'Context analysis around error positions'
+    ]
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('🔍 DEBUG WEBHOOK ENDPOINT - Analyzing payload...')
