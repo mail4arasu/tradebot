@@ -856,7 +856,7 @@ function TradesContent() {
           {/* Bot Positions List */}
           {!botPositionsLoading && !botPositionsError && (
             <ZerodhaTable
-              headers={['Product', 'Instrument', 'Type/Duration', 'Qty.', 'Avg.', 'P&L', 'Status']}
+              headers={['Product', 'Instrument', 'Entry Date & Time', 'Type/Duration', 'Qty.', 'Avg.', 'P&L', 'Status']}
               searchTerm={searchTerms.botPositions}
               onSearch={(term) => setSearchTerms(prev => ({ ...prev, botPositions: term }))}
               actions={
@@ -879,7 +879,7 @@ function TradesContent() {
                 (position.botName || '').toLowerCase().includes(searchTerms.botPositions.toLowerCase())
               ).length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     {searchTerms.botPositions ? 'No bot positions match your search' : 'No bot positions found'}
                   </td>
                 </tr>
@@ -928,17 +928,40 @@ function TradesContent() {
                 </Button>
               }
             >
-              {[...positions.net, ...positions.day]
-                .filter(position => 
-                  position.tradingsymbol.toLowerCase().includes(searchTerms.positions.toLowerCase())
-                )
-                .map((position, index) => (
-                  <PositionRow key={`${position.instrument_token}-${index}`} position={position} />
-                ))}
-              {[...positions.net, ...positions.day]
-                .filter(position => 
-                  position.tradingsymbol.toLowerCase().includes(searchTerms.positions.toLowerCase())
-                ).length === 0 && (
+              {(() => {
+                // Combine and deduplicate positions by instrument_token
+                const allPositions = [...positions.net, ...positions.day]
+                const uniquePositions = allPositions.reduce((acc, position) => {
+                  const key = position.instrument_token
+                  if (!acc.find(p => p.instrument_token === key)) {
+                    acc.push(position)
+                  }
+                  return acc
+                }, [])
+                
+                return uniquePositions
+                  .filter(position => 
+                    position.tradingsymbol.toLowerCase().includes(searchTerms.positions.toLowerCase())
+                  )
+                  .map((position, index) => (
+                    <PositionRow key={`${position.instrument_token}-${index}`} position={position} />
+                  ))
+              })()}
+              {(() => {
+                const allPositions = [...positions.net, ...positions.day]
+                const uniquePositions = allPositions.reduce((acc, position) => {
+                  const key = position.instrument_token
+                  if (!acc.find(p => p.instrument_token === key)) {
+                    acc.push(position)
+                  }
+                  return acc
+                }, [])
+                
+                return uniquePositions
+                  .filter(position => 
+                    position.tradingsymbol.toLowerCase().includes(searchTerms.positions.toLowerCase())
+                  ).length === 0
+              })() && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                     {searchTerms.positions ? 'No positions match your search' : 'No positions found'}
@@ -952,87 +975,49 @@ function TradesContent() {
 
       {activeTab === 'orders' && (
         <>
-          {/* Order Filters */}
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5" />
-                Order Filters
-              </CardTitle>
-              <CardDescription>
-                Filter orders by status. Note: Zerodha API only provides current day orders.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div>
-                  <Label htmlFor="orderStatus">Order Status</Label>
-                  <select
-                    id="orderStatus"
-                    value={orderFilters.orderStatus}
-                    onChange={(e) => setOrderFilters(prev => ({
-                      ...prev,
-                      orderStatus: e.target.value as 'all' | 'complete' | 'open' | 'cancelled'
-                    }))}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="all">All Orders</option>
-                    <option value="complete">Completed</option>
-                    <option value="open">Open/Pending</option>
-                    <option value="cancelled">Cancelled/Rejected</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <Button
-                    onClick={() => setOrderFilters({
-                      orderStatus: 'all'
-                    })}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Clear Filter
-                  </Button>
-                </div>
-                
-                <div>
-                  <Button
-                    onClick={fetchOrders}
-                    disabled={ordersLoading}
-                    className="w-full"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh Orders
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Order Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-4 border-t">
+          {/* Order Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <Card>
+              <CardContent className="pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-gray-900">{orderSummary.total}</div>
                   <div className="text-sm text-gray-600">Total Orders</div>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">{orderSummary.complete}</div>
                   <div className="text-sm text-gray-600">Completed</div>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{orderSummary.open}</div>
                   <div className="text-sm text-gray-600">Open</div>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-red-600">{orderSummary.cancelled}</div>
                   <div className="text-sm text-gray-600">Cancelled</div>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{formatCurrency(orderSummary.totalValue)}</div>
                   <div className="text-sm text-gray-600">Total Value</div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Orders Error State */}
           {ordersError && (
@@ -1046,133 +1031,84 @@ function TradesContent() {
             </Card>
           )}
 
-          {/* Orders Loading State */}
-          {ordersLoading && (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex justify-center items-center py-8">
-                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-                  <span>Loading orders...</span>
+          {/* Orders Table */}
+          <ZerodhaTable
+            headers={['Time', 'Type', 'Instrument', 'Product', 'Qty.', 'Avg. price', 'Status']}
+            searchTerm={searchTerms.orders}
+            onSearch={(term) => setSearchTerms(prev => ({ ...prev, orders: term }))}
+            actions={
+              <>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm font-medium">Status:</Label>
+                  <select
+                    value={orderFilters.orderStatus}
+                    onChange={(e) => setOrderFilters(prev => ({
+                      ...prev,
+                      orderStatus: e.target.value as 'all' | 'complete' | 'open' | 'cancelled'
+                    }))}
+                    className="text-sm border border-gray-300 rounded px-3 py-1 h-9"
+                  >
+                    <option value="all">All Orders</option>
+                    <option value="complete">Completed</option>
+                    <option value="open">Open/Pending</option>
+                    <option value="cancelled">Cancelled/Rejected</option>
+                  </select>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Orders List */}
-          {!ordersLoading && !ordersError && (
-            <>
-              {orders.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center py-8">
-                      <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
-                      <p className="text-gray-600">
-                        No orders match your current filter criteria. 
-                        <br />
-                        <span className="text-sm text-orange-600 mt-2 inline-block">
-                          Note: Zerodha API only provides orders for the current trading day.
-                        </span>
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-600">
-                      Showing {orders.length} order{orders.length !== 1 ? 's' : ''} for today
-                      {orderFilters.orderStatus !== 'all' && (
-                        <span> • Status: {orderFilters.orderStatus}</span>
-                      )}
-                    </p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setOrderFilters({ orderStatus: 'all' })}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
+                <Button variant="outline" size="sm" onClick={fetchOrders} disabled={ordersLoading}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${ordersLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </>
+            }
+          >
+            {ordersLoading ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <div className="flex justify-center items-center">
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    Loading orders...
                   </div>
-                  
-                  {orders.map((order) => (
-                    <Card key={order.order_id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-full ${getOrderStatusColor(order.status)}`}>
-                              {getOrderStatusIcon(order.status)}
-                            </div>
-                            
-                            <div>
-                              <h3 className="font-medium text-gray-900">
-                                {order.tradingsymbol}
-                              </h3>
-                              <p className="text-sm text-gray-600">
-                                {order.exchange} • {formatDate(order.order_timestamp)} • {order.order_type}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="flex items-center space-x-4">
-                              <Badge className={getOrderStatusColor(order.status)}>
-                                {order.status}
-                              </Badge>
-                              <Badge variant={order.transaction_type === 'BUY' ? 'default' : 'secondary'}>
-                                {order.transaction_type}
-                              </Badge>
-                              
-                              <div className="text-right">
-                                <p className="font-medium">
-                                  {order.filled_quantity > 0 && order.status === 'COMPLETE' 
-                                    ? `${order.filled_quantity} @ ${formatCurrency(order.average_price)}` 
-                                    : `${order.quantity} @ ${formatCurrency(order.price)}`}
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                  {order.status === 'COMPLETE' && order.filled_quantity > 0 
-                                    ? `Total: ${formatCurrency(order.filled_quantity * order.average_price)}`
-                                    : `Target: ${formatCurrency(order.quantity * order.price)}`}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Order ID:</span>
-                              <p className="font-mono">{order.order_id}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Product:</span>
-                              <p>{order.product}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Quantity:</span>
-                              <p>
-                                {order.filled_quantity > 0 
-                                  ? `${order.filled_quantity}/${order.quantity}`
-                                  : order.quantity}
-                                {order.pending_quantity > 0 && (
-                                  <span className="text-orange-600"> ({order.pending_quantity} pending)</span>
-                                )}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Validity:</span>
-                              <p>{order.validity}</p>
-                            </div>
-                          </div>
-                          
-                          {order.status_message && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <span className="text-gray-500 text-sm">Status Message:</span>
-                              <p className="text-sm text-gray-700 mt-1">{order.status_message}</p>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                </td>
+              </tr>
+            ) : orders.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <div>
+                    <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <div>No orders found</div>
+                    <div className="text-xs text-orange-600 mt-1">
+                      Note: Zerodha API only provides current day orders
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              orders
+                .filter(order => 
+                  order.tradingsymbol.toLowerCase().includes(searchTerms.orders.toLowerCase())
+                )
+                .map((order) => (
+                  <OrderRow key={order.order_id} order={order} />
+                ))
+            )}
+            {orders.length > 0 && orders.filter(order => 
+              order.tradingsymbol.toLowerCase().includes(searchTerms.orders.toLowerCase())
+            ).length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  No orders match your search
+                </td>
+              </tr>
+            )}
+          </ZerodhaTable>
         </>
       )}
 
@@ -1276,113 +1212,60 @@ function TradesContent() {
             </Card>
           )}
 
-          {/* Trades List */}
-          {!loading && !error && (
-            <>
-              {trades.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center py-8">
-                      <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No trades found</h3>
-                      <p className="text-gray-600">Your trade history will appear here once you start trading.</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-600">
-                      Showing {trades.length} trade{trades.length !== 1 ? 's' : ''}
-                    </p>
+          {/* Trades Table */}
+          <ZerodhaTable
+            headers={['Trade ID', 'Fill time', 'Type', 'Instrument', 'Product', 'Qty.', 'Avg. Price']}
+            searchTerm={searchTerms.trades}
+            onSearch={(term) => setSearchTerms(prev => ({ ...prev, trades: term }))}
+            actions={
+              <Button variant="outline" size="sm" onClick={fetchTrades} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            }
+          >
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <div className="flex justify-center items-center">
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                    Loading trades...
                   </div>
-                  
-                  {trades.map((trade) => (
-                    <Card key={trade.trade_id}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-full ${
-                              trade.transaction_type === 'BUY' 
-                                ? 'bg-green-100 text-green-600' 
-                                : 'bg-red-100 text-red-600'
-                            }`}>
-                              {trade.transaction_type === 'BUY' ? (
-                                <TrendingUp className="h-4 w-4" />
-                              ) : (
-                                <TrendingDown className="h-4 w-4" />
-                              )}
-                            </div>
-                            
-                            <div>
-                              <h3 className="font-medium text-gray-900">
-                                {trade.tradingsymbol}
-                              </h3>
-                              <p className="text-sm text-gray-600">
-                                {trade.exchange || 'Unknown Exchange'} • {trade.trade_date ? formatDate(trade.trade_date) : 'Unknown Date'}
-                              </p>
-                              {trade.bot_name && (
-                                <p className="text-xs text-blue-600 mt-1">
-                                  🤖 {trade.bot_name}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="flex items-center space-x-4">
-                              <Badge variant={trade.transaction_type === 'BUY' ? 'default' : 'secondary'}>
-                                {trade.transaction_type}
-                              </Badge>
-                              
-                              <div className="text-right">
-                                <p className="font-medium">
-                                  {trade.quantity || 0} @ {formatCurrency(trade.price)}
-                                </p>
-                                <p className="text-sm text-gray-600">
-                                  Total: {formatCurrency((trade.quantity || 0) * (trade.price || 0))}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Trade ID:</span>
-                              <p className="font-mono">{trade.trade_id}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Order ID:</span>
-                              <p className="font-mono">{trade.order_id}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Product:</span>
-                              <p>{trade.product}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Trade Source:</span>
-                              <p className={trade.trade_source === 'BOT' ? 'text-blue-600 font-medium' : ''}>
-                                {trade.trade_source === 'BOT' ? '🤖 Bot Trade' : (trade.trade_source ? `👤 ${trade.trade_source} Trade` : '👤 Manual Trade')}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {trade.bot_name && trade.trade_source === 'BOT' && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <span className="text-gray-500 text-sm">Bot Used:</span>
-                              <p className="text-sm text-blue-700 mt-1 font-medium">{trade.bot_name}</p>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                </td>
+              </tr>
+            ) : trades.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <div>
+                    <TrendingUp className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <div>No trades found</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Your trade history will appear here once you start trading
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              trades
+                .filter(trade => 
+                  trade.tradingsymbol.toLowerCase().includes(searchTerms.trades.toLowerCase()) ||
+                  (trade.bot_name || '').toLowerCase().includes(searchTerms.trades.toLowerCase())
+                )
+                .map((trade) => (
+                  <TradeRow key={trade.trade_id} trade={trade} />
+                ))
+            )}
+            {trades.length > 0 && trades.filter(trade => 
+              trade.tradingsymbol.toLowerCase().includes(searchTerms.trades.toLowerCase()) ||
+              (trade.bot_name || '').toLowerCase().includes(searchTerms.trades.toLowerCase())
+            ).length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  No trades match your search
+                </td>
+              </tr>
+            )}
+          </ZerodhaTable>
         </>
       )}
 

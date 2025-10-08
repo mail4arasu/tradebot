@@ -323,6 +323,22 @@ const BotPositionRow = ({ position }: { position: BotPosition }) => {
     })
   }
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return {
+      date: date.toLocaleDateString('en-IN', { 
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      }),
+      time: date.toLocaleTimeString('en-IN', { 
+        hour12: true,
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+  }
+
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60)
     const mins = minutes % 60
@@ -331,7 +347,12 @@ const BotPositionRow = ({ position }: { position: BotPosition }) => {
 
   // Determine actual product type - for options it should be OPTIONS not FUTURES
   const getProductType = () => {
-    if (position.symbol.includes('CE') || position.symbol.includes('PE')) {
+    // Check in multiple places for CE/PE indicators
+    const symbolCheck = position.symbol && (position.symbol.includes('CE') || position.symbol.includes('PE'))
+    const instrumentCheck = position.instrumentType === 'OPTIONS'
+    const exchangeCheck = position.exchange === 'NFO' && position.botName && position.botName.toLowerCase().includes('options')
+    
+    if (symbolCheck || instrumentCheck || exchangeCheck) {
       return 'OPTIONS'
     }
     return position.instrumentType || 'FUTURES'
@@ -350,6 +371,10 @@ const BotPositionRow = ({ position }: { position: BotPosition }) => {
       <td className="px-4 py-3">
         <div className="text-sm text-gray-900 font-medium">{position.symbol}</div>
         <div className="text-xs text-gray-500">{position.exchange} • {position.botName || 'Bot'} • {position.side}</div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="text-sm text-gray-900">{formatDateTime(position.entryTime).date}</div>
+        <div className="text-xs text-gray-500">{formatDateTime(position.entryTime).time}</div>
       </td>
       <td className="px-4 py-3">
         <div className="text-sm text-gray-900">{position.isIntraday ? 'Intraday' : 'Positional'}</div>
