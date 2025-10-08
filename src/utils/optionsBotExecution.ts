@@ -22,6 +22,8 @@ export interface OptionsBotConfig {
   riskPercentage: number
   deltaThreshold: number
   lotSize: number
+  positionSizingMethod?: 'FIXED_QUANTITY' | 'RISK_PERCENTAGE'
+  fixedQuantity?: number
 }
 
 export interface OptionsBotSignal {
@@ -118,21 +120,46 @@ export async function executeOptionsBotTrade(
     }
     console.log(`🏆 Selected best contract: ${bestContract.symbol} (Delta: ${bestContract.delta?.toFixed(3)})`)
 
-    // Step 9: Calculate position size based on risk percentage (same as simulator)
+    // Step 9: Calculate position size based on user's position sizing method
     const premiumPerLot = (bestContract.premium || 0) * config.lotSize
-    const positionCalc = calculatePositionSize(
-      config.capital,
-      config.riskPercentage,
-      premiumPerLot,
-      config.lotSize
-    )
+    let positionCalc: any
+    
+    if (config.positionSizingMethod === 'FIXED_QUANTITY') {
+      // Fixed quantity mode: Use user-specified lots
+      const fixedLots = config.fixedQuantity || 1
+      const totalInvestment = fixedLots * premiumPerLot
+      
+      console.log(`📊 Using Fixed Quantity mode: ${fixedLots} lots`)
+      console.log(`💰 Premium per lot: ₹${premiumPerLot.toLocaleString()}`)
+      console.log(`💵 Total investment required: ₹${totalInvestment.toLocaleString()}`)
+      
+      // Check if user has sufficient capital for fixed quantity
+      if (totalInvestment > config.capital) {
+        throw new Error(`Insufficient capital for fixed quantity ${fixedLots} lots. Required: ₹${totalInvestment.toLocaleString()}, Available: ₹${config.capital.toLocaleString()}. Reduce quantity or increase allocated amount.`)
+      }
+      
+      positionCalc = {
+        lots: fixedLots,
+        amount: totalInvestment,
+        canTrade: true
+      }
+    } else {
+      // Risk percentage mode: Use existing logic
+      console.log(`📊 Using Risk Percentage mode: ${config.riskPercentage}%`)
+      positionCalc = calculatePositionSize(
+        config.capital,
+        config.riskPercentage,
+        premiumPerLot,
+        config.lotSize
+      )
 
-    if (!positionCalc.canTrade) {
-      const minCapitalRequired = Math.ceil((premiumPerLot / config.riskPercentage) * 100)
-      throw new Error(`Insufficient capital for minimum position size. Required: ₹${minCapitalRequired.toLocaleString()} (at ${config.riskPercentage}% risk). Current: ₹${config.capital.toLocaleString()}`)
+      if (!positionCalc.canTrade) {
+        const minCapitalRequired = Math.ceil((premiumPerLot / config.riskPercentage) * 100)
+        throw new Error(`Insufficient capital for minimum position size. Required: ₹${minCapitalRequired.toLocaleString()} (at ${config.riskPercentage}% risk). Current: ₹${config.capital.toLocaleString()}`)
+      }
     }
 
-    console.log(`💰 Position calculated: ${positionCalc.lots} lots (${positionCalc.lots * config.lotSize} quantity)`)
+    console.log(`💰 Final position: ${positionCalc.lots} lots (${positionCalc.lots * config.lotSize} quantity)`)
     console.log(`💵 Total investment: ₹${positionCalc.amount.toLocaleString()}`)
 
     // Step 10: Place actual order with Zerodha
@@ -256,6 +283,17 @@ export function validateOptionsBotConfig(config: OptionsBotConfig): { valid: boo
   
   if (config.lotSize !== 75) {
     return { valid: false, error: 'NIFTY options lot size must be 75' }
+  }
+  
+  // Validate position sizing method specific fields
+  if (config.positionSizingMethod === 'FIXED_QUANTITY') {
+    if (!config.fixedQuantity || config.fixedQuantity <= 0) {
+      return { valid: false, error: 'Fixed quantity must be greater than 0 when using FIXED_QUANTITY mode' }
+    }
+    
+    if (config.fixedQuantity > 100) {
+      return { valid: false, error: 'Fixed quantity cannot exceed 100 lots for safety' }
+    }
   }
   
   return { valid: true }

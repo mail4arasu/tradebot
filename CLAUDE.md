@@ -4,7 +4,7 @@
 
 **TradeBot Portal** is a Next.js 15 web application for managing automated trading strategies, specifically designed for Indian stock markets with Zerodha integration. The application provides a complete trading dashboard, bot management, trade history, backtesting capabilities, and comprehensive historical data management.
 
-## Current Project Status (October 7, 2025)
+## Current Project Status (October 8, 2025)
 
 ### ✅ **Completed Features:**
 - **Dashboard**: Real-time trading overview with authentic Zerodha data
@@ -27,7 +27,17 @@
 - **GitHub Repository**: https://github.com/mail4arasu/tradebot
 - **Domain**: https://niveshawealth.in (SSL configured)
 
-## 🚀 **Recent Major Improvements (October 7, 2025)**
+## 🚀 **Recent Major Improvements (October 8, 2025)**
+
+### **🔧 Bot Management Validation Updates (October 8, 2025)**
+- **Increased Trading Limits**: Enhanced bot management interface with higher validation limits
+- **Max Trades/Day**: Increased from 10 to 25 trades per day for higher frequency trading
+- **Risk per Trade**: Increased maximum from 50% to 100% for aggressive strategies
+- **Consistent Validation**: Updated frontend, backend API, and options bot execution consistently
+- **Files Modified**: `src/app/bots/manage/page.tsx`, `src/app/api/bots/allocations/route.ts`, `src/utils/optionsBotExecution.ts`
+- **Production Impact**: Allows users to configure more aggressive trading strategies with higher risk tolerance
+
+## 🚀 **Previous Major Improvements (October 7, 2025)**
 
 ### **🔧 Options Trading Simulator Fix (October 7, 2025)**
 - **Critical Issue Resolved**: Fixed expiry date selection logic in Options Trading Simulator
@@ -862,6 +872,6 @@ Focus on enhancing the backtesting capabilities and adding more sophisticated tr
 
 ---
 
-*Last Updated: October 7, 2025*
-*Project Status: Advanced Production System with Complete Historical Data & Fixed Options Trading*
-*Version: 3.1.0 - Options Trading Simulator Fix & Enhanced Expiry Selection*
+*Last Updated: October 8, 2025*
+*Project Status: Advanced Production System with Complete Historical Data & Enhanced Trading Limits*
+*Version: 3.2.0 - Bot Management Validation Updates & Higher Trading Limits*

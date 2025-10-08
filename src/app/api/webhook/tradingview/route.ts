@@ -743,10 +743,12 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
       capital: allocation.allocatedAmount, // User's allocated capital for this bot
       riskPercentage: allocation.riskPercentage, // User's configured risk percentage
       deltaThreshold: bot.parameters?.deltaThreshold || 0.6, // From bot configuration
-      lotSize: 75 // Correct NIFTY options lot size
+      lotSize: 75, // Correct NIFTY options lot size
+      positionSizingMethod: allocation.positionSizingMethod || 'RISK_PERCENTAGE', // User's position sizing method
+      fixedQuantity: allocation.quantity || 1 // User's fixed quantity if using fixed quantity method
     }
 
-    console.log(`👤 User-specific config: Capital=₹${optionsConfig.capital.toLocaleString()}, Risk=${optionsConfig.riskPercentage}%`)
+    console.log(`👤 User-specific config: Capital=₹${optionsConfig.capital.toLocaleString()}, Risk=${optionsConfig.riskPercentage}%, Method=${optionsConfig.positionSizingMethod}, Fixed=${optionsConfig.fixedQuantity} lots`)
 
     // Validate options bot configuration
     const configValidation = validateOptionsBotConfig(optionsConfig)
