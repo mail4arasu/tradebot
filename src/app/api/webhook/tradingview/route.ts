@@ -59,11 +59,37 @@ interface TradingViewAlert {
 
 // Enhanced webhook processing for multi-user system
 export async function POST(request: NextRequest) {
+  let rawPayload = ''
   try {
-    // Parse the incoming webhook payload
-    const payload: TradingViewAlert = await request.json()
+    // First get the raw text to help debug JSON parsing issues
+    rawPayload = await request.text()
+    console.log('📡 Raw TradingView webhook payload:', rawPayload)
+    console.log('📏 Payload length:', rawPayload.length)
     
-    console.log('📡 Received TradingView webhook:', payload)
+    // Parse the incoming webhook payload
+    let payload: TradingViewAlert
+    try {
+      payload = JSON.parse(rawPayload)
+    } catch (jsonError) {
+      console.error('❌ JSON parsing failed:')
+      console.error('📍 Error position:', jsonError.message)
+      console.error('📋 Raw payload:', rawPayload)
+      console.error('🔍 Character at position 102:', rawPayload.charAt(102))
+      console.error('🔍 Context around position 102:', rawPayload.substring(95, 110))
+      
+      return NextResponse.json(
+        { 
+          error: 'Invalid JSON payload',
+          details: jsonError.message,
+          rawPayload: rawPayload.substring(0, 200), // First 200 chars for debugging
+          charAtError: rawPayload.charAt(102),
+          context: rawPayload.substring(95, 110)
+        },
+        { status: 400 }
+      )
+    }
+    
+    console.log('📡 Parsed TradingView webhook:', payload)
 
     // Basic validation
     if (!payload.symbol || !payload.action) {
@@ -183,9 +209,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Webhook processing error:', error)
+    console.error('📋 Raw payload when error occurred:', rawPayload)
     
     return NextResponse.json(
-      { error: 'Internal server error processing webhook' },
+      { 
+        error: 'Internal server error processing webhook',
+        details: error.message,
+        rawPayload: rawPayload.substring(0, 200) // First 200 chars for debugging
+      },
       { status: 500 }
     )
   }
