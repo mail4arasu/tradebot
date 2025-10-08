@@ -52,11 +52,11 @@ export default function Dashboard() {
     const hours = istTime.getHours()
     const minutes = istTime.getMinutes()
     
-    // Market hours: 9:00 AM to 3:30 PM IST (weekdays only)
+    // Market hours: 9:15 AM to 3:30 PM IST (weekdays only)
     const dayOfWeek = istTime.getDay() // 0 = Sunday, 6 = Saturday
     const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
     const currentTimeInMinutes = hours * 60 + minutes
-    const marketOpenTime = 9 * 60 // 9:00 AM
+    const marketOpenTime = 9 * 60 + 15 // 9:15 AM
     const marketCloseTime = 15 * 60 + 30 // 3:30 PM
     
     const isInMarketHours = isWeekday && currentTimeInMinutes >= marketOpenTime && currentTimeInMinutes <= marketCloseTime
