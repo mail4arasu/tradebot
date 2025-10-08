@@ -742,23 +742,46 @@ export default function TradingAdminDashboard() {
 
                   {signal.executions.length > 0 && (
                     <details className="mt-3">
-                      <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800">
+                      <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <Eye className="h-3 w-3" />
                         View {signal.executions.length} execution details
                       </summary>
-                      <div className="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                      <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
                         {signal.executions.map((exec: any, idx: number) => (
-                          <div key={idx} className="text-xs p-2 bg-gray-50 rounded">
-                            <div className="flex justify-between">
-                              <span>User: {exec.userId.toString().slice(-8)}</span>
-                              <Badge variant={exec.status === 'EXECUTED' ? 'default' : 'destructive'}>
+                          <div key={idx} className={`text-xs p-3 rounded border-l-4 ${
+                            exec.status === 'EXECUTED' 
+                              ? 'bg-green-50 border-green-400' 
+                              : 'bg-red-50 border-red-400'
+                          }`}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex flex-col">
+                                <span className="font-medium">
+                                  👤 {exec.user?.name || exec.user?.email || `User ${exec.userId.toString().slice(-8)}`}
+                                </span>
+                                {exec.user?.email && exec.user?.name && (
+                                  <span className="text-gray-500 text-xs">{exec.user.email}</span>
+                                )}
+                              </div>
+                              <Badge variant={exec.status === 'EXECUTED' ? 'default' : 'destructive'} className="text-xs">
                                 {exec.status}
                               </Badge>
                             </div>
-                            <div className="text-gray-600">
-                              Qty: {exec.quantity} | Price: ₹{exec.executedPrice || 'Pending'}
+                            <div className="text-gray-600 mb-1">
+                              📊 Qty: {exec.quantity} | 💰 Price: ₹{exec.executedPrice || 'Pending'}
                             </div>
+                            {exec.createdAt && (
+                              <div className="text-gray-500 text-xs mb-1">
+                                🕒 {new Date(exec.createdAt).toLocaleString()}
+                              </div>
+                            )}
                             {exec.error && (
-                              <div className="text-red-600">Error: {exec.error}</div>
+                              <div className="text-red-700 bg-red-100 p-2 rounded mt-2 border border-red-200">
+                                <div className="font-medium text-red-800 flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Error Details:
+                                </div>
+                                <div className="mt-1 text-red-700">{exec.error}</div>
+                              </div>
                             )}
                           </div>
                         ))}

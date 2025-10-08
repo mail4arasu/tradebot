@@ -197,11 +197,38 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
         // Check if user has reached daily trade limit
         if (todayTrades >= allocation.maxTradesPerDay) {
           console.log(`📊 Daily trade limit reached for user: ${allocation.userId}`)
+          
+          // Record detailed error in tradeexecutions for better tracking
+          const errorExecution = {
+            userId: allocation.userId,
+            botId: bot._id,
+            signalId: signalId,
+            symbol: payload.symbol,
+            exchange: payload.exchange || bot.exchange || 'NFO',
+            orderType: payload.action,
+            quantity: allocation.quantity || 0,
+            requestedPrice: payload.price || 0,
+            executedPrice: 0,
+            executedQuantity: 0,
+            zerodhaOrderId: null,
+            status: 'FAILED',
+            tradeType: payload.action === 'SELL' || payload.action === 'EXIT' ? 'EXIT' : 'ENTRY',
+            exitReason: null,
+            pnl: 0,
+            fees: 0,
+            error: `Daily trade limit reached (${todayTrades}/${allocation.maxTradesPerDay} trades today). Trading limit configured in bot allocation settings.`,
+            zerodhaResponse: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+          
+          const errorResult = await db.collection('tradeexecutions').insertOne(errorExecution)
+          
           results.affectedUsers.push({
             userId: allocation.userId,
             executed: false,
-            executionId: null,
-            error: 'Daily trade limit reached'
+            executionId: errorResult.insertedId,
+            error: `Daily trade limit reached (${todayTrades}/${allocation.maxTradesPerDay} trades today)`
           })
           results.failed++
           continue
@@ -218,10 +245,37 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
         
         if (currentTime < startTime || currentTime > endTime) {
           console.log(`⏰ Outside trading hours for user: ${allocation.userId} (${currentTime} not between ${startTime}-${endTime})`)
+          
+          // Record detailed error in tradeexecutions for better tracking
+          const errorExecution = {
+            userId: allocation.userId,
+            botId: bot._id,
+            signalId: signalId,
+            symbol: payload.symbol,
+            exchange: payload.exchange || bot.exchange || 'NFO',
+            orderType: payload.action,
+            quantity: allocation.quantity || 0,
+            requestedPrice: payload.price || 0,
+            executedPrice: 0,
+            executedQuantity: 0,
+            zerodhaOrderId: null,
+            status: 'FAILED',
+            tradeType: payload.action === 'SELL' || payload.action === 'EXIT' ? 'EXIT' : 'ENTRY',
+            exitReason: null,
+            pnl: 0,
+            fees: 0,
+            error: `Outside configured trading hours (${currentTime} not between ${startTime}-${endTime}). Check bot allocation settings to modify trading hours.`,
+            zerodhaResponse: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+          
+          const errorResult = await db.collection('tradeexecutions').insertOne(errorExecution)
+          
           results.affectedUsers.push({
             userId: allocation.userId,
             executed: false,
-            executionId: null,
+            executionId: errorResult.insertedId,
             error: `Outside configured trading hours (${startTime}-${endTime})`
           })
           results.failed++
