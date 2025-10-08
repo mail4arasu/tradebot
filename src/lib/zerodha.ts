@@ -174,7 +174,10 @@ export class ZerodhaAPI {
       // Positions calculations (net positions for day trading)
       const netPositions = positions.net || []
       netPositions.forEach((position: any) => {
-        totalDayPnL += position.pnl || 0
+        const positionPnL = position.pnl || 0
+        totalDayPnL += positionPnL
+        // Add position P&L to total P&L as well
+        totalPnL += positionPnL
       })
 
       // Extract margin details from Zerodha
