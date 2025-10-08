@@ -11,6 +11,35 @@ import {
 } from '@/utils/positionManager'
 import { intradayScheduler } from '@/services/intradayScheduler'
 
+// Utility function to calculate position size based on user's sizing method
+function calculatePositionSizeForAllocation(allocation: any, payload: TradingViewAlert): number {
+  const positionSizingMethod = allocation.positionSizingMethod || 'RISK_PERCENTAGE'
+  
+  if (positionSizingMethod === 'FIXED_QUANTITY') {
+    // Use the fixed quantity specified by user
+    return allocation.quantity || 1
+  } else {
+    // RISK_PERCENTAGE: Calculate quantity based on risk and price
+    const allocatedAmount = allocation.allocatedAmount || 100000
+    const riskPercentage = allocation.riskPercentage || 2
+    const price = payload.price || 1
+    
+    // Calculate risk amount
+    const riskAmount = (allocatedAmount * riskPercentage) / 100
+    
+    // For futures, assume typical margin requirement (estimate 10% of notional)
+    // This is a simplified calculation - in practice, you'd get actual margin requirements
+    const marginPerLot = price * 75 * 0.10 // Assuming 75 lot size and 10% margin
+    
+    // Calculate maximum lots based on risk amount
+    const maxLots = Math.floor(riskAmount / marginPerLot)
+    
+    console.log(`📊 Risk-based position sizing: Risk=₹${riskAmount.toLocaleString()}, MarginPerLot=₹${marginPerLot.toLocaleString()}, MaxLots=${maxLots}`)
+    
+    return Math.max(1, maxLots) // At least 1 lot
+  }
+}
+
 // TradingView Alert Interface
 interface TradingViewAlert {
   symbol: string
@@ -206,7 +235,7 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
             symbol: payload.symbol,
             exchange: payload.exchange || bot.exchange || 'NFO',
             orderType: payload.action,
-            quantity: allocation.quantity || 0,
+            quantity: calculatePositionSizeForAllocation(allocation, payload),
             requestedPrice: payload.price || 0,
             executedPrice: 0,
             executedQuantity: 0,
@@ -254,7 +283,7 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
             symbol: payload.symbol,
             exchange: payload.exchange || bot.exchange || 'NFO',
             orderType: payload.action,
-            quantity: allocation.quantity || 0,
+            quantity: calculatePositionSizeForAllocation(allocation, payload),
             requestedPrice: payload.price || 0,
             executedPrice: 0,
             executedQuantity: 0,
@@ -369,6 +398,10 @@ async function processEntrySignal(allocation: any, bot: any, payload: TradingVie
   try {
     console.log(`🚪 Processing ENTRY signal for user: ${allocation.userId}`)
     
+    // Calculate position size based on user's sizing method
+    const calculatedQuantity = calculatePositionSizeForAllocation(allocation, payload)
+    console.log(`📊 Entry position sizing: Method=${allocation.positionSizingMethod || 'RISK_PERCENTAGE'}, Calculated=${calculatedQuantity} lots`)
+    
     // Check if bot allows multiple positions
     if (!bot.allowMultiplePositions) {
       const openPositions = await getOpenPositions(new ObjectId(allocation.userId), bot._id)
@@ -383,7 +416,7 @@ async function processEntrySignal(allocation: any, bot: any, payload: TradingVie
           symbol: payload.symbol,
           exchange: payload.exchange || bot.exchange || 'NFO',
           orderType: payload.action,
-          quantity: allocation.quantity || 0,
+          quantity: calculatedQuantity,
           requestedPrice: payload.price || 0,
           executedPrice: 0,
           executedQuantity: 0,
@@ -426,7 +459,7 @@ async function processEntrySignal(allocation: any, bot: any, payload: TradingVie
         entryExecutionId: executionResult.executionId,
         entrySignalId: signalId,
         entryPrice: payload.price || 0,
-        entryQuantity: allocation.quantity,
+        entryQuantity: calculatedQuantity,
         entryTime: new Date(),
         entryOrderId: executionResult.orderId || 'SIMULATED',
         side: determinePositionSide(payload),
@@ -478,6 +511,10 @@ async function processExitSignal(allocation: any, bot: any, payload: TradingView
   try {
     console.log(`🚪 Processing EXIT signal for user: ${allocation.userId}`)
     
+    // Calculate position size based on user's sizing method  
+    const calculatedQuantity = calculatePositionSizeForAllocation(allocation, payload)
+    console.log(`📊 Exit position sizing: Method=${allocation.positionSizingMethod || 'RISK_PERCENTAGE'}, Calculated=${calculatedQuantity} lots`)
+    
     // Find open positions for this user and bot
     const openPositions = await getOpenPositions(new ObjectId(allocation.userId), bot._id)
     
@@ -492,7 +529,7 @@ async function processExitSignal(allocation: any, bot: any, payload: TradingView
         symbol: payload.symbol,
         exchange: payload.exchange || bot.exchange || 'NFO',
         orderType: payload.action,
-        quantity: allocation.quantity || 0,
+        quantity: calculatedQuantity,
         requestedPrice: payload.price || 0,
         executedPrice: 0,
         executedQuantity: 0,
@@ -609,6 +646,10 @@ async function executeTradeForUser(allocation: any, bot: any, payload: TradingVi
     }
 
     // Standard futures/equity execution
+    // Calculate position size based on user's sizing method
+    const calculatedQuantity = calculatePositionSizeForAllocation(allocation, payload)
+    console.log(`📊 Position sizing: Method=${allocation.positionSizingMethod || 'RISK_PERCENTAGE'}, Calculated=${calculatedQuantity} lots`)
+    
     // Create trade execution record
     const tradeExecution = {
       userId: allocation.userId,
@@ -618,7 +659,7 @@ async function executeTradeForUser(allocation: any, bot: any, payload: TradingVi
       symbol: payload.symbol,
       exchange: payload.exchange || bot.exchange || 'NFO',
       instrumentType: payload.instrumentType || bot.instrumentType || 'FUTURES',
-      quantity: allocation.quantity, // User-defined quantity
+      quantity: calculatedQuantity, // Calculated based on user's position sizing method
       orderType: payload.action,
       requestedPrice: payload.price,
       executedPrice: null,

@@ -14,6 +14,13 @@ const UserBotAllocationSchema = new mongoose.Schema({
   maxTradesPerDay: { type: Number, required: true, default: 1 }, // Daily trade limit
   currentDayTrades: { type: Number, default: 0 }, // Today's trade count
   lastTradeDate: { type: Date }, // Last trade execution date
+  // Risk management
+  riskPercentage: { type: Number, required: true, default: 2 }, // Risk per trade as percentage
+  positionSizingMethod: { 
+    type: String, 
+    enum: ['FIXED_QUANTITY', 'RISK_PERCENTAGE'], 
+    default: 'RISK_PERCENTAGE' 
+  },
   // Trading preferences
   enabledHours: {
     start: { type: String, default: '09:15' }, // Market start time

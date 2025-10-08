@@ -56,7 +56,8 @@ export async function GET(request: NextRequest) {
       successfulTrades: allocation.successfulTrades,
       totalPnl: allocation.totalPnl,
       allocatedAmount: allocation.allocatedAmount,
-      riskPercentage: allocation.riskPercentage
+      riskPercentage: allocation.riskPercentage,
+      positionSizingMethod: allocation.positionSizingMethod || 'RISK_PERCENTAGE'
     }))
 
     return NextResponse.json({ allocations: formattedAllocations })
@@ -79,11 +80,20 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = await request.json()
-    const { botId, quantity, maxTradesPerDay, allocatedAmount, riskPercentage } = payload
+    const { botId, quantity, maxTradesPerDay, allocatedAmount, riskPercentage, positionSizingMethod } = payload
 
     if (!botId || !quantity || !maxTradesPerDay || !allocatedAmount || !riskPercentage) {
       return NextResponse.json(
         { error: 'Missing required fields: botId, quantity, maxTradesPerDay, allocatedAmount, riskPercentage' },
+        { status: 400 }
+      )
+    }
+
+    // Validate positionSizingMethod
+    const validSizingMethods = ['FIXED_QUANTITY', 'RISK_PERCENTAGE']
+    if (positionSizingMethod && !validSizingMethods.includes(positionSizingMethod)) {
+      return NextResponse.json(
+        { error: 'Invalid positionSizingMethod. Must be FIXED_QUANTITY or RISK_PERCENTAGE' },
         { status: 400 }
       )
     }
@@ -136,6 +146,7 @@ export async function POST(request: NextRequest) {
       quantity,
       maxTradesPerDay,
       riskPercentage, // User-specific risk percentage
+      positionSizingMethod: positionSizingMethod || 'RISK_PERCENTAGE', // Default to risk percentage
       isActive: true,
       startDate: new Date(),
       currentValue: allocatedAmount,

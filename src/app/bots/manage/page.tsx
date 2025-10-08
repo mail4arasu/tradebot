@@ -30,6 +30,7 @@ interface BotAllocation {
   totalPnl: number
   allocatedAmount: number
   riskPercentage: number
+  positionSizingMethod: 'FIXED_QUANTITY' | 'RISK_PERCENTAGE'
 }
 
 interface AvailableBot {
@@ -152,7 +153,8 @@ export default function BotManagement() {
           quantity: 1, // Default quantity
           maxTradesPerDay: 1,
           allocatedAmount: 300000, // Default 3 Lakh allocation
-          riskPercentage: 2 // Default 2% risk per trade
+          riskPercentage: 2, // Default 2% risk per trade
+          positionSizingMethod: 'RISK_PERCENTAGE' // Default to risk percentage
         })
       })
 
@@ -286,24 +288,93 @@ export default function BotManagement() {
                           <h4 className="font-medium text-gray-900">Trading Configuration</h4>
                           
                           <div>
-                            <Label htmlFor={`quantity-${allocation._id}`}>Position Quantity</Label>
+                            <Label htmlFor={`allocatedAmount-${allocation._id}`}>Allocated Amount (₹)</Label>
                             <Input
-                              id={`quantity-${allocation._id}`}
+                              id={`allocatedAmount-${allocation._id}`}
                               type="number"
-                              min="1"
-                              value={allocation.quantity || 1}
+                              min="10000"
+                              step="1000"
+                              value={allocation.allocatedAmount || 300000}
                               onChange={(e) => {
-                                const quantity = parseInt(e.target.value)
-                                if (quantity > 0) {
-                                  updateAllocation(allocation._id, { quantity })
+                                const allocatedAmount = parseInt(e.target.value)
+                                if (allocatedAmount >= 10000) {
+                                  updateAllocation(allocation._id, { allocatedAmount })
                                 }
                               }}
                               disabled={saving === allocation._id}
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                              Number of lots/contracts per trade
+                              Total capital allocated for this bot
                             </p>
                           </div>
+
+                          <div>
+                            <Label htmlFor={`positionSizing-${allocation._id}`}>Position Sizing Method</Label>
+                            <select
+                              id={`positionSizing-${allocation._id}`}
+                              className="w-full p-2 border rounded"
+                              value={allocation.positionSizingMethod || 'RISK_PERCENTAGE'}
+                              onChange={(e) => {
+                                updateAllocation(allocation._id, { 
+                                  positionSizingMethod: e.target.value as 'FIXED_QUANTITY' | 'RISK_PERCENTAGE' 
+                                })
+                              }}
+                              disabled={saving === allocation._id}
+                            >
+                              <option value="RISK_PERCENTAGE">Risk Percentage</option>
+                              <option value="FIXED_QUANTITY">Fixed Quantity</option>
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Choose how to calculate position size
+                            </p>
+                          </div>
+
+                          {(allocation.positionSizingMethod || 'RISK_PERCENTAGE') === 'FIXED_QUANTITY' ? (
+                            <div>
+                              <Label htmlFor={`quantity-${allocation._id}`}>Position Quantity</Label>
+                              <Input
+                                id={`quantity-${allocation._id}`}
+                                type="number"
+                                min="1"
+                                value={allocation.quantity || 1}
+                                onChange={(e) => {
+                                  const quantity = parseInt(e.target.value)
+                                  if (quantity > 0) {
+                                    updateAllocation(allocation._id, { quantity })
+                                  }
+                                }}
+                                disabled={saving === allocation._id}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Fixed number of lots/contracts per trade
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <Label htmlFor={`riskPercentage-${allocation._id}`}>Risk Per Trade (%)</Label>
+                              <Input
+                                id={`riskPercentage-${allocation._id}`}
+                                type="number"
+                                min="0.1"
+                                max="50"
+                                step="0.1"
+                                value={allocation.riskPercentage || 2}
+                                onChange={(e) => {
+                                  const riskPercentage = parseFloat(e.target.value)
+                                  if (riskPercentage > 0 && riskPercentage <= 50) {
+                                    updateAllocation(allocation._id, { riskPercentage })
+                                  }
+                                }}
+                                disabled={saving === allocation._id}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Percentage of allocated amount to risk per trade
+                              </p>
+                              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded mt-2">
+                                Risk Amount: ₹{((allocation.allocatedAmount || 300000) * (allocation.riskPercentage || 2) / 100).toLocaleString()}
+                              </div>
+                            </div>
+                          )}
 
                           <div>
                             <Label htmlFor={`maxTrades-${allocation._id}`}>Max Trades/Day</Label>
@@ -323,28 +394,6 @@ export default function BotManagement() {
                             />
                             <p className="text-xs text-gray-500 mt-1">
                               Daily trade limit for risk management
-                            </p>
-                          </div>
-
-                          <div>
-                            <Label htmlFor={`riskPercentage-${allocation._id}`}>Risk Per Trade (%)</Label>
-                            <Input
-                              id={`riskPercentage-${allocation._id}`}
-                              type="number"
-                              min="0.1"
-                              max="50"
-                              step="0.1"
-                              value={allocation.riskPercentage || 2}
-                              onChange={(e) => {
-                                const riskPercentage = parseFloat(e.target.value)
-                                if (riskPercentage > 0 && riskPercentage <= 50) {
-                                  updateAllocation(allocation._id, { riskPercentage })
-                                }
-                              }}
-                              disabled={saving === allocation._id}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Percentage of allocated amount to risk per trade
                             </p>
                           </div>
                         </div>
@@ -429,9 +478,11 @@ export default function BotManagement() {
                             </div>
                             
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Risk Per Trade:</span>
+                              <span className="text-gray-500">Position Sizing:</span>
                               <span className="font-medium">
-                                {allocation.riskPercentage || 0}%
+                                {(allocation.positionSizingMethod || 'RISK_PERCENTAGE') === 'FIXED_QUANTITY' 
+                                  ? `${allocation.quantity || 1} lots` 
+                                  : `${allocation.riskPercentage || 2}% risk`}
                               </span>
                             </div>
                           </div>
