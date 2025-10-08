@@ -168,35 +168,45 @@ const ZerodhaTable = ({
 
 // Position Row Component
 const PositionRow = ({ position }: { position: Position }) => {
-  const isProfit = position.pnl >= 0
-  const changePercent = position.average_price > 0 ? ((position.last_price - position.average_price) / position.average_price * 100) : 0
+  const pnlValue = position.pnl || 0
+  const isProfit = pnlValue >= 0
+  const avgPrice = position.average_price || 0
+  const lastPrice = position.last_price || 0
+  const changePercent = avgPrice > 0 ? ((lastPrice - avgPrice) / avgPrice * 100) : 0
+  
+  const formatPrice = (price: number | undefined | null) => {
+    if (price === undefined || price === null || isNaN(Number(price))) {
+      return '0.00'
+    }
+    return Number(price).toFixed(2)
+  }
   
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-3">
         <div className="flex items-center">
-          <div className={`w-2 h-2 rounded-full mr-3 ${position.quantity > 0 ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+          <div className={`w-2 h-2 rounded-full mr-3 ${(position.quantity || 0) > 0 ? 'bg-blue-500' : 'bg-red-500'}`}></div>
           <div>
-            <div className="text-sm font-medium text-gray-900">{position.product}</div>
+            <div className="text-sm font-medium text-gray-900">{position.product || 'N/A'}</div>
           </div>
         </div>
       </td>
       <td className="px-4 py-3">
-        <div className="text-sm text-gray-900">{position.tradingsymbol}</div>
-        <div className="text-xs text-gray-500">{position.exchange}</div>
+        <div className="text-sm text-gray-900">{position.tradingsymbol || 'N/A'}</div>
+        <div className="text-xs text-gray-500">{position.exchange || 'N/A'}</div>
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {Math.abs(position.quantity)}
+        {Math.abs(position.quantity || 0)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {position.average_price.toFixed(2)}
+        ₹{formatPrice(position.average_price)}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {position.last_price.toFixed(2)}
+        ₹{formatPrice(position.last_price)}
       </td>
       <td className="px-4 py-3 text-right">
         <div className={`text-sm font-medium ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
-          {isProfit ? '+' : ''}{position.pnl.toFixed(2)}
+          {isProfit ? '+' : ''}₹{formatPrice(pnlValue)}
         </div>
         <div className={`text-xs ${changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
           {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
@@ -218,12 +228,24 @@ const OrderRow = ({ order }: { order: Order }) => {
   }
 
   const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('en-IN', { 
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
+    if (!timestamp) return 'N/A'
+    try {
+      return new Date(timestamp).toLocaleTimeString('en-IN', { 
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    } catch (error) {
+      return 'Invalid Date'
+    }
+  }
+
+  const formatPrice = (price: number | undefined | null) => {
+    if (price === undefined || price === null || isNaN(Number(price))) {
+      return '0.00'
+    }
+    return Number(price).toFixed(2)
   }
 
   return (
@@ -235,25 +257,25 @@ const OrderRow = ({ order }: { order: Order }) => {
         <div className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
           order.transaction_type === 'BUY' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
         }`}>
-          {order.transaction_type}
+          {order.transaction_type || 'N/A'}
         </div>
       </td>
       <td className="px-4 py-3">
-        <div className="text-sm text-gray-900">{order.tradingsymbol}</div>
-        <div className="text-xs text-gray-500">{order.exchange}</div>
+        <div className="text-sm text-gray-900">{order.tradingsymbol || 'N/A'}</div>
+        <div className="text-xs text-gray-500">{order.exchange || 'N/A'}</div>
       </td>
       <td className="px-4 py-3 text-sm text-gray-900">
-        {order.product}
+        {order.product || 'N/A'}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {order.filled_quantity > 0 ? `${order.filled_quantity} / ${order.quantity}` : `0 / ${order.quantity}`}
+        {(order.filled_quantity || 0) > 0 ? `${order.filled_quantity || 0} / ${order.quantity || 0}` : `0 / ${order.quantity || 0}`}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {order.average_price > 0 ? order.average_price.toFixed(2) : order.price.toFixed(2)}
+        ₹{(order.average_price || 0) > 0 ? formatPrice(order.average_price) : formatPrice(order.price)}
       </td>
       <td className="px-4 py-3">
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status)}`}>
-          {order.status}
+        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(order.status || 'UNKNOWN')}`}>
+          {order.status || 'UNKNOWN'}
         </span>
       </td>
     </tr>
@@ -263,18 +285,30 @@ const OrderRow = ({ order }: { order: Order }) => {
 // Trade Row Component  
 const TradeRow = ({ trade }: { trade: Trade }) => {
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-IN', { 
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
+    if (!dateString) return 'N/A'
+    try {
+      return new Date(dateString).toLocaleTimeString('en-IN', { 
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    } catch (error) {
+      return 'Invalid Date'
+    }
+  }
+
+  const formatPrice = (price: number | undefined | null) => {
+    if (price === undefined || price === null || isNaN(Number(price))) {
+      return '0.00'
+    }
+    return Number(price).toFixed(2)
   }
 
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-3 text-sm text-gray-900">
-        {trade.trade_id}
+        {trade.trade_id || 'N/A'}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900">
         {formatTime(trade.trade_date)}
@@ -283,21 +317,21 @@ const TradeRow = ({ trade }: { trade: Trade }) => {
         <div className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
           trade.transaction_type === 'BUY' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
         }`}>
-          {trade.transaction_type}
+          {trade.transaction_type || 'N/A'}
         </div>
       </td>
       <td className="px-4 py-3">
-        <div className="text-sm text-gray-900">{trade.tradingsymbol}</div>
-        <div className="text-xs text-gray-500">{trade.exchange}</div>
+        <div className="text-sm text-gray-900">{trade.tradingsymbol || 'N/A'}</div>
+        <div className="text-xs text-gray-500">{trade.exchange || 'N/A'}</div>
       </td>
       <td className="px-4 py-3 text-sm text-gray-900">
-        {trade.product}
+        {trade.product || 'N/A'}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {trade.quantity}
+        {trade.quantity || 0}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {trade.price.toFixed(2)}
+        ₹{formatPrice(trade.price)}
       </td>
     </tr>
   )
