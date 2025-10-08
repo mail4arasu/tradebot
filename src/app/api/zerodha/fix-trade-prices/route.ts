@@ -23,9 +23,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    console.log(`Starting price fix for user ${user.email}`)
+    console.log(`Starting price fix and duplicate removal for user ${user.email}`)
 
-    // Find trades with price 0 or null that have zerodhaData
+    // STEP 1: Remove duplicate trades
+    // Find all trades grouped by orderId
+    const duplicateTrades = await Trade.aggregate([
+      { $match: { userId: user._id } },
+      { 
+        $group: { 
+          _id: "$orderId", 
+          trades: { $push: "$$ROOT" }, 
+          count: { $sum: 1 } 
+        } 
+      },
+      { $match: { count: { $gt: 1 } } }
+    ])
+
+    let duplicatesRemovedCount = 0
+    console.log(`Found ${duplicateTrades.length} sets of duplicate trades`)
+
+    for (const duplicateGroup of duplicateTrades) {
+      const trades = duplicateGroup.trades
+      // Keep the trade with the highest price (most likely correct) and most recent timestamp
+      const bestTrade = trades.reduce((best, current) => {
+        if (current.price > best.price) return current
+        if (current.price === best.price && new Date(current.timestamp) > new Date(best.timestamp)) return current
+        return best
+      })
+
+      // Delete the other duplicates
+      for (const trade of trades) {
+        if (trade._id.toString() !== bestTrade._id.toString()) {
+          await Trade.findByIdAndDelete(trade._id)
+          duplicatesRemovedCount++
+          console.log(`Removed duplicate trade ${trade.tradeId} (orderId: ${trade.orderId})`)
+        }
+      }
+    }
+
+    // STEP 2: Fix trades with price 0 or null that have zerodhaData
     const tradesWithZeroPrices = await Trade.find({
       userId: user._id,
       $or: [
@@ -65,13 +101,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       summary: {
+        duplicatesRemoved: duplicatesRemovedCount,
         totalFound: tradesWithZeroPrices.length,
         fixed: fixedCount,
         skipped: skippedCount,
         errors: errors.length
       },
       errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully fixed ${fixedCount} trade prices, skipped ${skippedCount} trades without valid prices`
+      message: `Successfully removed ${duplicatesRemovedCount} duplicate trades and fixed ${fixedCount} trade prices, skipped ${skippedCount} trades without valid prices`
     })
 
   } catch (error) {

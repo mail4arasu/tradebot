@@ -73,10 +73,13 @@ export async function POST(request: NextRequest) {
 
       for (const zerodhaTradeData of zerodhaTradesData) {
         try {
-          // Check if trade already exists (by Zerodha trade_id)
+          // Check if trade already exists (by Zerodha trade_id or order_id)
           const existingTrade = await Trade.findOne({
             userId: user._id,
-            tradeId: zerodhaTradeData.trade_id
+            $or: [
+              { tradeId: zerodhaTradeData.trade_id },
+              { orderId: zerodhaTradeData.order_id }
+            ]
           })
 
           if (existingTrade) {
