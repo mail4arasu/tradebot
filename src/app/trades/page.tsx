@@ -178,8 +178,20 @@ function TradesContent() {
     endDate: '',
     botType: 'all' as 'all' | 'bot' | 'manual'
   })
-  const [equityData, setEquityData] = useState<{date: string, value: number, pnl: number}[]>([])
+  const [equityData, setEquityData] = useState<{date: string, value: number, pnl: number, totalPnL?: number, botPerformance?: any[]}[]>([])
   const [totalPnl, setTotalPnl] = useState(0)
+  const [equityLoading, setEquityLoading] = useState(false)
+  const [equityError, setEquityError] = useState('')
+  const [equitySummary, setEquitySummary] = useState({
+    totalDays: 0,
+    profitableDays: 0,
+    winRate: 0,
+    averageDailyPnL: 0,
+    bestDay: 0,
+    worstDay: 0
+  })
+  const [availableBots, setAvailableBots] = useState<{id: string, name: string}[]>([])
+  const [selectedBot, setSelectedBot] = useState<string>('all')
   const [orderSummary, setOrderSummary] = useState({
     total: 0,
     complete: 0,
@@ -261,6 +273,13 @@ function TradesContent() {
     }
   }, [session, activeTab])
 
+  // Fetch equity curve when equity tab is active or filters change
+  useEffect(() => {
+    if (session && activeTab === 'equity') {
+      fetchEquityCurve()
+    }
+  }, [session, activeTab, tradeFilters, selectedBot])
+
   const fetchTrades = async () => {
     try {
       setLoading(true)
@@ -317,7 +336,7 @@ function TradesContent() {
         }
         
         setTrades(filteredTrades)
-        calculateEquityCurve(filteredTrades)
+        // Note: Equity curve is now fetched separately on demand
       } else {
         const errorData = await response.json()
         setError(errorData.error || 'Failed to fetch trades')
@@ -524,74 +543,73 @@ function TradesContent() {
     await Promise.all([fetchTrades(), fetchPositions(), fetchOrders(), fetchBotPositions(), fetchHoldings()])
   }
 
-  const calculateEquityCurve = (tradesData: Trade[]) => {
+  const fetchEquityCurve = async () => {
     try {
-      // Validate input data
-      if (!tradesData || !Array.isArray(tradesData) || tradesData.length === 0) {
-        setEquityData([])
-        setTotalPnl(0)
-        return
-      }
+      setEquityLoading(true)
+      setEquityError('')
 
-      // Sort trades by date with error handling
-      const sortedTrades = tradesData
-        .filter(trade => trade && trade.trade_date && trade.quantity && trade.price && trade.transaction_type)
-        .sort((a, b) => {
-          try {
-            return new Date(a.trade_date).getTime() - new Date(b.trade_date).getTime()
-          } catch {
-            return 0
-          }
-        })
+      // Build query parameters
+      const queryParams = new URLSearchParams()
+      if (tradeFilters.startDate) queryParams.set('startDate', tradeFilters.startDate)
+      if (tradeFilters.endDate) queryParams.set('endDate', tradeFilters.endDate)
+      if (selectedBot !== 'all') queryParams.set('botId', selectedBot)
+      queryParams.set('realtime', 'true') // Include real-time data
 
-      let runningPnl = 0
-      const equityPoints: {date: string, value: number, pnl: number}[] = []
-      const initialCapital = 100000 // Default starting capital
+      console.log('Fetching equity curve data with params:', queryParams.toString())
 
-      // Group trades by date and calculate daily P&L
-      const tradesByDate = sortedTrades.reduce((acc, trade) => {
-        try {
-          const date = new Date(trade.trade_date).toISOString().split('T')[0]
-          if (!acc[date]) acc[date] = []
-          acc[date].push(trade)
-          return acc
-        } catch {
-          return acc
-        }
-      }, {} as Record<string, Trade[]>)
-
-      // Calculate cumulative P&L
-      Object.entries(tradesByDate).forEach(([date, dayTrades]) => {
-        try {
-          const dayPnl = dayTrades.reduce((sum, trade) => {
-            try {
-              // Simplified P&L calculation - in real scenario this would need entry/exit matching
-              const quantity = Number(trade.quantity) || 0
-              const price = Number(trade.price) || 0
-              const value = quantity * price
-              return sum + (trade.transaction_type === 'SELL' ? value : -value)
-            } catch {
-              return sum
-            }
-          }, 0)
+      const response = await fetch(`/api/equity/pnl-breakdown?${queryParams}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (data.success && data.data) {
+          // Transform P&L snapshots to equity curve format
+          const snapshots = data.data.snapshots || []
+          let runningValue = 100000 // Initial capital
           
-          runningPnl += dayPnl
-          equityPoints.push({
-            date,
-            value: initialCapital + runningPnl,
-            pnl: dayPnl
-          })
-        } catch {
-          // Skip this date if there's an error
-        }
-      })
+          const equityPoints = snapshots
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .map(snapshot => {
+              runningValue += snapshot.totalDayPnL
+              return {
+                date: snapshot.date,
+                value: runningValue,
+                pnl: snapshot.totalDayPnL,
+                totalPnL: snapshot.totalPortfolioPnL,
+                botPerformance: snapshot.botPerformance || []
+              }
+            })
 
-      setEquityData(equityPoints)
-      setTotalPnl(runningPnl)
+          setEquityData(equityPoints)
+          setTotalPnl(data.data.summary?.totalPnL || 0)
+          setEquitySummary(data.data.summary || {
+            totalDays: 0,
+            profitableDays: 0,
+            winRate: 0,
+            averageDailyPnL: 0,
+            bestDay: 0,
+            worstDay: 0
+          })
+          setAvailableBots(data.data.availableBots || [])
+
+          console.log('✅ Equity curve data loaded:', {
+            snapshots: snapshots.length,
+            summary: data.data.summary
+          })
+        } else {
+          throw new Error(data.error || 'Failed to fetch equity data')
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to fetch equity curve data')
+      }
     } catch (error) {
-      console.error('Error calculating equity curve:', error)
+      console.error('Error fetching equity curve:', error)
+      setEquityError(error.message || 'Error fetching equity curve data')
       setEquityData([])
       setTotalPnl(0)
+    } finally {
+      setEquityLoading(false)
     }
   }
 
@@ -1311,8 +1329,83 @@ function TradesContent() {
         <>
           {/* Equity Curve */}
           <div className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Bot Filter */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="h-5 w-5" />
+                  Equity Curve Filters
+                </CardTitle>
+                <CardDescription>
+                  Filter equity curve by bot performance and date range.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                  <div>
+                    <Label htmlFor="botFilter">Bot Performance</Label>
+                    <select
+                      id="botFilter"
+                      value={selectedBot}
+                      onChange={(e) => setSelectedBot(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="all">All Trading Activity</option>
+                      {availableBots.map(bot => (
+                        <option key={bot.id} value={bot.id}>{bot.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="equityStartDate">Start Date</Label>
+                    <Input
+                      id="equityStartDate"
+                      type="date"
+                      value={tradeFilters.startDate}
+                      onChange={(e) => setTradeFilters(prev => ({
+                        ...prev,
+                        startDate: e.target.value
+                      }))}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="equityEndDate">End Date</Label>
+                    <Input
+                      id="equityEndDate"
+                      type="date"
+                      value={tradeFilters.endDate}
+                      onChange={(e) => setTradeFilters(prev => ({
+                        ...prev,
+                        endDate: e.target.value
+                      }))}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Button
+                      onClick={() => {
+                        setTradeFilters({
+                          startDate: '',
+                          endDate: '',
+                          botType: 'all'
+                        })
+                        setSelectedBot('all')
+                      }}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reset
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Enhanced Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">Total P&L</CardTitle>
@@ -1328,26 +1421,39 @@ function TradesContent() {
                       <TrendingDown className="h-5 w-5 text-red-600 ml-2" />
                     )}
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Zerodha calculated</p>
                 </CardContent>
               </Card>
               
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-600">Total Trades</CardTitle>
+                  <CardTitle className="text-sm font-medium text-gray-600">Trading Days</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">{trades.length}</div>
+                  <div className="text-2xl font-bold text-gray-900">{equitySummary.totalDays}</div>
+                  <p className="text-xs text-gray-500 mt-1">{equitySummary.profitableDays} profitable</p>
                 </CardContent>
               </Card>
               
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-600">Win Rate</CardTitle>
+                  <CardTitle className="text-sm font-medium text-gray-600">Daily Win Rate</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {trades.length > 0 ? Math.round((equityData.filter(d => d.pnl > 0).length / equityData.length) * 100) : 0}%
+                  <div className="text-2xl font-bold text-gray-900">{equitySummary.winRate}%</div>
+                  <p className="text-xs text-gray-500 mt-1">Profitable days</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">Avg Daily P&L</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className={`text-2xl font-bold ${equitySummary.averageDailyPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(equitySummary.averageDailyPnL)}
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Per trading day</p>
                 </CardContent>
               </Card>
             </div>
@@ -1355,13 +1461,63 @@ function TradesContent() {
             {/* Equity Curve Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Portfolio Value Over Time</CardTitle>
-                <CardDescription>
-                  Track your portfolio value progression based on trade history
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Portfolio Value Over Time</CardTitle>
+                    <CardDescription>
+                      Track your portfolio value using Zerodha's daily P&L data
+                      {selectedBot !== 'all' && availableBots.find(b => b.id === selectedBot) && 
+                        ` - Filtered by ${availableBots.find(b => b.id === selectedBot)?.name}`}
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={fetchEquityCurve} 
+                      disabled={equityLoading}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${equityLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <Button 
+                      onClick={async () => {
+                        try {
+                          const response = await fetch('/api/equity/pnl-breakdown', { method: 'POST' })
+                          if (response.ok) {
+                            const data = await response.json()
+                            alert('Daily P&L snapshot created successfully!')
+                            fetchEquityCurve() // Refresh data
+                          } else {
+                            const error = await response.json()
+                            alert(`Failed to create snapshot: ${error.error}`)
+                          }
+                        } catch (error) {
+                          alert(`Error: ${error.message}`)
+                        }
+                      }}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Snapshot Today
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {equityData.length > 0 ? (
+                {equityError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                    {equityError}
+                  </div>
+                )}
+
+                {equityLoading ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+                    <p>Loading equity curve data...</p>
+                  </div>
+                ) : equityData.length > 0 ? (
                   <div className="space-y-4">
                     {/* Simple equity curve visualization */}
                     <div className="h-64 bg-gray-50 rounded-lg p-4 flex items-end space-x-1">
@@ -1382,7 +1538,7 @@ function TradesContent() {
                       })}
                     </div>
                     
-                    {/* Data Points */}
+                    {/* Enhanced Data Points */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -1390,27 +1546,87 @@ function TradesContent() {
                             <th className="text-left py-2">Date</th>
                             <th className="text-right py-2">Portfolio Value</th>
                             <th className="text-right py-2">Daily P&L</th>
+                            <th className="text-right py-2">Total P&L</th>
+                            <th className="text-left py-2">Source</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {equityData.slice(-10).reverse().map((point, index) => (
-                            <tr key={index} className="border-b">
-                              <td className="py-2">{new Date(point.date).toLocaleDateString()}</td>
+                          {equityData.slice(-15).reverse().map((point, index) => (
+                            <tr key={index} className="border-b hover:bg-gray-50">
+                              <td className="py-2">
+                                <div className="flex items-center gap-2">
+                                  {new Date(point.date).toLocaleDateString()}
+                                  {point.isRealtime && (
+                                    <Badge variant="secondary" className="text-xs">Live</Badge>
+                                  )}
+                                </div>
+                              </td>
                               <td className="py-2 text-right font-medium">{formatCurrency(point.value)}</td>
-                              <td className={`py-2 text-right ${point.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              <td className={`py-2 text-right font-mono ${point.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {point.pnl >= 0 ? '+' : ''}{formatCurrency(point.pnl)}
+                              </td>
+                              <td className={`py-2 text-right font-mono ${(point.totalPnL || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {(point.totalPnL || 0) >= 0 ? '+' : ''}{formatCurrency(point.totalPnL || 0)}
+                              </td>
+                              <td className="py-2">
+                                <div className="text-xs text-gray-500">
+                                  {point.isRealtime ? 'Real-time' : 'Snapshot'}
+                                  {point.botPerformance && point.botPerformance.length > 0 && (
+                                    <div className="text-xs text-blue-600">
+                                      {point.botPerformance.length} bot{point.botPerformance.length > 1 ? 's' : ''} active
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
+
+                    {/* Best/Worst Days */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                      <div className="text-center">
+                        <div className="text-sm text-gray-600">Best Day</div>
+                        <div className="text-lg font-bold text-green-600">
+                          {formatCurrency(equitySummary.bestDay)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm text-gray-600">Worst Day</div>
+                        <div className="text-lg font-bold text-red-600">
+                          {formatCurrency(equitySummary.worstDay)}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8">
                     <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No equity data available</h3>
-                    <p className="text-gray-600">Your equity curve will appear here once you have trade history.</p>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No P&L data available</h3>
+                    <p className="text-gray-600 mb-4">
+                      Create a daily P&L snapshot to start tracking your equity curve with Zerodha's data.
+                    </p>
+                    <Button 
+                      onClick={async () => {
+                        try {
+                          const response = await fetch('/api/equity/pnl-breakdown', { method: 'POST' })
+                          if (response.ok) {
+                            alert('Daily P&L snapshot created successfully!')
+                            fetchEquityCurve()
+                          } else {
+                            const error = await response.json()
+                            alert(`Failed to create snapshot: ${error.error}`)
+                          }
+                        } catch (error) {
+                          alert(`Error: ${error.message}`)
+                        }
+                      }}
+                      className="mx-auto"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Create First Snapshot
+                    </Button>
                   </div>
                 )}
               </CardContent>
