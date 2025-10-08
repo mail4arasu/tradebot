@@ -836,10 +836,53 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
     const executionResult = await db.collection('tradeexecutions').insertOne(optionsTradeExecution)
     console.log('📋 Options trade execution record created:', executionResult.insertedId)
 
-    // Create trade history record if successful
+    // Create position record for auto-exit scheduling if successful
     if (optionsResult.success && optionsResult.selectedContract) {
+      console.log(`📊 Creating position record for Options Bot trade...`)
+      
+      const positionData = {
+        userId: allocation.userId,
+        botId: bot._id,
+        allocationId: allocation._id,
+        symbol: optionsResult.selectedContract.symbol,
+        exchange: 'NFO',
+        instrumentType: 'OPTIONS',
+        entrySignalId: signalId,
+        entryPrice: optionsResult.selectedContract.premium,
+        entryQuantity: optionsResult.positionSize?.quantity || 0,
+        entryTime: new Date(),
+        entryOrderId: optionsResult.executionDetails?.orderId || 'SIMULATED',
+        side: determinePositionSide(payload),
+        isIntraday: bot.tradingType === 'INTRADAY',
+        scheduledExitTime: bot.tradingType === 'INTRADAY' ? bot.intradayExitTime : undefined,
+        stopLoss: payload.stopLoss,
+        target: payload.target
+      }
+      
+      const positionId = await createPosition(positionData)
+      console.log(`📊 Position created for Options Bot: ${positionId}`)
+      
+      // Schedule intraday auto-exit if applicable
+      if (bot.tradingType === 'INTRADAY' && bot.intradayExitTime) {
+        console.log(`📅 Scheduling auto-exit for Options Bot position at ${bot.intradayExitTime}`)
+        await intradayScheduler.schedulePositionExit(positionId.toString(), bot.intradayExitTime)
+      }
+      
+      // Update trade execution with position link
+      await db.collection('tradeexecutions').updateOne(
+        { _id: executionResult.insertedId },
+        {
+          $set: {
+            positionId: positionId,
+            updatedAt: new Date()
+          }
+        }
+      )
+      
+      // Create trade history record
       await createTradeHistoryRecord({
         ...optionsTradeExecution,
+        positionId: positionId,
         symbol: optionsResult.selectedContract.symbol,
         quantity: optionsResult.positionSize?.quantity || 0,
         price: optionsResult.selectedContract.premium
