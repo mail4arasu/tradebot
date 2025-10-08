@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download, Clock, Target, Shield, PieChart, Search } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download, Clock, Target, Shield, PieChart, Search, Zap, AlertTriangle, Eye } from 'lucide-react'
 import Link from 'next/link'
 import { ZerodhaTable, PositionRow, OrderRow, TradeRow, BotPositionRow } from './zerodha-style'
 
@@ -113,6 +113,44 @@ interface BotPosition {
   pnlPercentage: number
 }
 
+interface WebhookSignal {
+  _id: string
+  signal: string
+  symbol: string
+  exchange: string
+  price: number
+  processed: boolean
+  processedAt: string
+  emergencyStop: boolean
+  totalUsersTargeted: number
+  successfulExecutions: number
+  failedExecutions: number
+  createdAt: string
+  bot: {
+    name: string
+    strategy: string
+  }
+  executions: Array<{
+    _id: string
+    userId: string
+    quantity: number
+    status: string
+    executedPrice: number
+    error: string
+    createdAt: string
+    user: {
+      email: string
+      name: string
+    }
+  }>
+  userStats: {
+    totalExecutions: number
+    successfulExecutions: number
+    failedExecutions: number
+    successRate: number
+  }
+}
+
 interface Holding {
   tradingsymbol: string
   exchange: string
@@ -149,7 +187,7 @@ function TradesContent() {
   const [error, setError] = useState('')
   const [positionsError, setPositionsError] = useState('')
   const [ordersError, setOrdersError] = useState('')
-  const [activeTab, setActiveTab] = useState<'bot-positions' | 'positions' | 'orders' | 'trades' | 'equity' | 'holdings'>('bot-positions')
+  const [activeTab, setActiveTab] = useState<'bot-positions' | 'positions' | 'orders' | 'trades' | 'equity' | 'holdings' | 'bot-activity'>('bot-positions')
   
   // Bot positions state
   const [botPositions, setBotPositions] = useState<BotPosition[]>([])
@@ -205,7 +243,25 @@ function TradesContent() {
     botPositions: '',
     positions: '',
     orders: '',
-    trades: ''
+    trades: '',
+    botActivity: ''
+  })
+  
+  // Bot Activity state
+  const [webhookSignals, setWebhookSignals] = useState<WebhookSignal[]>([])
+  const [webhookSignalsLoading, setWebhookSignalsLoading] = useState(true)
+  const [webhookSignalsError, setWebhookSignalsError] = useState('')
+  const [webhookSignalsStats, setWebhookSignalsStats] = useState({
+    totalSignals: 0,
+    processedSignals: 0,
+    totalExecutions: 0,
+    successfulExecutions: 0,
+    failedExecutions: 0,
+    successRate: 0
+  })
+  const [activityFilters, setActivityFilters] = useState({
+    status: 'all' as 'all' | 'successful' | 'failed' | 'emergency',
+    botId: 'all'
   })
   
   // Holdings state
@@ -222,7 +278,7 @@ function TradesContent() {
   // Set initial tab from URL parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab') as typeof activeTab
-    if (tabParam && ['bot-positions', 'positions', 'orders', 'trades', 'equity', 'holdings'].includes(tabParam)) {
+    if (tabParam && ['bot-positions', 'positions', 'orders', 'trades', 'equity', 'holdings', 'bot-activity'].includes(tabParam)) {
       setActiveTab(tabParam)
     }
   }, [searchParams])
@@ -235,6 +291,7 @@ function TradesContent() {
       fetchSyncStatus()
       fetchBotPositions()
       fetchHoldings()
+      fetchWebhookSignals()
     }
   }, [session])
 
@@ -279,6 +336,13 @@ function TradesContent() {
       fetchEquityCurve()
     }
   }, [session, activeTab, tradeFilters, selectedBot])
+
+  // Fetch webhook signals when bot activity tab is active or filters change
+  useEffect(() => {
+    if (session && activeTab === 'bot-activity') {
+      fetchWebhookSignals()
+    }
+  }, [session, activeTab, activityFilters])
 
   const fetchTrades = async () => {
     try {
@@ -540,7 +604,7 @@ function TradesContent() {
   }
 
   const refreshAll = async () => {
-    await Promise.all([fetchTrades(), fetchPositions(), fetchOrders(), fetchBotPositions(), fetchHoldings()])
+    await Promise.all([fetchTrades(), fetchPositions(), fetchOrders(), fetchBotPositions(), fetchHoldings(), fetchWebhookSignals()])
   }
 
   const fetchEquityCurve = async () => {
@@ -610,6 +674,51 @@ function TradesContent() {
       setTotalPnl(0)
     } finally {
       setEquityLoading(false)
+    }
+  }
+
+  const fetchWebhookSignals = async () => {
+    try {
+      setWebhookSignalsLoading(true)
+      setWebhookSignalsError('')
+
+      // Build query parameters
+      const queryParams = new URLSearchParams()
+      if (activityFilters.status !== 'all') queryParams.set('status', activityFilters.status)
+      if (activityFilters.botId !== 'all') queryParams.set('botId', activityFilters.botId)
+      queryParams.set('limit', '50') // Show last 50 signals
+
+      console.log('Fetching webhook signals with params:', queryParams.toString())
+
+      const response = await fetch(`/api/user/webhook-signals?${queryParams}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        setWebhookSignals(data.signals || [])
+        setWebhookSignalsStats(data.stats || {
+          totalSignals: 0,
+          processedSignals: 0,
+          totalExecutions: 0,
+          successfulExecutions: 0,
+          failedExecutions: 0,
+          successRate: 0
+        })
+
+        console.log('✅ Webhook signals loaded:', {
+          signals: data.signals?.length || 0,
+          stats: data.stats
+        })
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to fetch webhook signals')
+      }
+    } catch (error) {
+      console.error('Error fetching webhook signals:', error)
+      setWebhookSignalsError(error.message || 'Error fetching webhook signals')
+      setWebhookSignals([])
+    } finally {
+      setWebhookSignalsLoading(false)
     }
   }
 
@@ -813,6 +922,17 @@ function TradesContent() {
             >
               <PieChart className="h-4 w-4 inline mr-2" />
               Holdings ({holdingsSummary.count})
+            </button>
+            <button
+              onClick={() => setActiveTab('bot-activity')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'bot-activity'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Zap className="h-4 w-4 inline mr-2" />
+              Bot Activity ({webhookSignalsStats.totalSignals})
             </button>
           </nav>
         </div>
@@ -1784,6 +1904,258 @@ function TradesContent() {
               )}
             </CardContent>
           </Card>
+        </>
+      )}
+
+      {activeTab === 'bot-activity' && (
+        <>
+          {/* Bot Activity Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{webhookSignalsStats.totalSignals}</div>
+                  <div className="text-sm text-gray-600">Total Signals</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{webhookSignalsStats.successfulExecutions}</div>
+                  <div className="text-sm text-gray-600">Successful</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{webhookSignalsStats.failedExecutions}</div>
+                  <div className="text-sm text-gray-600">Failed</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{webhookSignalsStats.successRate}%</div>
+                  <div className="text-sm text-gray-600">Success Rate</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">{webhookSignalsStats.processedSignals}</div>
+                  <div className="text-sm text-gray-600">Processed</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{webhookSignalsStats.totalExecutions}</div>
+                  <div className="text-sm text-gray-600">Total Executions</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Activity Filters */}
+          <Card className="mb-6">
+            <CardContent className="pt-4">
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="status-filter">Status:</Label>
+                  <select
+                    id="status-filter"
+                    className="px-3 py-1 border rounded text-sm"
+                    value={activityFilters.status}
+                    onChange={(e) => setActivityFilters(prev => ({ ...prev, status: e.target.value as any }))}
+                  >
+                    <option value="all">All Signals</option>
+                    <option value="successful">Successful Only</option>
+                    <option value="failed">Failed Only</option>
+                    <option value="emergency">Emergency Stopped</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search signals..."
+                    value={searchTerms.botActivity}
+                    onChange={(e) => setSearchTerms(prev => ({ ...prev, botActivity: e.target.value }))}
+                    className="w-64"
+                  />
+                </div>
+                <Button 
+                  onClick={fetchWebhookSignals} 
+                  disabled={webhookSignalsLoading}
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${webhookSignalsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bot Activity Error State */}
+          {webhookSignalsError && (
+            <Card className="mb-6 border-red-200 bg-red-50">
+              <CardContent className="pt-6">
+                <p className="text-red-800">{webhookSignalsError}</p>
+                <Button onClick={fetchWebhookSignals} className="mt-4" variant="outline">
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bot Activity Loading State */}
+          {webhookSignalsLoading && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex justify-center items-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading bot activity...</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bot Activity List */}
+          {!webhookSignalsLoading && !webhookSignalsError && (
+            <ZerodhaTable
+              headers={['Signal', 'Symbol', 'Price', 'Status', 'Executions', 'Time', 'Details']}
+              searchTerm={searchTerms.botActivity}
+              onSearch={(term) => setSearchTerms(prev => ({ ...prev, botActivity: term }))}
+              actions={
+                <Button onClick={fetchWebhookSignals} disabled={webhookSignalsLoading} variant="outline" size="sm">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${webhookSignalsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              }
+            >
+              {webhookSignals
+                .filter(signal => 
+                  signal.symbol.toLowerCase().includes(searchTerms.botActivity.toLowerCase()) ||
+                  signal.signal.toLowerCase().includes(searchTerms.botActivity.toLowerCase()) ||
+                  signal.bot.name.toLowerCase().includes(searchTerms.botActivity.toLowerCase())
+                )
+                .map((signal) => (
+                  <tr key={signal._id} className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <Badge className={
+                          signal.emergencyStop ? 'bg-red-100 text-red-800' :
+                          !signal.processed ? 'bg-yellow-100 text-yellow-800' :
+                          signal.userStats.failedExecutions > 0 ? 'bg-orange-100 text-orange-800' :
+                          'bg-green-100 text-green-800'
+                        }>
+                          {signal.emergencyStop ? 'Emergency Stop' : 
+                           signal.processed ? 'Processed' : 'Processing'}
+                        </Badge>
+                        <span className="font-medium">{signal.signal}</span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        via {signal.bot.name}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-medium">{signal.symbol}</div>
+                      <div className="text-xs text-gray-500">{signal.exchange}</div>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="font-medium">₹{signal.price.toLocaleString()}</div>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {signal.userStats.successfulExecutions > 0 && (
+                          <span className="text-green-600 text-sm">✓ {signal.userStats.successfulExecutions}</span>
+                        )}
+                        {signal.userStats.failedExecutions > 0 && (
+                          <span className="text-red-600 text-sm">✗ {signal.userStats.failedExecutions}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="text-sm">
+                        <div className="text-green-600">✓ {signal.userStats.successfulExecutions}</div>
+                        <div className="text-red-600">✗ {signal.userStats.failedExecutions}</div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="text-sm text-gray-500 flex items-center justify-end gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(signal.createdAt)}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {signal.executions.length > 0 && (
+                        <details className="inline-block">
+                          <summary className="cursor-pointer text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            View Details
+                          </summary>
+                          <div className="absolute z-10 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg p-4 right-0">
+                            <h4 className="font-medium mb-2">Execution Details</h4>
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {signal.executions.map((exec, idx) => (
+                                <div key={idx} className={`text-xs p-3 rounded border-l-4 ${
+                                  exec.status === 'EXECUTED' 
+                                    ? 'bg-green-50 border-green-400' 
+                                    : 'bg-red-50 border-red-400'
+                                }`}>
+                                  <div className="flex justify-between items-start mb-2">
+                                    <span className="font-medium">
+                                      {exec.user?.name || exec.user?.email || 'Unknown User'}
+                                    </span>
+                                    <Badge variant={exec.status === 'EXECUTED' ? 'default' : 'destructive'} className="text-xs">
+                                      {exec.status}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-gray-600 mb-1">
+                                    Qty: {exec.quantity} | Price: ₹{exec.executedPrice || 'Pending'}
+                                  </div>
+                                  {exec.createdAt && (
+                                    <div className="text-gray-500 text-xs mb-1">
+                                      {new Date(exec.createdAt).toLocaleString()}
+                                    </div>
+                                  )}
+                                  {exec.error && (
+                                    <div className="text-red-700 bg-red-100 p-2 rounded mt-2 border border-red-200">
+                                      <div className="font-medium text-red-800 flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        Error:
+                                      </div>
+                                      <div className="mt-1">{exec.error}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </details>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              {webhookSignals
+                .filter(signal => 
+                  signal.symbol.toLowerCase().includes(searchTerms.botActivity.toLowerCase()) ||
+                  signal.signal.toLowerCase().includes(searchTerms.botActivity.toLowerCase()) ||
+                  signal.bot.name.toLowerCase().includes(searchTerms.botActivity.toLowerCase())
+                ).length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    {searchTerms.botActivity ? 'No signals match your search' : 'No bot activity found'}
+                  </td>
+                </tr>
+              )}
+            </ZerodhaTable>
+          )}
         </>
       )}
     </div>
