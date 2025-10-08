@@ -165,6 +165,7 @@ function TradesContent() {
   })
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<any>(null)
+  const [cleaning, setCleaning] = useState(false)
   
   // Order filtering states (no date filters - Zerodha API limitation)
   const [orderFilters, setOrderFilters] = useState({
@@ -448,6 +449,33 @@ function TradesContent() {
     }
   }
 
+  const cleanupDuplicates = async () => {
+    try {
+      setCleaning(true)
+      const response = await fetch('/api/zerodha/fix-trade-prices', {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Cleanup result:', data)
+        // Show success message to user
+        alert(`Cleanup completed: ${data.summary.duplicatesRemoved} duplicates removed, ${data.summary.fixed} prices fixed`)
+        // Refresh trades after cleanup
+        await fetchTrades()
+      } else {
+        const errorData = await response.json()
+        console.error('Cleanup failed:', errorData)
+        alert('Cleanup failed: ' + errorData.error)
+      }
+    } catch (error) {
+      console.error('Error cleaning trades:', error)
+      alert('Error cleaning trades: ' + error.message)
+    } finally {
+      setCleaning(false)
+    }
+  }
+
   const fetchHoldings = async () => {
     try {
       setHoldingsLoading(true)
@@ -656,6 +684,10 @@ function TradesContent() {
             <Button onClick={syncTrades} disabled={syncing} variant="outline">
               <Download className={`h-4 w-4 mr-2 ${syncing ? 'animate-bounce' : ''}`} />
               {syncing ? 'Syncing...' : 'Sync Trades'}
+            </Button>
+            <Button onClick={cleanupDuplicates} disabled={cleaning} variant="outline">
+              <RotateCcw className={`h-4 w-4 mr-2 ${cleaning ? 'animate-spin' : ''}`} />
+              {cleaning ? 'Cleaning...' : 'Cleanup Duplicates'}
             </Button>
             <Button onClick={refreshAll} disabled={loading || positionsLoading || ordersLoading} variant="outline">
               <RefreshCw className={`h-4 w-4 mr-2 ${(loading || positionsLoading || ordersLoading) ? 'animate-spin' : ''}`} />
@@ -1218,10 +1250,16 @@ function TradesContent() {
             searchTerm={searchTerms.trades}
             onSearch={(term) => setSearchTerms(prev => ({ ...prev, trades: term }))}
             actions={
-              <Button variant="outline" size="sm" onClick={fetchTrades} disabled={loading}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={cleanupDuplicates} disabled={cleaning}>
+                  <RotateCcw className={`h-4 w-4 mr-2 ${cleaning ? 'animate-spin' : ''}`} />
+                  {cleaning ? 'Cleaning...' : 'Cleanup'}
+                </Button>
+                <Button variant="outline" size="sm" onClick={fetchTrades} disabled={loading}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </>
             }
           >
             {loading ? (

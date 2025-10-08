@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
               exchange: trade.exchange,
               transaction_type: trade.transaction_type,
               quantity: Math.abs(trade.quantity),
-              price: trade.price,
+              price: trade.average_price || trade.price || 0,
               trade_date: trade.trade_date || trade.fill_timestamp,
               order_id: trade.order_id,
               product: trade.product,
