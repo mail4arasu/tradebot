@@ -798,13 +798,13 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
       quantity: optionsResult.positionSize?.quantity || 0,
       orderType: payload.action,
       requestedPrice: optionsResult.selectedContract?.premium || 0,
-      executedPrice: null,
-      executedQuantity: null,
-      zerodhaOrderId: null,
-      zerodhaTradeId: null,
+      executedPrice: optionsResult.executionDetails?.executionPrice || null,
+      executedQuantity: optionsResult.success ? optionsResult.positionSize?.quantity || 0 : null,
+      zerodhaOrderId: optionsResult.executionDetails?.orderId || null,
+      zerodhaTradeId: optionsResult.executionDetails?.orderId || null,
       status: optionsResult.success ? 'EXECUTED' : 'FAILED',
       submittedAt: new Date(),
-      executedAt: optionsResult.success ? new Date() : null,
+      executedAt: optionsResult.executionDetails?.executionTime || (optionsResult.success ? new Date() : null),
       error: optionsResult.error || null,
       retryCount: 0,
       zerodhaResponse: optionsResult.executionDetails || null,
@@ -842,14 +842,15 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
         price: optionsResult.selectedContract.premium
       }, {
         success: true,
-        orderId: `OPT_${Date.now()}`,
-        tradeId: `OPTTRD_${Date.now()}`,
-        executedPrice: optionsResult.selectedContract.premium,
+        orderId: optionsResult.executionDetails?.orderId || `OPT_${Date.now()}`,
+        tradeId: `OPTTRD_${optionsResult.executionDetails?.orderId || Date.now()}`,
+        executedPrice: optionsResult.executionDetails?.executionPrice || optionsResult.selectedContract.premium,
         executedQuantity: optionsResult.positionSize?.quantity || 0,
         response: { 
           status: 'COMPLETE',
           options_analysis: optionsResult,
-          order_timestamp: new Date().toISOString()
+          order_timestamp: optionsResult.executionDetails?.executionTime?.toISOString() || new Date().toISOString(),
+          real_order_placed: !!optionsResult.executionDetails?.orderId
         }
       }, executionResult.insertedId, db)
     }
@@ -857,11 +858,12 @@ async function executeOptionsBot(allocation: any, bot: any, payload: TradingView
     return {
       success: optionsResult.success,
       executionId: executionResult.insertedId,
-      orderId: optionsResult.success ? `OPT_${Date.now()}` : null,
+      orderId: optionsResult.executionDetails?.orderId || null,
       error: optionsResult.error,
       optionsDetails: {
         selectedContract: optionsResult.selectedContract,
-        positionSize: optionsResult.positionSize
+        positionSize: optionsResult.positionSize,
+        realOrderPlaced: !!optionsResult.executionDetails?.orderId
       }
     }
 

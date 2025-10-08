@@ -135,28 +135,99 @@ export async function executeOptionsBotTrade(
     console.log(`💰 Position calculated: ${positionCalc.lots} lots (${positionCalc.lots * config.lotSize} quantity)`)
     console.log(`💵 Total investment: ₹${positionCalc.amount.toLocaleString()}`)
 
-    // Step 10: Prepare execution result (actual order placement would happen here)
-    const result: OptionsBotResult = {
-      success: true,
-      selectedContract: {
-        symbol: bestContract.symbol!,
-        strike: bestContract.strike,
-        expiry: bestContract.expiry,
-        optionType: bestContract.optionType,
-        premium: bestContract.premium || 0,
-        delta: bestContract.delta || 0,
-        openInterest: bestContract.openInterest || 0
-      },
-      positionSize: {
-        lots: positionCalc.lots,
-        quantity: positionCalc.lots * config.lotSize,
-        totalInvestment: positionCalc.amount,
-        riskAmount: (config.capital * config.riskPercentage) / 100
+    // Step 10: Place actual order with Zerodha
+    console.log(`📤 Placing real order with Zerodha...`)
+    
+    // Import ZerodhaAPI for order placement
+    const { ZerodhaAPI } = await import('@/lib/zerodha')
+    const { decrypt } = await import('@/lib/encryption')
+    
+    // Initialize Zerodha API with decrypted credentials
+    const apiKey = decrypt(zerodhaConfig.apiKey)
+    const apiSecret = decrypt(zerodhaConfig.apiSecret) 
+    const accessToken = decrypt(zerodhaConfig.accessToken)
+    
+    const zerodha = new ZerodhaAPI(apiKey, apiSecret)
+    zerodha.setAccessToken(accessToken)
+    
+    // Prepare order parameters for options
+    const orderParams = {
+      exchange: 'NFO',
+      tradingsymbol: bestContract.symbol!,
+      transaction_type: signal.action === 'SELL' || signal.action === 'SHORT' ? 'SELL' : 'BUY',
+      quantity: positionCalc.lots * config.lotSize,
+      order_type: 'MARKET', // Use market orders for immediate execution
+      product: 'MIS', // Intraday for options
+      validity: 'DAY',
+      tag: `OPTBOT_${Date.now()}`
+    }
+    
+    console.log(`📋 Order parameters:`, orderParams)
+    
+    try {
+      // Place the order
+      const orderResponse = await zerodha.placeOrder('regular', orderParams)
+      
+      if (orderResponse.status === 'success') {
+        const orderId = orderResponse.data.order_id
+        console.log(`✅ Options order placed successfully: ${orderId}`)
+        
+        // Prepare successful execution result
+        const result: OptionsBotResult = {
+          success: true,
+          selectedContract: {
+            symbol: bestContract.symbol!,
+            strike: bestContract.strike,
+            expiry: bestContract.expiry,
+            optionType: bestContract.optionType,
+            premium: bestContract.premium || 0,
+            delta: bestContract.delta || 0,
+            openInterest: bestContract.openInterest || 0
+          },
+          positionSize: {
+            lots: positionCalc.lots,
+            quantity: positionCalc.lots * config.lotSize,
+            totalInvestment: positionCalc.amount,
+            riskAmount: (config.capital * config.riskPercentage) / 100
+          },
+          executionDetails: {
+            orderId: orderId,
+            executionPrice: bestContract.premium || 0,
+            executionTime: new Date()
+          }
+        }
+        
+        console.log(`✅ Options Bot execution completed successfully with real order`)
+        return result
+        
+      } else {
+        throw new Error(`Order placement failed: ${orderResponse.message || 'Unknown error'}`)
+      }
+      
+    } catch (orderError) {
+      console.error(`❌ Failed to place options order:`, orderError)
+      
+      // Return failure result with detailed error
+      return {
+        success: false,
+        error: `Order placement failed: ${orderError instanceof Error ? orderError.message : 'Unknown order error'}`,
+        selectedContract: {
+          symbol: bestContract.symbol!,
+          strike: bestContract.strike,
+          expiry: bestContract.expiry,
+          optionType: bestContract.optionType,
+          premium: bestContract.premium || 0,
+          delta: bestContract.delta || 0,
+          openInterest: bestContract.openInterest || 0
+        },
+        positionSize: {
+          lots: positionCalc.lots,
+          quantity: positionCalc.lots * config.lotSize,
+          totalInvestment: positionCalc.amount,
+          riskAmount: (config.capital * config.riskPercentage) / 100
+        }
       }
     }
-
-    console.log(`✅ Options Bot execution completed successfully`)
-    return result
 
   } catch (error) {
     console.error('❌ Options Bot execution error:', error)
