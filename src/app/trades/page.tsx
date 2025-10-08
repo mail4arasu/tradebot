@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download, Clock, Target, Shield, PieChart } from 'lucide-react'
+import { ArrowLeft, TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity, FileText, Filter, RotateCcw, Download, Clock, Target, Shield, PieChart, Search } from 'lucide-react'
 import Link from 'next/link'
+import { ZerodhaTable, PositionRow, OrderRow, TradeRow, BotPositionRow } from './zerodha-style'
 
 interface Trade {
   trade_id: string
@@ -184,6 +185,14 @@ function TradesContent() {
     open: 0,
     cancelled: 0,
     totalValue: 0
+  })
+  
+  // Search states for Zerodha-style UI
+  const [searchTerms, setSearchTerms] = useState({
+    botPositions: '',
+    positions: '',
+    orders: '',
+    trades: ''
   })
   
   // Holdings state
@@ -846,164 +855,36 @@ function TradesContent() {
 
           {/* Bot Positions List */}
           {!botPositionsLoading && !botPositionsError && (
-            <>
-              {botPositions.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center py-8">
-                      <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No bot positions</h3>
-                      <p className="text-gray-600">Positions opened by your trading bots will appear here.</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  {botPositions.map((position) => (
-                    <Card key={position._id} className="border-blue-200">
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className={`p-2 rounded-full ${
-                              position.status === 'OPEN' 
-                                ? 'bg-green-100 text-green-600' 
-                                : position.status === 'PARTIAL'
-                                ? 'bg-orange-100 text-orange-600'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              <Shield className="h-4 w-4" />
-                            </div>
-                            
-                            <div>
-                              <h3 className="font-medium text-gray-900">
-                                {position.symbol}
-                              </h3>
-                              <p className="text-sm text-gray-600">
-                                {position.exchange} • {position.botName} • {position.side}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                Entry: {formatDate(position.entryTime)}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="flex items-center space-x-4">
-                              <Badge variant={
-                                position.status === 'OPEN' ? 'default' :
-                                position.status === 'PARTIAL' ? 'secondary' : 'outline'
-                              }>
-                                {position.status}
-                              </Badge>
-                              
-                              <div className="text-right">
-                                <p className="font-medium">
-                                  {position.currentQuantity}/{position.entryQuantity} @ {formatCurrency(position.averagePrice)}
-                                </p>
-                                <p className={`text-sm ${
-                                  position.totalPnl >= 0 ? 'text-green-600' : 'text-red-600'
-                                }`}>
-                                  P&L: {formatCurrency(position.totalPnl)} ({position.pnlPercentage.toFixed(2)}%)
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Position Details */}
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Position ID:</span>
-                              <p className="font-mono text-xs">{position.positionId}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Type:</span>
-                              <p>{position.isIntraday ? 'Intraday' : 'Positional'}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Unrealized P&L:</span>
-                              <p className={position.unrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                {formatCurrency(position.unrealizedPnl)}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Realized P&L:</span>
-                              <p className={position.realizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                {formatCurrency(position.realizedPnl)}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          {/* Bot & Strategy Info */}
-                          <div className="mt-3 pt-3 border-t border-gray-100">
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                              <div>
-                                <span className="text-gray-500">Bot Strategy:</span>
-                                <p className="text-blue-600 font-medium">{position.botStrategy}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Risk Level:</span>
-                                <p>{position.botRiskLevel}</p>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Duration:</span>
-                                <p>{Math.floor(position.durationInPosition / 60)}h {position.durationInPosition % 60}m</p>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Exit History */}
-                          {position.exitExecutions && position.exitExecutions.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <span className="text-gray-500 text-sm">Exit History:</span>
-                              <div className="space-y-1 mt-2">
-                                {position.exitExecutions.map((exit, index) => (
-                                  <div key={index} className="flex justify-between text-sm">
-                                    <span>{exit.quantity} @ {formatCurrency(exit.price)}</span>
-                                    <span className="text-gray-500">{exit.reason}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Stop Loss & Target */}
-                          {(position.stopLoss || position.target) && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <div className="flex space-x-6 text-sm">
-                                {position.stopLoss && (
-                                  <div className="flex items-center text-red-600">
-                                    <TrendingDown className="h-4 w-4 mr-1" />
-                                    SL: {formatCurrency(position.stopLoss)}
-                                  </div>
-                                )}
-                                {position.target && (
-                                  <div className="flex items-center text-green-600">
-                                    <Target className="h-4 w-4 mr-1" />
-                                    Target: {formatCurrency(position.target)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Auto Square-off Info */}
-                          {position.isIntraday && position.status !== 'CLOSED' && position.scheduledExitTime && (
-                            <div className="mt-3 pt-3 border-t border-gray-100">
-                              <div className="flex items-center text-sm text-orange-600">
-                                <Clock className="h-4 w-4 mr-2" />
-                                Auto square-off scheduled at {position.scheduledExitTime}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+            <ZerodhaTable
+              headers={['Product', 'Instrument', 'Qty.', 'Avg.', 'LTP', 'P&L', 'Status']}
+              searchTerm={searchTerms.botPositions}
+              onSearch={(term) => setSearchTerms(prev => ({ ...prev, botPositions: term }))}
+              actions={
+                <Button onClick={fetchBotPositions} disabled={botPositionsLoading} variant="outline" size="sm">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${botPositionsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              }
+            >
+              {botPositions
+                .filter(position => 
+                  position.symbol.toLowerCase().includes(searchTerms.botPositions.toLowerCase()) ||
+                  (position.botName || '').toLowerCase().includes(searchTerms.botPositions.toLowerCase())
+                )
+                .map((position) => (
+                  <BotPositionRow key={position._id} position={position} />
+                ))}
+              {botPositions.filter(position => 
+                position.symbol.toLowerCase().includes(searchTerms.botPositions.toLowerCase()) ||
+                (position.botName || '').toLowerCase().includes(searchTerms.botPositions.toLowerCase())
+              ).length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    {searchTerms.botPositions ? 'No bot positions match your search' : 'No bot positions found'}
+                  </td>
+                </tr>
               )}
-            </>
+            </ZerodhaTable>
           )}
         </>
       )}
