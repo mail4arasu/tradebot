@@ -374,9 +374,38 @@ async function processEntrySignal(allocation: any, bot: any, payload: TradingVie
       const openPositions = await getOpenPositions(new ObjectId(allocation.userId), bot._id)
       if (openPositions.length > 0) {
         console.log(`❌ Multiple positions not allowed for bot: ${bot.name}`)
+        
+        // Record this as a failed execution in the database for tracking
+        const errorExecution = {
+          userId: allocation.userId,
+          botId: bot._id,
+          signalId: signalId,
+          symbol: payload.symbol,
+          exchange: payload.exchange || bot.exchange || 'NFO',
+          orderType: payload.action,
+          quantity: allocation.quantity || 0,
+          requestedPrice: payload.price || 0,
+          executedPrice: 0,
+          executedQuantity: 0,
+          zerodhaOrderId: null,
+          status: 'FAILED',
+          tradeType: 'ENTRY',
+          exitReason: null,
+          pnl: 0,
+          fees: 0,
+          error: `Multiple positions not allowed for this bot. Current open positions: ${openPositions.length}. Bot configuration prevents multiple simultaneous positions. Exit existing position first or enable multiple positions in bot settings.`,
+          zerodhaResponse: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+        
+        const client = await clientPromise
+        const db = client.db('tradebot')
+        const errorResult = await db.collection('tradeexecutions').insertOne(errorExecution)
+        
         return {
           success: false,
-          executionId: null,
+          executionId: errorResult.insertedId,
           error: 'Multiple positions not allowed for this bot'
         }
       }
@@ -454,9 +483,38 @@ async function processExitSignal(allocation: any, bot: any, payload: TradingView
     
     if (openPositions.length === 0) {
       console.log(`⚠️ No open positions found for user: ${allocation.userId}, bot: ${bot.name}`)
+      
+      // Record this as a failed execution in the database for tracking
+      const errorExecution = {
+        userId: allocation.userId,
+        botId: bot._id,
+        signalId: signalId,
+        symbol: payload.symbol,
+        exchange: payload.exchange || bot.exchange || 'NFO',
+        orderType: payload.action,
+        quantity: allocation.quantity || 0,
+        requestedPrice: payload.price || 0,
+        executedPrice: 0,
+        executedQuantity: 0,
+        zerodhaOrderId: null,
+        status: 'FAILED',
+        tradeType: 'EXIT',
+        exitReason: 'No open positions to exit',
+        pnl: 0,
+        fees: 0,
+        error: `No open positions found to exit. This usually means: 1) Positions were manually closed in Zerodha, 2) Previous exit signal already processed, or 3) No entry signal was executed for this bot.`,
+        zerodhaResponse: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      
+      const client = await clientPromise
+      const db = client.db('tradebot')
+      const errorResult = await db.collection('tradeexecutions').insertOne(errorExecution)
+      
       return {
         success: false,
-        executionId: null,
+        executionId: errorResult.insertedId,
         error: 'No open positions to exit'
       }
     }
