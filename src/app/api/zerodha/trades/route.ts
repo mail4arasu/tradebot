@@ -65,10 +65,28 @@ export async function GET(request: NextRequest) {
               trades = liveTrades
               dataSource = 'live'
             } else {
-              // Hybrid: combine with database data
+              // Hybrid: combine with database data and deduplicate
               const dbTrades = await getStoredTrades(user._id, startDate, endDate, limit)
-              trades = [...liveTrades, ...dbTrades]
+              
+              // Deduplicate by trade_id, prioritizing live data
+              const tradeMap = new Map()
+              
+              // Add live trades first (higher priority)
+              liveTrades.forEach(trade => {
+                tradeMap.set(trade.trade_id, trade)
+              })
+              
+              // Add database trades only if they don't exist in live data
+              dbTrades.forEach(trade => {
+                if (!tradeMap.has(trade.trade_id)) {
+                  tradeMap.set(trade.trade_id, trade)
+                }
+              })
+              
+              trades = Array.from(tradeMap.values())
               dataSource = 'hybrid'
+              
+              console.log(`Hybrid mode: ${liveTrades.length} live + ${dbTrades.length} db = ${trades.length} deduplicated trades`)
             }
           } catch (zerodhaError) {
             console.error('Zerodha API error, falling back to database:', zerodhaError)
@@ -129,11 +147,24 @@ async function getStoredTrades(userId: string, startDate?: string | null, endDat
 
   const dbTrades = await Trade.find(query)
     .sort({ timestamp: -1 })
-    .limit(limit)
+    .limit(limit * 2) // Get more records to account for deduplication
     .lean()
 
+  // Deduplicate database trades by tradeId and orderId
+  const deduplicatedTrades = dbTrades.reduce((acc, trade) => {
+    const key = trade.tradeId || trade.orderId || trade._id.toString()
+    if (!acc.find(t => (t.tradeId === trade.tradeId && trade.tradeId) || 
+                       (t.orderId === trade.orderId && trade.orderId) ||
+                       t._id.toString() === trade._id.toString())) {
+      acc.push(trade)
+    }
+    return acc
+  }, [])
+
+  console.log(`Database query: ${dbTrades.length} raw trades -> ${deduplicatedTrades.length} deduplicated trades`)
+
   // Convert database format to API format with bot information
-  return dbTrades.map(trade => ({
+  return deduplicatedTrades.slice(0, limit).map(trade => ({
     trade_id: trade.tradeId,
     tradingsymbol: trade.tradingSymbol,
     exchange: trade.exchange,
