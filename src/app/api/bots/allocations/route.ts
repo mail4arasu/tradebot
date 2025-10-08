@@ -99,9 +99,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate risk percentage
-    if (riskPercentage <= 0 || riskPercentage > 50) {
+    if (riskPercentage <= 0 || riskPercentage > 100) {
       return NextResponse.json(
-        { error: 'Risk percentage must be between 0.1% and 50%' },
+        { error: 'Risk percentage must be between 0.1% and 100%' },
         { status: 400 }
       )
     }

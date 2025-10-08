@@ -246,8 +246,8 @@ export function validateOptionsBotConfig(config: OptionsBotConfig): { valid: boo
     return { valid: false, error: 'Capital must be greater than 0' }
   }
   
-  if (config.riskPercentage <= 0 || config.riskPercentage > 50) {
-    return { valid: false, error: 'Risk percentage must be between 0 and 50' }
+  if (config.riskPercentage <= 0 || config.riskPercentage > 100) {
+    return { valid: false, error: 'Risk percentage must be between 0 and 100' }
   }
   
   if (config.deltaThreshold < 0.1 || config.deltaThreshold > 1.0) {

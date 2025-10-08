@@ -356,12 +356,12 @@ export default function BotManagement() {
                                 id={`riskPercentage-${allocation._id}`}
                                 type="number"
                                 min="0.1"
-                                max="50"
+                                max="100"
                                 step="0.1"
                                 value={allocation.riskPercentage || 2}
                                 onChange={(e) => {
                                   const riskPercentage = parseFloat(e.target.value)
-                                  if (riskPercentage > 0 && riskPercentage <= 50) {
+                                  if (riskPercentage > 0 && riskPercentage <= 100) {
                                     updateAllocation(allocation._id, { riskPercentage })
                                   }
                                 }}
@@ -382,11 +382,11 @@ export default function BotManagement() {
                               id={`maxTrades-${allocation._id}`}
                               type="number"
                               min="1"
-                              max="10"
+                              max="25"
                               value={allocation.maxTradesPerDay || 1}
                               onChange={(e) => {
                                 const maxTrades = parseInt(e.target.value)
-                                if (maxTrades > 0 && maxTrades <= 10) {
+                                if (maxTrades > 0 && maxTrades <= 25) {
                                   updateAllocation(allocation._id, { maxTradesPerDay: maxTrades })
                                 }
                               }}
