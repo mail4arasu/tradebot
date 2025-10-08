@@ -856,7 +856,7 @@ function TradesContent() {
           {/* Bot Positions List */}
           {!botPositionsLoading && !botPositionsError && (
             <ZerodhaTable
-              headers={['Product', 'Instrument', 'Qty.', 'Avg.', 'LTP', 'P&L', 'Status']}
+              headers={['Product', 'Instrument', 'Type/Duration', 'Qty.', 'Avg.', 'P&L', 'Status']}
               searchTerm={searchTerms.botPositions}
               onSearch={(term) => setSearchTerms(prev => ({ ...prev, botPositions: term }))}
               actions={
@@ -917,166 +917,35 @@ function TradesContent() {
 
           {/* Positions List */}
           {!positionsLoading && !positionsError && (
-            <>
-              {positions.net.length === 0 && positions.day.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-center py-8">
-                      <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No open positions</h3>
-                      <p className="text-gray-600">Your open positions will appear here when you have active trades.</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-6">
-                  {/* Net Positions */}
-                  {positions.net.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Net Positions ({positions.net.length})</h3>
-                      <div className="space-y-4">
-                        {positions.net.map((position, index) => (
-                          <Card key={`net-${index}`}>
-                            <CardContent className="pt-6">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-4">
-                                  <div className={`p-2 rounded-full ${
-                                    position.quantity > 0 
-                                      ? 'bg-green-100 text-green-600' 
-                                      : 'bg-red-100 text-red-600'
-                                  }`}>
-                                    {position.quantity > 0 ? (
-                                      <TrendingUp className="h-4 w-4" />
-                                    ) : (
-                                      <TrendingDown className="h-4 w-4" />
-                                    )}
-                                  </div>
-                                  
-                                  <div>
-                                    <h3 className="font-medium text-gray-900">
-                                      {position.tradingsymbol}
-                                    </h3>
-                                    <p className="text-sm text-gray-600">
-                                      {position.exchange} • {position.product}
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <div className="text-right">
-                                  <div className="flex items-center space-x-4">
-                                    <Badge variant={position.quantity > 0 ? 'default' : 'secondary'}>
-                                      {position.quantity > 0 ? 'LONG' : 'SHORT'}
-                                    </Badge>
-                                    
-                                    <div className="text-right">
-                                      <p className="font-medium">
-                                        {Math.abs(position.quantity)} @ {formatCurrency(position.average_price)}
-                                      </p>
-                                      <p className={`text-sm ${
-                                        position.pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                                      }`}>
-                                        P&L: {formatCurrency(position.pnl)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                  <div>
-                                    <span className="text-gray-500">Last Price:</span>
-                                    <p className="font-medium">{formatCurrency(position.last_price)}</p>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-500">Value:</span>
-                                    <p className="font-medium">{formatCurrency(position.value)}</p>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-500">Unrealised:</span>
-                                    <p className={`font-medium ${
-                                      position.unrealised >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      {formatCurrency(position.unrealised)}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-500">Realised:</span>
-                                    <p className={`font-medium ${
-                                      position.realised >= 0 ? 'text-green-600' : 'text-red-600'
-                                    }`}>
-                                      {formatCurrency(position.realised)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Day Positions */}
-                  {positions.day.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Day Positions ({positions.day.length})</h3>
-                      <div className="space-y-4">
-                        {positions.day.map((position, index) => (
-                          <Card key={`day-${index}`} className="border-orange-200 bg-orange-50">
-                            <CardContent className="pt-6">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-4">
-                                  <div className={`p-2 rounded-full ${
-                                    position.quantity > 0 
-                                      ? 'bg-green-100 text-green-600' 
-                                      : 'bg-red-100 text-red-600'
-                                  }`}>
-                                    {position.quantity > 0 ? (
-                                      <TrendingUp className="h-4 w-4" />
-                                    ) : (
-                                      <TrendingDown className="h-4 w-4" />
-                                    )}
-                                  </div>
-                                  
-                                  <div>
-                                    <h3 className="font-medium text-gray-900">
-                                      {position.tradingsymbol}
-                                    </h3>
-                                    <p className="text-sm text-gray-600">
-                                      {position.exchange} • {position.product} • <span className="text-orange-600">Day Position</span>
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <div className="text-right">
-                                  <div className="flex items-center space-x-4">
-                                    <Badge variant={position.quantity > 0 ? 'default' : 'secondary'}>
-                                      {position.quantity > 0 ? 'LONG' : 'SHORT'}
-                                    </Badge>
-                                    
-                                    <div className="text-right">
-                                      <p className="font-medium">
-                                        {Math.abs(position.quantity)} @ {formatCurrency(position.average_price)}
-                                      </p>
-                                      <p className={`text-sm ${
-                                        position.pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                                      }`}>
-                                        P&L: {formatCurrency(position.pnl)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+            <ZerodhaTable
+              headers={['Product', 'Instrument', 'Qty.', 'Avg.', 'LTP', 'P&L']}
+              searchTerm={searchTerms.positions}
+              onSearch={(term) => setSearchTerms(prev => ({ ...prev, positions: term }))}
+              actions={
+                <Button onClick={fetchPositions} disabled={positionsLoading} variant="outline" size="sm">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${positionsLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              }
+            >
+              {[...positions.net, ...positions.day]
+                .filter(position => 
+                  position.tradingsymbol.toLowerCase().includes(searchTerms.positions.toLowerCase())
+                )
+                .map((position, index) => (
+                  <PositionRow key={`${position.instrument_token}-${index}`} position={position} />
+                ))}
+              {[...positions.net, ...positions.day]
+                .filter(position => 
+                  position.tradingsymbol.toLowerCase().includes(searchTerms.positions.toLowerCase())
+                ).length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    {searchTerms.positions ? 'No positions match your search' : 'No positions found'}
+                  </td>
+                </tr>
               )}
-            </>
+            </ZerodhaTable>
           )}
         </>
       )}

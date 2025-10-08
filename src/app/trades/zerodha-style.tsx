@@ -323,38 +323,60 @@ const BotPositionRow = ({ position }: { position: BotPosition }) => {
     })
   }
 
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+  }
+
+  // Determine actual product type - for options it should be OPTIONS not FUTURES
+  const getProductType = () => {
+    if (position.symbol.includes('CE') || position.symbol.includes('PE')) {
+      return 'OPTIONS'
+    }
+    return position.instrumentType || 'FUTURES'
+  }
+
   return (
     <tr className="hover:bg-gray-50">
       <td className="px-4 py-3">
         <div className="flex items-center">
           <div className={`w-2 h-2 rounded-full mr-3 ${position.side === 'LONG' ? 'bg-green-500' : 'bg-red-500'}`}></div>
           <div>
-            <div className="text-sm font-medium text-gray-900">{position.instrumentType}</div>
+            <div className="text-sm font-medium text-gray-900">{getProductType()}</div>
           </div>
         </div>
       </td>
       <td className="px-4 py-3">
-        <div className="text-sm text-gray-900">{position.symbol}</div>
+        <div className="text-sm text-gray-900 font-medium">{position.symbol}</div>
         <div className="text-xs text-gray-500">{position.exchange} • {position.botName || 'Bot'} • {position.side}</div>
+      </td>
+      <td className="px-4 py-3">
+        <div className="text-sm text-gray-900">{position.isIntraday ? 'Intraday' : 'Positional'}</div>
+        <div className="text-xs text-gray-500">{formatDuration(position.durationInPosition || 0)}</div>
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
         {position.currentQuantity}
       </td>
       <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {position.averagePrice.toFixed(2)}
-      </td>
-      <td className="px-4 py-3 text-sm text-gray-900 text-right">
-        {position.entryPrice.toFixed(2)}
+        ₹{position.averagePrice.toFixed(2)}
       </td>
       <td className="px-4 py-3 text-right">
         <div className={`text-sm font-medium ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
-          {isProfit ? '+' : ''}{position.totalPnl.toFixed(2)}
+          {isProfit ? '+' : ''}₹{position.totalPnl.toFixed(2)}
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(position.status)}`}>
-          {position.status}
-        </span>
+        <div>
+          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(position.status)}`}>
+            {position.status}
+          </span>
+          {position.isIntraday && position.status !== 'CLOSED' && position.scheduledExitTime && (
+            <div className="text-xs text-orange-600 mt-1">
+              Auto exit: {position.scheduledExitTime}
+            </div>
+          )}
+        </div>
       </td>
     </tr>
   )
