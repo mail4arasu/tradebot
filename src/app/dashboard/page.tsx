@@ -44,11 +44,12 @@ export default function Dashboard() {
   const [positionsData, setPositionsData] = useState<any[]>([])
   const [loadingPortfolioDetails, setLoadingPortfolioDetails] = useState(false)
 
-  // Check if current time is within market hours (9:00 AM - 3:30 PM IST)
+  // Check if current time is within market hours (9:15 AM - 3:30 PM IST)
   const checkMarketHours = useCallback(() => {
     const now = new Date()
-    // Convert to IST (UTC+5:30)
-    const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
+    // Convert to IST (UTC+5:30) - properly handle timezone conversion
+    const utcTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000))
+    const istTime = new Date(utcTime.getTime() + (5.5 * 60 * 60 * 1000))
     const hours = istTime.getHours()
     const minutes = istTime.getMinutes()
     
