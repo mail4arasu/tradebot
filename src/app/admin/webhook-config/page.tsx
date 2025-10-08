@@ -17,7 +17,8 @@ import {
   Zap, 
   AlertCircle,
   CheckCircle,
-  Settings
+  Settings,
+  Bug
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -353,6 +354,60 @@ export default function WebhookConfigPage() {
         </Card>
       )}
 
+      {/* Debugging Tools */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bug className="h-5 w-5" />
+            Webhook Debugging
+          </CardTitle>
+          <CardDescription>
+            Tools to diagnose webhook issues and test payloads
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-blue-900 mb-2">Webhook Debug Endpoint</h4>
+              <p className="text-sm text-blue-700 mb-3">
+                Deep analysis tool for troubleshooting JSON parsing errors and webhook payload issues
+              </p>
+              <div className="flex gap-2">
+                <a 
+                  href="/api/webhook/debug" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open Debug Tool
+                </a>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => copyToClipboard('https://niveshawealth.in/api/webhook/debug')}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+              <h4 className="font-semibold text-green-900 mb-2">Trading Control Panel</h4>
+              <p className="text-sm text-green-700 mb-3">
+                Test webhook payloads manually and manage bot operations
+              </p>
+              <Link href="/admin/trading">
+                <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Trading Control
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Instructions */}
       <Card className="mt-6">
         <CardHeader>
@@ -378,6 +433,15 @@ export default function WebhookConfigPage() {
                   <li>• Use Bot ID method for precise targeting</li>
                   <li>• Create separate alerts for each bot</li>
                   <li>• Test each configuration using Admin Trading Control</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Debugging Issues:</strong>
+                <ul className="mt-1 space-y-1">
+                  <li>• Use Webhook Debug Tool for JSON parsing errors</li>
+                  <li>• Check character encoding and special characters</li>
+                  <li>• Test payloads manually before deploying alerts</li>
+                  <li>• Monitor webhook logs in Trading Control Panel</li>
                 </ul>
               </li>
               <li>
