@@ -80,7 +80,8 @@ export async function POST(request: NextRequest) {
           })
 
           if (existingTrade) {
-            // Update existing trade with latest data
+            // Update existing trade with latest data and fix price if needed
+            existingTrade.price = zerodhaTradeData.average_price || zerodhaTradeData.price || existingTrade.price
             existingTrade.zerodhaData = zerodhaTradeData
             existingTrade.lastSyncCheck = new Date()
             await existingTrade.save()
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
             exchange: zerodhaTradeData.exchange,
             instrumentToken: zerodhaTradeData.instrument_token,
             quantity: Math.abs(zerodhaTradeData.quantity), // Store as positive number
-            price: zerodhaTradeData.price,
+            price: zerodhaTradeData.average_price || zerodhaTradeData.price || 0,
             product: zerodhaTradeData.product,
             orderType: zerodhaTradeData.order_type || 'MARKET',
             transactionType: zerodhaTradeData.transaction_type,
