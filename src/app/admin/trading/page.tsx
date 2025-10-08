@@ -421,8 +421,8 @@ export default function TradingAdminDashboard() {
           <CardDescription>
             Send a test signal to the webhook endpoint to verify system functionality.
             <br />
-            <span className="text-blue-600 font-medium">✨ Enhanced with SHORT trading support:</span>
-            <span className="text-sm text-gray-600"> Long positions (buy low, sell high) and Short positions (sell high, buy low to cover)</span>
+            <span className="text-blue-600 font-medium">📈 Long:</span> BUY → SELL &nbsp;&nbsp;
+            <span className="text-purple-600 font-medium">📉 Short:</span> SHORT → BUY TO COVER
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -459,14 +459,10 @@ export default function TradingAdminDashboard() {
               >
                 <optgroup label="Long Trading">
                   <option value="BUY">BUY (Long Entry)</option>
-                  <option value="ENTRY">ENTRY (Long Entry)</option>
                   <option value="SELL">SELL (Long Exit)</option>
-                  <option value="EXIT">EXIT (Long Exit)</option>
                 </optgroup>
                 <optgroup label="Short Trading">
-                  <option value="SELL_SHORT">SELL SHORT (Short Entry)</option>
                   <option value="SHORT">SHORT (Short Entry)</option>
-                  <option value="SELL_ENTRY">SELL ENTRY (Short Entry)</option>
                   <option value="BUY_TO_COVER">BUY TO COVER (Short Exit)</option>
                 </optgroup>
               </select>
