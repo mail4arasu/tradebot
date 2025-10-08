@@ -25,7 +25,9 @@ import {
   Settings,
   Target,
   Calculator,
-  Percent
+  Percent,
+  Square,
+  Shield
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -113,6 +115,11 @@ export default function TradingAdminDashboard() {
   })
   const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null)
   const [simulatorLoading, setSimulatorLoading] = useState(false)
+  
+  // Emergency Square Off State
+  const [squareOffLoading, setSquareOffLoading] = useState<Record<string, boolean>>({})
+  const [squareOffResults, setSquareOffResults] = useState<Record<string, any>>({})
+  const [confirmDialog, setConfirmDialog] = useState<{open: boolean, botId: string, botName: string, openPositions: number}>({open: false, botId: '', botName: '', openPositions: 0})
 
   useEffect(() => {
     if (session) {
@@ -254,6 +261,59 @@ export default function TradingAdminDashboard() {
     } finally {
       setSimulatorLoading(false)
     }
+  }
+
+  const emergencySquareOff = async (botId: string, botName: string) => {
+    try {
+      setSquareOffLoading(prev => ({ ...prev, [botId]: true }))
+      
+      const response = await fetch('/api/admin/emergency-square-off', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botId,
+          confirmationCode: 'EMERGENCY_SQUARE_OFF'
+        })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        setSquareOffResults(prev => ({ ...prev, [botId]: result }))
+        
+        // Show detailed results
+        const message = result.results.failed === 0
+          ? `✅ Emergency Square Off Successful!\n\n${result.message}\n\nAll ${result.results.successful} positions closed successfully.`
+          : `⚠️ Emergency Square Off Completed with Issues!\n\n${result.message}\n\nSuccessful: ${result.results.successful}\nFailed: ${result.results.failed}\n\nCheck console for details of failed positions requiring manual intervention.`
+        
+        alert(message)
+        
+        // Log detailed results for admin
+        if (result.results.failed > 0) {
+          console.warn('🚨 Emergency Square Off - Failed Positions:', result.results.details.filter(d => d.status === 'FAILED'))
+        }
+        
+        // Refresh data to show updated positions
+        fetchData()
+      } else {
+        alert(`❌ Emergency Square Off Failed!\n\n${result.error}\n\nDetails: ${result.details || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Emergency square off error:', error)
+      alert(`❌ Emergency Square Off Failed!\n\nNetwork or system error. Please try again or contact support.`)
+    } finally {
+      setSquareOffLoading(prev => ({ ...prev, [botId]: false }))
+      setConfirmDialog({open: false, botId: '', botName: '', openPositions: 0})
+    }
+  }
+
+  const openSquareOffConfirm = (botId: string, botName: string, openPositions: number) => {
+    setConfirmDialog({
+      open: true,
+      botId,
+      botName,
+      openPositions
+    })
   }
 
   const formatTime = (dateString: string) => {
@@ -401,6 +461,22 @@ export default function TradingAdminDashboard() {
                           className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-red-300"
                         />
                         <span className="text-xs text-gray-500">Emergency</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <Button
+                          onClick={() => openSquareOffConfirm(bot._id, bot.name, bot.openPositions || 0)}
+                          disabled={squareOffLoading[bot._id] || (bot.openPositions || 0) === 0}
+                          variant="destructive"
+                          size="sm"
+                          className="h-8 px-2 text-xs"
+                        >
+                          {squareOffLoading[bot._id] ? (
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <><Square className="h-3 w-3 mr-1" />SQUARE OFF</>
+                          )}
+                        </Button>
+                        <span className="text-xs text-gray-500">({bot.openPositions || 0} open)</span>
                       </div>
                     </div>
                   </div>
@@ -801,6 +877,71 @@ export default function TradingAdminDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Emergency Square Off Confirmation Dialog */}
+      {confirmDialog.open && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-red-900">Emergency Square Off</h3>
+                <p className="text-sm text-red-700">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-3">
+                Are you sure you want to <strong>immediately square off ALL open positions</strong> for:
+              </p>
+              <div className="bg-gray-50 p-3 rounded border-l-4 border-red-500">
+                <div className="font-medium text-gray-900">{confirmDialog.botName}</div>
+                <div className="text-sm text-red-600 flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  {confirmDialog.openPositions} open position{confirmDialog.openPositions !== 1 ? 's' : ''} will be closed with MARKET orders
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <p className="text-sm text-yellow-800">
+                  <strong>⚠️ WARNING:</strong> This will place MARKET orders to immediately close all positions. 
+                  This action is irreversible and may result in slippage.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setConfirmDialog({open: false, botId: '', botName: '', openPositions: 0})}
+                variant="outline"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => emergencySquareOff(confirmDialog.botId, confirmDialog.botName)}
+                variant="destructive"
+                className="flex-1"
+                disabled={squareOffLoading[confirmDialog.botId]}
+              >
+                {squareOffLoading[confirmDialog.botId] ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Executing...
+                  </>
+                ) : (
+                  <>
+                    <Square className="h-4 w-4 mr-2" />
+                    Square Off All
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -131,16 +131,29 @@ export async function GET(request: NextRequest) {
     // Get all bots with their emergency stop status
     const bots = await db.collection('bots').find({}).toArray()
     
+    // Get open positions count for each bot
+    const botsWithPositions = await Promise.all(
+      bots.map(async (bot) => {
+        const openPositions = await db.collection('positions').countDocuments({
+          botId: bot._id,
+          status: { $in: ['OPEN', 'PARTIAL'] }
+        })
+        
+        return {
+          _id: bot._id.toString(),
+          name: bot.name,
+          isActive: bot.isActive,
+          emergencyStop: bot.emergencyStop || false,
+          symbol: bot.symbol,
+          exchange: bot.exchange,
+          openPositions
+        }
+      })
+    )
+    
     const emergencyStatus = {
       globalEmergencyStop: bots.every(bot => bot.emergencyStop),
-      bots: bots.map(bot => ({
-        _id: bot._id.toString(),
-        name: bot.name,
-        isActive: bot.isActive,
-        emergencyStop: bot.emergencyStop || false,
-        symbol: bot.symbol,
-        exchange: bot.exchange
-      })),
+      bots: botsWithPositions,
       pendingExecutions: await db.collection('tradeexecutions').countDocuments({
         status: 'PENDING'
       }),

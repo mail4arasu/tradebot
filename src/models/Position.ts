@@ -65,6 +65,15 @@ const PositionSchema = new mongoose.Schema({
   stopLoss: { type: Number },
   target: { type: Number },
   
+  // Emergency Controls
+  emergencySquareOff: { type: Boolean, default: false },
+  emergencySquareOffTime: { type: Date },
+  exitReason: { 
+    type: String, 
+    enum: ['SIGNAL', 'AUTO_SQUARE_OFF', 'EMERGENCY_SQUARE_OFF', 'MANUAL', 'STOP_LOSS', 'TARGET'],
+    default: 'SIGNAL'
+  },
+  
   // Additional Data
   notes: { type: String },
   tags: [{ type: String }]
