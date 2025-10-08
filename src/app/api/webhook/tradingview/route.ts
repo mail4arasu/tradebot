@@ -207,21 +207,28 @@ async function processSignalForAllUsers(signalId: ObjectId, bot: any, payload: T
           continue
         }
 
-        // Check trading hours
+        // Check trading hours with safe defaults
         const now = new Date()
         const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
         
-        if (currentTime < allocation.enabledHours.start || currentTime > allocation.enabledHours.end) {
-          console.log(`⏰ Outside trading hours for user: ${allocation.userId}`)
+        // Use default trading hours if enabledHours is missing or incomplete
+        const enabledHours = allocation.enabledHours || {}
+        const startTime = enabledHours.start || '09:15'  // Default market start
+        const endTime = enabledHours.end || '15:30'      // Default market end
+        
+        if (currentTime < startTime || currentTime > endTime) {
+          console.log(`⏰ Outside trading hours for user: ${allocation.userId} (${currentTime} not between ${startTime}-${endTime})`)
           results.affectedUsers.push({
             userId: allocation.userId,
             executed: false,
             executionId: null,
-            error: 'Outside configured trading hours'
+            error: `Outside configured trading hours (${startTime}-${endTime})`
           })
           results.failed++
           continue
         }
+        
+        console.log(`✅ Trading hours check passed for user: ${allocation.userId} (${currentTime} within ${startTime}-${endTime})`)
 
         // Execute trade for this user with position management
         const executionResult = await executeTradeWithPositionManagement(
