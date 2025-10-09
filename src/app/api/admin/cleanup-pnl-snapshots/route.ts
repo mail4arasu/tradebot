@@ -20,53 +20,71 @@ export async function POST(request: NextRequest) {
       case 'remove_duplicates':
         console.log(`🧹 Cleaning up duplicate P&L snapshots requested by ${session.user.email}`)
         
-        // Find all snapshots grouped by userId and date
-        const duplicates = await DailyPnLSnapshot.aggregate([
-          {
-            $group: {
-              _id: { userId: '$userId', date: '$date' },
-              count: { $sum: 1 },
-              docs: { $push: '$_id' },
-              snapshots: { $push: '$$ROOT' }
-            }
-          },
-          {
-            $match: { count: { $gt: 1 } }
+        // Get all snapshots and group manually to handle any data type issues
+        const allSnapshots = await DailyPnLSnapshot.find({})
+          .populate('userId', 'name email')
+          .sort({ date: -1, snapshotTime: -1 })
+          .lean()
+
+        console.log(`📊 Found ${allSnapshots.length} total snapshots`)
+
+        // Group by userId and date manually
+        const groupedSnapshots = new Map()
+        
+        for (const snapshot of allSnapshots) {
+          const userId = snapshot.userId?._id?.toString() || snapshot.userId?.toString()
+          const key = `${userId}-${snapshot.date}`
+          
+          if (!groupedSnapshots.has(key)) {
+            groupedSnapshots.set(key, [])
           }
-        ])
+          
+          groupedSnapshots.get(key).push(snapshot)
+        }
 
         let removedCount = 0
         const removalLog = []
+        let duplicateGroups = 0
 
-        for (const duplicate of duplicates) {
-          // Sort by snapshotTime descending (keep the latest)
-          const sortedSnapshots = duplicate.snapshots.sort((a: any, b: any) => 
-            new Date(b.snapshotTime).getTime() - new Date(a.snapshotTime).getTime()
-          )
-          
-          // Keep the first (latest) snapshot, remove the rest
-          const toKeep = sortedSnapshots[0]
-          const toRemove = sortedSnapshots.slice(1)
-          
-          for (const snapshot of toRemove) {
-            await DailyPnLSnapshot.deleteOne({ _id: snapshot._id })
-            removedCount++
-            removalLog.push({
-              date: snapshot.date,
-              userId: snapshot.userId,
-              snapshotTime: snapshot.snapshotTime,
-              totalDayPnL: snapshot.totalDayPnL
-            })
+        for (const [key, snapshots] of groupedSnapshots.entries()) {
+          if (snapshots.length > 1) {
+            duplicateGroups++
+            console.log(`🔍 Found ${snapshots.length} snapshots for key: ${key}`)
+            
+            // Sort by snapshotTime descending (keep the latest)
+            snapshots.sort((a, b) => new Date(b.snapshotTime).getTime() - new Date(a.snapshotTime).getTime())
+            
+            // Keep the first (latest) snapshot, remove the rest
+            const toKeep = snapshots[0]
+            const toRemove = snapshots.slice(1)
+            
+            console.log(`✅ Keeping snapshot from ${toKeep.snapshotTime}, removing ${toRemove.length} older ones`)
+            
+            for (const snapshot of toRemove) {
+              await DailyPnLSnapshot.deleteOne({ _id: snapshot._id })
+              removedCount++
+              removalLog.push({
+                date: snapshot.date,
+                userId: snapshot.userId?._id || snapshot.userId,
+                userName: snapshot.userId?.name || 'Unknown',
+                snapshotTime: snapshot.snapshotTime,
+                totalDayPnL: snapshot.totalDayPnL,
+                totalPortfolioValue: snapshot.totalPortfolioValue,
+                dataSource: snapshot.dataSource
+              })
+              console.log(`🗑️ Removed snapshot: ${snapshot.date} at ${snapshot.snapshotTime}`)
+            }
           }
-          
-          console.log(`🗑️ Kept latest snapshot for ${duplicate._id.date}, removed ${toRemove.length} duplicates`)
         }
+
+        console.log(`🎯 Cleanup complete: ${duplicateGroups} duplicate groups, ${removedCount} snapshots removed`)
 
         return NextResponse.json({
           success: true,
-          message: `Removed ${removedCount} duplicate snapshots`,
+          message: `Removed ${removedCount} duplicate snapshots from ${duplicateGroups} duplicate groups`,
           details: {
-            duplicateGroups: duplicates.length,
+            totalSnapshots: allSnapshots.length,
+            duplicateGroups,
             removedSnapshots: removedCount,
             removalLog
           }

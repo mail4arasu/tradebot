@@ -89,6 +89,41 @@ export default function DailyPnLCollectorPage() {
     }
   }
 
+  const handleDebug = async () => {
+    try {
+      setActionLoading('debug')
+      
+      const response = await fetch('/api/admin/debug-pnl-snapshots')
+      const result = await response.json()
+      
+      if (result.success) {
+        console.log('Debug results:', result.data)
+        
+        let message = `Debug Results:\n`
+        message += `Total Snapshots: ${result.data.totalSnapshots}\n`
+        message += `Duplicate Groups: ${result.data.duplicateGroups}\n\n`
+        
+        if (result.data.duplicateAnalysis.length > 0) {
+          message += `Duplicates found:\n`
+          result.data.duplicateAnalysis.forEach((group, index) => {
+            message += `${index + 1}. ${group.snapshots[0].userName} - ${group.snapshots[0].date} (${group.count} snapshots)\n`
+          })
+        } else {
+          message += `No duplicates found in database.\nCheck browser console for detailed results.`
+        }
+        
+        alert(message)
+      } else {
+        alert(`Error: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error debugging snapshots:', error)
+      alert('Error debugging snapshots')
+    } finally {
+      setActionLoading('')
+    }
+  }
+
   const handleCleanup = async () => {
     if (!confirm('Are you sure you want to remove duplicate P&L snapshots? This will keep only the latest snapshot for each date.')) {
       return
@@ -106,7 +141,8 @@ export default function DailyPnLCollectorPage() {
       const result = await response.json()
       
       if (result.success) {
-        alert(result.message)
+        console.log('Cleanup results:', result.details)
+        alert(result.message + '\nCheck browser console for detailed cleanup log.')
         await loadStatus() // Refresh status
       } else {
         alert(`Error: ${result.error}`)
@@ -281,13 +317,22 @@ export default function DailyPnLCollectorPage() {
                 <p className="text-xs text-gray-600 mb-3">
                   Remove duplicate snapshots for the same date
                 </p>
-                <button
-                  onClick={() => handleCleanup()}
-                  disabled={actionLoading === 'cleanup'}
-                  className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50"
-                >
-                  {actionLoading === 'cleanup' ? 'Cleaning...' : 'Clean Duplicates'}
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handleDebug()}
+                    disabled={actionLoading === 'debug'}
+                    className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {actionLoading === 'debug' ? 'Checking...' : 'Debug Snapshots'}
+                  </button>
+                  <button
+                    onClick={() => handleCleanup()}
+                    disabled={actionLoading === 'cleanup'}
+                    className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {actionLoading === 'cleanup' ? 'Cleaning...' : 'Clean Duplicates'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
