@@ -289,7 +289,7 @@ export class OrderMonitoringService {
       const result = await db.collection('positions').insertOne(position)
       console.log(`✅ Position created for order ${orderState.orderId}: ${result.insertedId}`)
 
-      // Update trade execution record
+      // Update trade execution record with complete references
       await this.updateTradeExecutionStatus(orderState, 'EXECUTED')
 
     } catch (error) {
@@ -300,27 +300,63 @@ export class OrderMonitoringService {
   }
 
   /**
-   * Update trade execution record status
+   * Update trade execution record status with complete Zerodha references
    */
   private async updateTradeExecutionStatus(orderState: any, status: string): Promise<void> {
     try {
       const client = await clientPromise
       const db = client.db('tradebot')
 
+      // Extract complete Zerodha references from order data
+      const zerodhaOrder = orderState.zerodhaOrderData
+      const updateData: any = {
+        status: status,
+        executedAt: status === 'EXECUTED' ? new Date() : null,
+        executedPrice: orderState.executedPrice,
+        executedQuantity: orderState.executedQuantity,
+        zerodhaOrderId: orderState.orderId,
+        error: orderState.error,
+        zerodhaResponse: zerodhaOrder,
+        updatedAt: new Date()
+      }
+
+      // Capture exchange_order_id if available
+      if (zerodhaOrder?.exchange_order_id) {
+        updateData.exchangeOrderId = zerodhaOrder.exchange_order_id
+        console.log(`📋 Capturing exchange_order_id: ${zerodhaOrder.exchange_order_id}`)
+      }
+
+      // If order is executed, also fetch and capture trade_id
+      if (status === 'EXECUTED' && orderState.executedQuantity > 0) {
+        try {
+          // Get user's Zerodha credentials for trade lookup
+          const user = orderState.userId
+          if (user?.zerodhaConfig?.apiKey) {
+            const zerodhaClient = new ZerodhaAPI(
+              decrypt(user.zerodhaConfig.apiKey),
+              decrypt(user.zerodhaConfig.apiSecret),
+              decrypt(user.zerodhaConfig.accessToken)
+            )
+
+            // Fetch trades to get trade_id
+            const tradesResponse = await zerodhaClient.getTrades()
+            const relatedTrade = tradesResponse.data?.find((trade: any) => 
+              trade.order_id === orderState.orderId
+            )
+
+            if (relatedTrade?.trade_id) {
+              updateData.zerodhaTradeId = relatedTrade.trade_id
+              console.log(`📋 Capturing trade_id: ${relatedTrade.trade_id} for order: ${orderState.orderId}`)
+            }
+          }
+        } catch (tradeError) {
+          console.warn(`⚠️ Could not fetch trade_id for order ${orderState.orderId}:`, tradeError.message)
+        }
+      }
+
       await db.collection('tradeexecutions').updateOne(
         { _id: orderState.tradeExecutionId },
-        {
-          $set: {
-            status: status,
-            executedAt: status === 'EXECUTED' ? new Date() : null,
-            executedPrice: orderState.executedPrice,
-            executedQuantity: orderState.executedQuantity,
-            zerodhaOrderId: orderState.orderId,
-            error: orderState.error,
-            zerodhaResponse: orderState.zerodhaOrderData,
-            updatedAt: new Date()
-          }
-        }
+        { $set: updateData }
       )
 
       console.log(`✅ Trade execution ${orderState.tradeExecutionId} updated to ${status}`)

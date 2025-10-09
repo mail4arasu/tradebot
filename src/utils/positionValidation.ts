@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb'
 import clientPromise from '@/lib/mongodb'
 import { ZerodhaAPI } from '@/lib/zerodha'
 import { decrypt } from '@/lib/encryption'
+import { placeEnhancedExitOrder, createExitTradeExecution } from '@/utils/enhancedExitOrder'
 
 export interface ZerodhaValidationResult {
   existsInZerodha: boolean
@@ -231,7 +232,18 @@ export async function executeNormalAutoExit(position: any, validation: ZerodhaVa
     // Determine order side (opposite of position side)
     const orderSide = position.side === 'LONG' ? 'SELL' : 'BUY'
     
-    // Place square-off order
+    // Get entry order references for enhanced exit tracking
+    const entryExecution = await db.collection('tradeexecutions').findOne({
+      _id: position.entryExecutionId
+    })
+
+    // Build enhanced tag with entry order reference
+    let orderTag = `AUTO_EXIT_${position.positionId}`
+    if (entryExecution?.zerodhaOrderId) {
+      orderTag += `_ENTRY_${entryExecution.zerodhaOrderId}`
+    }
+
+    // Place square-off order with enhanced traceability
     const orderParams = {
       exchange: position.exchange,
       tradingsymbol: position.symbol,
@@ -240,19 +252,57 @@ export async function executeNormalAutoExit(position: any, validation: ZerodhaVa
       order_type: 'MARKET',
       product: position.instrumentType === 'FUTURES' ? 'MIS' : 'CNC', // MIS for intraday
       validity: 'DAY',
-      tag: `AUTO_EXIT_${position.positionId}`
+      tag: orderTag // Enhanced tag with entry order reference
     }
 
-    console.log(`📋 Placing auto-exit order:`, orderParams)
-    const orderResponse = await zerodhaClient.placeOrder('regular', orderParams)
-    const orderResult = orderResponse?.data || orderResponse
+    console.log(`📋 Enhanced exit order with entry reference:`, {
+      exitOrderTag: orderTag,
+      entryOrderId: entryExecution?.zerodhaOrderId,
+      entryTradeId: entryExecution?.zerodhaTradeId,
+      exchangeOrderId: entryExecution?.exchangeOrderId
+    })
 
-    return {
-      success: true,
-      orderId: orderResult?.order_id || 'ORDER_PLACED',
-      executedPrice: validation.zerodhaPrice,
-      executedQuantity: Math.abs(validation.zerodhaQuantity),
-      response: orderResult
+    console.log(`📋 Placing enhanced auto-exit order with entry references...`)
+    
+    // Use enhanced exit order placement
+    const exitOrderResult = await placeEnhancedExitOrder(
+      zerodhaClient,
+      position,
+      Math.abs(validation.zerodhaQuantity),
+      'MARKET',
+      'AUTO_SQUARE_OFF',
+      undefined,
+      { includeEntryReference: true, useEntryOrderData: false }
+    )
+
+    if (exitOrderResult.success) {
+      console.log(`✅ Enhanced auto-exit order placed: ${exitOrderResult.orderId}`)
+      console.log(`📋 Entry references captured:`, exitOrderResult.entryReferences)
+      
+      // Create exit trade execution record with entry references
+      const executionId = await createExitTradeExecution(
+        position,
+        exitOrderResult,
+        new ObjectId().toString(),
+        'AUTO_SQUARE_OFF'
+      )
+      
+      return {
+        success: true,
+        orderId: exitOrderResult.orderId,
+        executedPrice: validation.zerodhaPrice,
+        executedQuantity: Math.abs(validation.zerodhaQuantity),
+        response: exitOrderResult.orderResponse,
+        entryReferences: exitOrderResult.entryReferences,
+        executionId: executionId
+      }
+    } else {
+      console.error(`❌ Enhanced auto-exit order failed:`, exitOrderResult.error)
+      return {
+        success: false,
+        error: exitOrderResult.error || 'Enhanced auto-exit order placement failed',
+        response: exitOrderResult
+      }
     }
 
   } catch (error) {

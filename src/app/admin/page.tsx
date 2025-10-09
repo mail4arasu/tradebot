@@ -261,6 +261,10 @@ export default function AdminDashboard() {
                       className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100">
                   🧹 Cleanup
                 </Link>
+                <Link href="/admin/position-reconciliation" 
+                      className="inline-flex items-center px-3 py-2 border border-yellow-300 text-sm font-medium rounded-md text-yellow-700 bg-yellow-50 hover:bg-yellow-100">
+                  🔍 Position Reconciliation
+                </Link>
               </div>
             </div>
           </div>

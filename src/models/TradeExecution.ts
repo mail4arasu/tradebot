@@ -21,6 +21,7 @@ const TradeExecutionSchema = new mongoose.Schema({
   // Zerodha integration
   zerodhaOrderId: { type: String }, // Zerodha order ID
   zerodhaTradeId: { type: String }, // Zerodha trade ID (after execution)
+  exchangeOrderId: { type: String }, // Exchange order ID from Zerodha
   
   // Execution details
   requestedPrice: { type: Number }, // Price from signal

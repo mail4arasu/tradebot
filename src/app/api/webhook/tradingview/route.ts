@@ -604,7 +604,8 @@ async function processExitSignal(allocation: any, bot: any, payload: TradingView
           action: position.side === 'LONG' ? 'SELL' : 'BUY'
         }
         
-        const executionResult = await executeTradeForUser(allocation, bot, exitPayload, signalId, db)
+        // Use enhanced exit order placement with entry references
+        const executionResult = await executeEnhancedWebhookExit(allocation, bot, position, payload, signalId, db)
         
         if (executionResult.success) {
           // Update position with exit
@@ -1300,4 +1301,100 @@ export async function GET() {
       passphrase: 'your-secret-passphrase'
     }
   })
+}
+
+// Enhanced exit order placement function for webhook signals
+async function executeEnhancedWebhookExit(allocation: any, bot: any, position: any, payload: any, signalId: ObjectId, db: any) {
+  try {
+    console.log(`🚪 Executing enhanced webhook exit for position: ${position.positionId}`)
+    
+    // Get user's Zerodha configuration
+    const user = await db.collection('users').findOne({ _id: allocation.userId })
+    if (!user?.zerodhaConfig?.isConnected) {
+      throw new Error('User Zerodha not connected')
+    }
+
+    // Initialize Zerodha client with user credentials
+    const { ZerodhaAPI } = await import('@/lib/zerodha')
+    const { decrypt } = await import('@/lib/encryption')
+    const { placeWebhookExitOrder, createExitTradeExecution } = await import('@/utils/enhancedExitOrder')
+    
+    const zerodhaClient = new ZerodhaAPI(
+      decrypt(user.zerodhaConfig.apiKey),
+      decrypt(user.zerodhaConfig.apiSecret),
+      decrypt(user.zerodhaConfig.accessToken)
+    )
+
+    // Place enhanced exit order with entry references
+    const exitOrderResult = await placeWebhookExitOrder(
+      zerodhaClient,
+      position,
+      payload,
+      signalId.toString()
+    )
+
+    if (exitOrderResult.success) {
+      console.log(`✅ Enhanced webhook exit order placed: ${exitOrderResult.orderId}`)
+      console.log(`📋 Entry references included:`, exitOrderResult.entryReferences)
+      
+      // Create exit trade execution record with entry references
+      const executionId = await createExitTradeExecution(
+        position,
+        exitOrderResult,
+        signalId.toString(),
+        'WEBHOOK_SIGNAL',
+        payload
+      )
+      
+      return {
+        success: true,
+        executionId: executionId,
+        orderId: exitOrderResult.orderId,
+        entryReferences: exitOrderResult.entryReferences,
+        message: `Enhanced exit order placed with entry tracking: ${exitOrderResult.orderId}`
+      }
+    } else {
+      console.error(`❌ Enhanced webhook exit failed:`, exitOrderResult.error)
+      
+      // Create failed execution record
+      const errorExecution = {
+        userId: allocation.userId,
+        botId: bot._id,
+        signalId: signalId,
+        symbol: payload.symbol,
+        exchange: payload.exchange || bot.exchange || 'NFO',
+        orderType: position.side === 'LONG' ? 'SELL' : 'BUY',
+        quantity: payload.quantity || position.currentQuantity,
+        requestedPrice: payload.price || 0,
+        executedPrice: 0,
+        executedQuantity: 0,
+        zerodhaOrderId: null,
+        status: 'FAILED',
+        tradeType: 'EXIT',
+        exitReason: 'WEBHOOK_SIGNAL',
+        pnl: 0,
+        fees: 0,
+        error: exitOrderResult.error,
+        zerodhaResponse: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      
+      const errorResult = await db.collection('tradeexecutions').insertOne(errorExecution)
+      
+      return {
+        success: false,
+        executionId: errorResult.insertedId,
+        error: exitOrderResult.error
+      }
+    }
+
+  } catch (error) {
+    console.error(`❌ Enhanced webhook exit error:`, error)
+    return {
+      success: false,
+      executionId: null,
+      error: error.message
+    }
+  }
 }

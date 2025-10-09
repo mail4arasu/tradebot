@@ -12,6 +12,8 @@ export interface OrderConfirmationResult {
   attempts: number
   totalWaitTime: number
   order?: any
+  tradeId?: string         // Zerodha trade_id after execution
+  exchangeOrderId?: string // Exchange order_id from Zerodha
 }
 
 export interface OrderConfirmationConfig {
@@ -73,7 +75,9 @@ export async function confirmOrderExecution(
 
       switch (status) {
         case 'COMPLETE':
-          // Order fully executed
+          // Order fully executed - extract trade references
+          const references = await extractTradeReferences(zerodhaClient, orderId, order)
+          
           if (filledQty === expectedQuantity) {
             return {
               success: true,
@@ -85,7 +89,9 @@ export async function confirmOrderExecution(
               finalStatus: 'COMPLETE',
               attempts,
               totalWaitTime: Date.now() - startTime,
-              order
+              order,
+              tradeId: references.tradeId,
+              exchangeOrderId: references.exchangeOrderId
             }
           } else {
             // Unexpected quantity mismatch
@@ -101,7 +107,9 @@ export async function confirmOrderExecution(
               finalStatus: 'COMPLETE_MISMATCH',
               attempts,
               totalWaitTime: Date.now() - startTime,
-              order
+              order,
+              tradeId: references.tradeId,
+              exchangeOrderId: references.exchangeOrderId
             }
           }
 
@@ -114,6 +122,7 @@ export async function confirmOrderExecution(
             console.log(`🔄 Partial fill: ${filledQty}/${expectedQuantity} (${fillPercentage.toFixed(1)}%)`)
             
             if (fillPercentage >= 80) { // Accept if 80%+ filled
+              const partialReferences = await extractTradeReferences(zerodhaClient, orderId, order)
               return {
                 success: true,
                 executed: true,
@@ -124,7 +133,9 @@ export async function confirmOrderExecution(
                 finalStatus: 'PARTIAL_FILL_ACCEPTED',
                 attempts,
                 totalWaitTime: Date.now() - startTime,
-                order
+                order,
+                tradeId: partialReferences.tradeId,
+                exchangeOrderId: partialReferences.exchangeOrderId
               }
             }
           }
@@ -210,6 +221,45 @@ export function getOptimalPollingConfig(orderType: string, productType: string):
  */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Extract trade and exchange references from completed order
+ */
+async function extractTradeReferences(
+  zerodhaClient: ZerodhaAPI, 
+  orderId: string, 
+  order: any
+): Promise<{ tradeId?: string, exchangeOrderId?: string }> {
+  const references: { tradeId?: string, exchangeOrderId?: string } = {}
+  
+  try {
+    // Extract exchange_order_id from order data
+    if (order.exchange_order_id) {
+      references.exchangeOrderId = order.exchange_order_id
+      console.log(`📋 Found exchange_order_id: ${order.exchange_order_id}`)
+    }
+
+    // Fetch trade_id by looking up trades
+    try {
+      const tradesResponse = await zerodhaClient.getTrades()
+      const relatedTrade = tradesResponse.data?.find((trade: any) => 
+        trade.order_id === orderId
+      )
+
+      if (relatedTrade?.trade_id) {
+        references.tradeId = relatedTrade.trade_id
+        console.log(`📋 Found trade_id: ${relatedTrade.trade_id} for order: ${orderId}`)
+      }
+    } catch (tradeError) {
+      console.warn(`⚠️ Could not fetch trade_id for order ${orderId}:`, tradeError.message)
+    }
+
+  } catch (error) {
+    console.warn(`⚠️ Error extracting trade references for order ${orderId}:`, error.message)
+  }
+
+  return references
 }
 
 /**
