@@ -4,8 +4,7 @@ const ScheduledExitSchema = new mongoose.Schema({
   positionId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
-    ref: 'Position',
-    unique: true  // One scheduled exit per position
+    ref: 'Position'
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
