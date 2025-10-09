@@ -245,6 +245,14 @@ export default function AdminDashboard() {
                       className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                   📊 Data Sync
                 </Link>
+                <Link href="/admin/charges" 
+                      className="inline-flex items-center px-3 py-2 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100">
+                  💰 Charges
+                </Link>
+                <Link href="/admin/reports" 
+                      className="inline-flex items-center px-3 py-2 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100">
+                  📋 Reports
+                </Link>
                 <Link href="/admin/cleanup" 
                       className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100">
                   🧹 Cleanup
