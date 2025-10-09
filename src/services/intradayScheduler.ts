@@ -448,11 +448,34 @@ export const intradayScheduler = IntradayScheduler.getInstance()
 
 // Auto-initialize when module is loaded (in production environment)
 if (process.env.NODE_ENV === 'production') {
-  // Delay initialization to allow proper database connection
-  setTimeout(() => {
-    intradayScheduler.initialize().catch(error => {
-      console.error('❌ Failed to auto-initialize intraday scheduler:', error)
-      console.log('💡 Try manual initialization via /api/admin/initialize-scheduler')
-    })
-  }, 5000) // 5 second delay
+  // Robust initialization with retry logic
+  initializeWithRetry()
+}
+
+/**
+ * Initialize scheduler with exponential backoff retry
+ */
+async function initializeWithRetry(attempt: number = 1, maxAttempts: number = 5): Promise<void> {
+  const baseDelay = 5000 // 5 seconds base delay
+  const currentDelay = Math.min(baseDelay * Math.pow(2, attempt - 1), 60000) // Max 60s delay
+  
+  console.log(`🔄 Scheduler initialization attempt ${attempt}/${maxAttempts} - waiting ${currentDelay/1000}s...`)
+  
+  setTimeout(async () => {
+    try {
+      await intradayScheduler.initialize()
+      console.log(`✅ Scheduler initialized successfully on attempt ${attempt}`)
+    } catch (error) {
+      console.error(`❌ Scheduler initialization attempt ${attempt} failed:`, error)
+      
+      if (attempt < maxAttempts) {
+        console.log(`🔄 Retrying initialization in ${Math.min(baseDelay * Math.pow(2, attempt), 60000)/1000} seconds...`)
+        await initializeWithRetry(attempt + 1, maxAttempts)
+      } else {
+        console.error(`💥 All ${maxAttempts} initialization attempts failed. Manual intervention required.`)
+        console.log('💡 Try manual initialization via /api/admin/initialize-scheduler')
+        console.log('🚨 CRITICAL: Auto-exit scheduler is NOT running - positions will not auto-close!')
+      }
+    }
+  }, currentDelay)
 }

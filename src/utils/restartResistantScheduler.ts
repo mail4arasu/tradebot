@@ -166,8 +166,27 @@ export class RestartResistantScheduler {
    */
 
   private async connectToDatabase(): Promise<void> {
-    await clientPromise
-    console.log(`📊 Connected to database for scheduler state management`)
+    const maxRetries = 3
+    let attempt = 1
+    
+    while (attempt <= maxRetries) {
+      try {
+        await clientPromise
+        console.log(`📊 Connected to database for scheduler state management (attempt ${attempt})`)
+        return
+      } catch (error) {
+        console.error(`❌ Database connection attempt ${attempt}/${maxRetries} failed:`, error)
+        
+        if (attempt === maxRetries) {
+          throw new Error(`Failed to connect to database after ${maxRetries} attempts: ${error.message}`)
+        }
+        
+        const delayMs = 2000 * attempt // 2s, 4s, 6s delays
+        console.log(`⏳ Retrying database connection in ${delayMs/1000}s...`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+        attempt++
+      }
+    }
   }
 
   private async detectRestartAndRecover(): Promise<void> {
