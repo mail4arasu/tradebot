@@ -57,12 +57,16 @@ export async function PUT(request: NextRequest) {
     console.log('🔧 Updating broker configuration:', Object.keys(updates))
     console.log('📊 Update payload size:', JSON.stringify(updates).length, 'characters')
     
+    // Filter out fields that conflict with MongoDB operators
+    const { version, lastUpdated, updatedBy, _id, __v, createdAt, updatedAt, ...cleanUpdates } = updates
+    console.log('🧹 Filtered update fields:', Object.keys(cleanUpdates))
+    
     // Find the active configuration and update it
     const config = await BrokerConfig.findOneAndUpdate(
       { isActive: true },
       {
         $set: {
-          ...updates,
+          ...cleanUpdates,
           lastUpdated: new Date(),
           updatedBy: session.user.email
         },
