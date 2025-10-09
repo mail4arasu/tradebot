@@ -55,15 +55,18 @@ export async function PUT(request: NextRequest) {
     
     const updates = await request.json()
     console.log('🔧 Updating broker configuration:', Object.keys(updates))
+    console.log('📊 Update payload size:', JSON.stringify(updates).length, 'characters')
     
     // Find the active configuration and update it
     const config = await BrokerConfig.findOneAndUpdate(
       { isActive: true },
       {
-        ...updates,
-        lastUpdated: new Date(),
-        updatedBy: session.user.email,
-        version: { $inc: 1 } // Increment version
+        $set: {
+          ...updates,
+          lastUpdated: new Date(),
+          updatedBy: session.user.email
+        },
+        $inc: { version: 1 } // Increment version
       },
       { 
         new: true, 
@@ -81,9 +84,17 @@ export async function PUT(request: NextRequest) {
     })
     
   } catch (error) {
-    console.error('Error updating broker config:', error)
+    console.error('❌ Error updating broker config:', error)
+    console.error('📋 Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    })
     return NextResponse.json(
-      { error: 'Failed to update broker configuration' },
+      { 
+        error: 'Failed to update broker configuration',
+        details: error.message 
+      },
       { status: 500 }
     )
   }
