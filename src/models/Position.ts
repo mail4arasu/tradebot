@@ -84,7 +84,7 @@ const PositionSchema = new mongoose.Schema({
 // Indexes for performance
 PositionSchema.index({ userId: 1, status: 1 })
 PositionSchema.index({ botId: 1, status: 1 })
-PositionSchema.index({ positionId: 1 })
+// Note: positionId already has unique index from schema field definition
 PositionSchema.index({ entrySignalId: 1 })
 PositionSchema.index({ status: 1, createdAt: -1 })
 PositionSchema.index({ userId: 1, createdAt: -1 })
