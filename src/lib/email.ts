@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer'
 
 // Email configuration for Zoho
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtppro.zoho.in',
   port: parseInt(process.env.EMAIL_PORT || '465'),
   secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
