@@ -220,51 +220,78 @@ export default function AdminDashboard() {
         
         {/* Header */}
         <div className="mb-8">
-          <div className="sm:flex sm:items-center sm:justify-between">
-            <div>
+          <div className="sm:flex sm:items-start sm:justify-between">
+            <div className="mb-6 sm:mb-0">
               <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
               <p className="mt-1 text-sm text-gray-600">Manage users and monitor platform statistics</p>
             </div>
             
-            {/* Admin Navigation */}
-            <div className="mt-4 sm:mt-0">
-              <div className="flex flex-wrap gap-2">
-                <Link href="/admin/trading" 
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                  Trading Control
-                </Link>
-                <Link href="/admin/intraday-scheduler" 
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                  ⏰ Scheduler
-                </Link>
-                <Link href="/admin/scheduler-status" 
-                      className="inline-flex items-center px-3 py-2 border border-orange-300 text-sm font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100">
-                  📊 Scheduler Status
-                </Link>
-                <Link href="/admin/announcements" 
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                  📢 Announcements
-                </Link>
-                <Link href="/admin/data-sync" 
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                  📊 Data Sync
-                </Link>
-                <Link href="/admin/charges" 
-                      className="inline-flex items-center px-3 py-2 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100">
-                  💰 Charges
-                </Link>
-                <Link href="/admin/reports" 
-                      className="inline-flex items-center px-3 py-2 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100">
-                  📋 Reports
-                </Link>
-                <Link href="/admin/cleanup" 
-                      className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100">
-                  🧹 Cleanup
-                </Link>
-                <Link href="/admin/position-reconciliation" 
-                      className="inline-flex items-center px-3 py-2 border border-yellow-300 text-sm font-medium rounded-md text-yellow-700 bg-yellow-50 hover:bg-yellow-100">
-                  🔍 Position Reconciliation
-                </Link>
+            {/* Admin Navigation Sidebar */}
+            <div className="w-full sm:w-64 bg-white border border-gray-200 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Admin Controls</h3>
+              
+              {/* Trading Management */}
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Trading Management</h4>
+                <div className="space-y-1">
+                  <Link href="/admin/trading" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Trading Control
+                  </Link>
+                  <Link href="/admin/position-reconciliation" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Position Reconciliation
+                  </Link>
+                </div>
+              </div>
+
+              {/* Scheduler & Automation */}
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Scheduler & Automation</h4>
+                <div className="space-y-1">
+                  <Link href="/admin/intraday-scheduler" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Scheduler Control
+                  </Link>
+                  <Link href="/admin/scheduler-status" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Scheduler Status
+                  </Link>
+                </div>
+              </div>
+
+              {/* Data & Reports */}
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Data & Reports</h4>
+                <div className="space-y-1">
+                  <Link href="/admin/data-sync" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Data Sync
+                  </Link>
+                  <Link href="/admin/reports" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Reports
+                  </Link>
+                  <Link href="/admin/charges" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Charges
+                  </Link>
+                </div>
+              </div>
+
+              {/* System Management */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">System Management</h4>
+                <div className="space-y-1">
+                  <Link href="/admin/announcements" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Announcements
+                  </Link>
+                  <Link href="/admin/cleanup" 
+                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
+                    Cleanup
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
