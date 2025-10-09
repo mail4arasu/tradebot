@@ -7,6 +7,7 @@ import {
   recordValidationResult,
   executeNormalAutoExit 
 } from '@/utils/positionValidation'
+import { restartResistantScheduler } from '@/utils/restartResistantScheduler'
 
 interface ScheduledExit {
   positionId: string
@@ -15,13 +16,14 @@ interface ScheduledExit {
 }
 
 /**
- * Intraday Auto-Exit Scheduler
- * Manages automatic square-off of intraday positions at specified times
+ * Intraday Auto-Exit Scheduler (Legacy + New Hybrid)
+ * Now uses RestartResistantScheduler for database-backed scheduling
  */
 class IntradayScheduler {
   private static instance: IntradayScheduler
   private scheduledExits: Map<string, ScheduledExit> = new Map()
   private isInitialized = false
+  private useRestartResistantScheduler = true  // Feature flag
 
   static getInstance(): IntradayScheduler {
     if (!IntradayScheduler.instance) {
@@ -38,9 +40,19 @@ class IntradayScheduler {
 
     try {
       console.log('🚀 Initializing Intraday Auto-Exit Scheduler...')
+      console.log(`🔧 Using Restart-Resistant Scheduler: ${this.useRestartResistantScheduler}`)
       
-      // Load existing open intraday positions and schedule their exits
-      await this.scheduleExistingPositions()
+      if (this.useRestartResistantScheduler) {
+        // Use new database-backed scheduler
+        await restartResistantScheduler.initialize()
+        console.log('✅ Restart-Resistant Scheduler initialized')
+        
+        // Migrate any legacy scheduled exits
+        await this.migrateLegacyScheduledExits()
+      } else {
+        // Legacy mode
+        await this.scheduleExistingPositions()
+      }
       
       // Set up daily cleanup at market close
       this.scheduleDailyCleanup()
@@ -56,34 +68,48 @@ class IntradayScheduler {
   /**
    * Schedule auto-exit for a specific position
    */
-  async schedulePositionExit(positionId: string, exitTime: string): Promise<void> {
+  async schedulePositionExit(positionId: string, exitTime: string, userId?: string, symbol?: string): Promise<void> {
     try {
-      // Cancel any existing schedule for this position
+      if (this.useRestartResistantScheduler) {
+        // Get additional info if not provided
+        if (!userId || !symbol) {
+          const client = await clientPromise
+          const db = client.db('tradebot')
+          const position = await db.collection('positions').findOne({ _id: new ObjectId(positionId) })
+          userId = userId || position?.userId?.toString()
+          symbol = symbol || position?.symbol
+        }
+        
+        if (!userId || !symbol) {
+          throw new Error(`Missing userId or symbol for position ${positionId}`)
+        }
+        
+        console.log(`📅 Using Restart-Resistant Scheduler for position ${positionId}`)
+        await restartResistantScheduler.schedulePositionExit(positionId, exitTime, userId, symbol)
+        return
+      }
+
+      // Legacy scheduling logic
       this.cancelPositionExit(positionId)
 
-      // Calculate milliseconds until exit time
       const msUntilExit = this.calculateMsUntilTime(exitTime)
       
       if (msUntilExit <= 0) {
-        // Exit time has already passed for today, execute immediately
         console.log(`⏰ Exit time already passed for position ${positionId}, executing immediately`)
         await this.executeAutoExit(positionId)
         return
       }
 
-      // Schedule the exit
       const timeoutId = setTimeout(async () => {
         await this.executeAutoExit(positionId)
       }, msUntilExit)
 
-      // Store the scheduled exit
       this.scheduledExits.set(positionId, {
         positionId,
         exitTime,
         timeoutId
       })
 
-      // Mark position as scheduled in database
       await markPositionForAutoExit(new ObjectId(positionId))
 
       console.log(`📅 Scheduled auto-exit for position ${positionId} at ${exitTime} (in ${Math.round(msUntilExit / 1000 / 60)} minutes)`)
@@ -352,11 +378,51 @@ class IntradayScheduler {
     isInitialized: boolean
     scheduledExits: number
     scheduledPositions: string[]
+    useRestartResistantScheduler: boolean
+    restartResistantStatus?: any
   } {
-    return {
+    const status = {
       isInitialized: this.isInitialized,
       scheduledExits: this.scheduledExits.size,
-      scheduledPositions: Array.from(this.scheduledExits.keys())
+      scheduledPositions: Array.from(this.scheduledExits.keys()),
+      useRestartResistantScheduler: this.useRestartResistantScheduler
+    }
+    
+    if (this.useRestartResistantScheduler) {
+      (status as any).restartResistantStatus = restartResistantScheduler.getStatus()
+    }
+    
+    return status
+  }
+
+  /**
+   * Migrate legacy scheduled exits to new system
+   */
+  private async migrateLegacyScheduledExits(): Promise<void> {
+    try {
+      console.log('🔄 Migrating legacy scheduled exits to restart-resistant scheduler...')
+      
+      const openPositions = await getIntradayPositionsForAutoExit()
+      let migratedCount = 0
+      
+      for (const position of openPositions) {
+        if (position.scheduledExitTime && position.autoSquareOffScheduled) {
+          console.log(`🔄 Migrating position ${position._id} with exit time ${position.scheduledExitTime}`)
+          
+          await restartResistantScheduler.schedulePositionExit(
+            position._id.toString(),
+            position.scheduledExitTime,
+            position.userId.toString(),
+            position.symbol
+          )
+          
+          migratedCount++
+        }
+      }
+      
+      console.log(`✅ Migrated ${migratedCount} legacy scheduled exits to restart-resistant scheduler`)
+    } catch (error) {
+      console.error('❌ Error migrating legacy scheduled exits:', error)
     }
   }
 

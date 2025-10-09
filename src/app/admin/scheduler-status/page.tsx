@@ -63,11 +63,21 @@ export default function SchedulerStatusPage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/debug/scheduler-status')
-      if (!response.ok) {
-        throw new Error('Failed to fetch scheduler status')
+      
+      // Fetch both legacy and new scheduler data
+      const [legacyResponse, newResponse] = await Promise.all([
+        fetch('/api/debug/scheduler-status'),
+        fetch('/api/admin/scheduler-v2?action=status')
+      ])
+      
+      const legacyResult = await legacyResponse.json()
+      const newResult = newResponse.ok ? await newResponse.json() : null
+      
+      // Combine the results
+      const result = {
+        ...legacyResult,
+        newScheduler: newResult
       }
-      const result = await response.json()
       
       // Enhance position data with additional calculations
       if (result.positions?.details) {
@@ -228,6 +238,24 @@ export default function SchedulerStatusPage() {
 
       {data && (
         <>
+          {/* New Scheduler Status Alert */}
+          {data?.newScheduler && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 text-blue-500 mr-2" />
+                <span className="font-medium text-blue-900">Restart-Resistant Scheduler v2.0 Active</span>
+              </div>
+              <p className="text-sm text-blue-700 mt-1">
+                Database-backed scheduling with automatic restart recovery
+              </p>
+              <div className="mt-2 text-xs text-blue-600">
+                Process ID: {data.newScheduler.restartResistantScheduler?.status?.processId} | 
+                Version: {data.newScheduler.restartResistantScheduler?.status?.schedulerVersion} |
+                Pending DB Exits: {data.newScheduler.restartResistantScheduler?.pendingExitsCount || 0}
+              </div>
+            </div>
+          )}
+
           {/* Overview Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
