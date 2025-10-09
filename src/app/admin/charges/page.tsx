@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Save, RefreshCw, DollarSign, TrendingUp, AlertTriangle, Settings } from 'lucide-react'
+import { ArrowLeft, Save, RefreshCw, DollarSign, TrendingUp, AlertTriangle, Settings, Building, FileText, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 
 interface ChargeConfig {
@@ -160,6 +160,18 @@ export default function ChargesAdminPage() {
             <p className="text-gray-600">Configure trading charges and view charge tracking statistics</p>
           </div>
           <div className="flex gap-2">
+            <Link href="/admin/broker-config">
+              <Button variant="outline">
+                <Building className="h-4 w-4 mr-2" />
+                Broker Config
+              </Button>
+            </Link>
+            <Link href="/admin/reports">
+              <Button variant="outline">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Reports
+              </Button>
+            </Link>
             <Button onClick={updateAllCharges} disabled={updating} variant="outline">
               <RefreshCw className={`h-4 w-4 mr-2 ${updating ? 'animate-spin' : ''}`} />
               {updating ? 'Updating...' : 'Update Charges'}

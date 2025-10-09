@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import Trade from '@/models/Trade'
+import BrokerConfig from '@/models/BrokerConfig'
 import { 
   ContractNote, 
   DerivativeTrade, 
@@ -14,13 +15,13 @@ import {
   calculateGST
 } from '@/types/contractNote'
 
-// TradeBot Portal broker information
-const TRADEBOT_BROKER_INFO = {
+// Default broker information (will be overridden by database config)
+const DEFAULT_BROKER_INFO = {
   name: 'TradeBot Portal',
   address: 'Technology Hub, Bangalore, Karnataka, India',
   phone: '+91 80 4718 1888',
   website: 'https://niveshawealth.in',
-  sebiRegistration: 'INZ000031633', // Using Zerodha's for reference
+  sebiRegistration: 'INZ000031633',
   complianceOfficer: {
     name: 'System Administrator',
     phone: '+91 80 4718 1888',
@@ -64,8 +65,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No trades found for the specified date range' }, { status: 404 })
     }
 
+    // Fetch broker configuration
+    const brokerConfig = await BrokerConfig.findOne({ isActive: true })
+    
     // Generate contract note
-    const contractNote = await generateContractNote(user, trades, startDate, endDate, true)
+    const contractNote = await generateContractNote(user, trades, startDate, endDate, true, brokerConfig)
 
     // Generate HTML for PDF
     const html = generateContractNoteHTML(contractNote)
@@ -91,15 +95,39 @@ async function generateContractNote(
   trades: any[],
   startDate: string,
   endDate: string,
-  includeCharges: boolean
+  includeCharges: boolean,
+  brokerConfig: any = null
 ): Promise<ContractNote> {
   
-  // Generate contract note number (format: CNT-DD/MM-YYYYMMDD)
+  // Use broker config or default values
+  const config = brokerConfig || {}
+  const brokerInfo = {
+    name: config.companyName || DEFAULT_BROKER_INFO.name,
+    displayName: config.companyDisplayName || '🤖 TRADEBOT PORTAL',
+    address: config.address || DEFAULT_BROKER_INFO.address,
+    phone: config.phone || DEFAULT_BROKER_INFO.phone,
+    website: config.website || DEFAULT_BROKER_INFO.website,
+    email: config.email || 'info@niveshawealth.in',
+    sebiRegistration: config.sebiRegistration || DEFAULT_BROKER_INFO.sebiRegistration,
+    gstNumber: config.gstNumber || '29AAAAA0000A1Z5',
+    gstStateCode: config.gstStateCode || '29',
+    placeOfSupply: config.placeOfSupply || 'KARNATAKA',
+    complianceOfficer: {
+      name: config.complianceOfficer?.name || DEFAULT_BROKER_INFO.complianceOfficer.name,
+      phone: config.complianceOfficer?.phone || DEFAULT_BROKER_INFO.complianceOfficer.phone,
+      email: config.complianceOfficer?.email || DEFAULT_BROKER_INFO.complianceOfficer.email
+    },
+    investorComplaintEmail: config.investorComplaintEmail || DEFAULT_BROKER_INFO.investorComplaintEmail
+  }
+
+  // Generate contract note number with configurable prefix
+  const prefix = config.contractNotePrefix || 'CNT'
   const today = new Date()
-  const contractNoteNumber = `CNT-${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`
+  const contractNoteNumber = `${prefix}-${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}`
   
-  // Generate IRN (Invoice Reference Number) - same format for simplicity
-  const invoiceReferenceNumber = contractNoteNumber
+  // Generate IRN (Invoice Reference Number) with configurable prefix
+  const irnPrefix = config.invoiceReferencePrefix || 'IRN'
+  const invoiceReferenceNumber = contractNoteNumber.replace(prefix, irnPrefix)
 
   // Convert trades to derivative trades format using stored charges
   const derivatives: DerivativeTrade[] = []
@@ -202,7 +230,7 @@ async function generateContractNote(
       ucc: user._id.toString().slice(-6).toUpperCase()
     },
     
-    broker: TRADEBOT_BROKER_INFO,
+    broker: brokerInfo,
     
     derivatives,
     
@@ -313,17 +341,50 @@ function generateContractNoteHTML(contractNote: ContractNote): string {
 </head>
 <body>
   <div class="no-print">
-    <button onclick="window.print()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
+    <button onclick="downloadPDF()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
       📄 Download PDF
     </button>
-    <button onclick="window.close()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+    <button onclick="closeWindow()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
       Close
     </button>
   </div>
 
+  <script>
+    function downloadPDF() {
+      // Hide the buttons temporarily
+      document.querySelector('.no-print').style.display = 'none';
+      
+      // Trigger print dialog
+      window.print();
+      
+      // Show buttons again after a delay
+      setTimeout(() => {
+        const noPrintDiv = document.querySelector('.no-print');
+        if (noPrintDiv) {
+          noPrintDiv.style.display = 'block';
+        }
+      }, 1000);
+    }
+    
+    function closeWindow() {
+      // Try to close the window
+      if (window.opener) {
+        window.close();
+      } else {
+        // If can't close, show message
+        alert('Please close this tab manually.');
+      }
+    }
+    
+    // Auto-focus for better user experience
+    window.addEventListener('load', function() {
+      document.body.focus();
+    });
+  </script>
+
   <!-- Header Section -->
   <div class="company-header">
-    <div class="company-name">🤖 TRADEBOT PORTAL</div>
+    <div class="company-name">${contractNote.broker.displayName || contractNote.broker.name}</div>
     <div>${contractNote.broker.address}</div>
     <div class="contract-title">CONTRACT NOTE CUM TAX INVOICE</div>
     <div class="tax-invoice">(Tax Invoice under Section 31 of GST Act)</div>
@@ -381,8 +442,8 @@ function generateContractNoteHTML(contractNote: ContractNote): string {
       </tr>
       <tr>
         <td colspan="4">
-          <div><strong>Place of supply:</strong> KARNATAKA</div>
-          <div><strong>GST State Code:</strong> 29</div>
+          <div><strong>Place of supply:</strong> ${contractNote.broker.placeOfSupply || 'KARNATAKA'}</div>
+          <div><strong>GST State Code:</strong> ${contractNote.broker.gstStateCode || '29'}</div>
           <div><strong>PAN:</strong> ${contractNote.client.pan}</div>
           <div><strong>UCC:</strong> ${contractNote.client.ucc}</div>
         </td>
