@@ -21,7 +21,13 @@ const UserSchema = new mongoose.Schema({
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   status: { type: String, enum: ['active', 'suspended', 'restricted'], default: 'active' },
   lastLoginAt: { type: Date },
-  password: { type: String }
+  password: { type: String },
+  
+  // Password reset functionality
+  passwordResetToken: { type: String },
+  passwordResetExpires: { type: Date },
+  passwordResetAttempts: { type: Number, default: 0 },
+  lastPasswordReset: { type: Date }
 }, {
   timestamps: true
 })

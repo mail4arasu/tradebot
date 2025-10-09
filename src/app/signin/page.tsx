@@ -115,6 +115,17 @@ export default function SignIn() {
                     required
                   />
                 </div>
+                
+                <div className="flex items-center justify-between">
+                  <div></div>
+                  <Link 
+                    href="/auth/forgot-password" 
+                    className="text-sm text-blue-600 hover:text-blue-500 font-medium"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                
                 {error && (
                   <div className="text-red-500 text-sm text-center">{error}</div>
                 )}
