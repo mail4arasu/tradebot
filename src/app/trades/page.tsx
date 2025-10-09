@@ -204,6 +204,7 @@ function TradesContent() {
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<any>(null)
   const [cleaning, setCleaning] = useState(false)
+  const [generatingContractNote, setGeneratingContractNote] = useState(false)
   
   // Order filtering states (no date filters - Zerodha API limitation)
   const [orderFilters, setOrderFilters] = useState({
@@ -556,6 +557,31 @@ function TradesContent() {
       alert('Error cleaning trades: ' + error.message)
     } finally {
       setCleaning(false)
+    }
+  }
+
+  const generateContractNote = async () => {
+    try {
+      setGeneratingContractNote(true)
+      
+      // Use the trade filters to determine date range
+      const startDate = tradeFilters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Default to last 30 days
+      const endDate = tradeFilters.endDate || new Date().toISOString().split('T')[0] // Default to today
+      
+      // Open contract note in new window/tab for PDF generation
+      const pdfUrl = `/api/trades/contract-note/pdf?startDate=${startDate}&endDate=${endDate}`
+      const contractNoteWindow = window.open(pdfUrl, '_blank')
+      
+      if (contractNoteWindow) {
+        console.log('Contract note opened in new window')
+      } else {
+        alert('Contract note generated! Please enable popups to view/download the PDF.')
+      }
+    } catch (error) {
+      console.error('Error generating contract note:', error)
+      alert('Error generating contract note: ' + error.message)
+    } finally {
+      setGeneratingContractNote(false)
     }
   }
 
@@ -1389,6 +1415,10 @@ function TradesContent() {
             onSearch={(term) => setSearchTerms(prev => ({ ...prev, trades: term }))}
             actions={
               <>
+                <Button variant="outline" size="sm" onClick={generateContractNote} disabled={generatingContractNote || trades.length === 0}>
+                  <Download className={`h-4 w-4 mr-2 ${generatingContractNote ? 'animate-bounce' : ''}`} />
+                  {generatingContractNote ? 'Generating...' : 'Contract Note'}
+                </Button>
                 <Button variant="outline" size="sm" onClick={cleanupDuplicates} disabled={cleaning}>
                   <RotateCcw className={`h-4 w-4 mr-2 ${cleaning ? 'animate-spin' : ''}`} />
                   {cleaning ? 'Cleaning...' : 'Cleanup'}

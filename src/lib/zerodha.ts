@@ -268,6 +268,159 @@ export class ZerodhaAPI {
     }
   }
 
+  /**
+   * Enhanced method to fetch trades with detailed charges
+   * This method fetches both trades and orders to get comprehensive charge information
+   */
+  async getTradesWithCharges() {
+    if (!this.accessToken) {
+      throw new Error('Access token required. Please complete OAuth flow first.')
+    }
+
+    try {
+      console.log('💰 Fetching trades with detailed charges...')
+
+      // Fetch trades and orders concurrently
+      const [tradesResponse, ordersResponse] = await Promise.all([
+        this.getTrades(),
+        this.getOrders()
+      ])
+
+      const trades = tradesResponse.data || []
+      const orders = ordersResponse.data || []
+
+      console.log(`📊 Found ${trades.length} trades and ${orders.length} orders`)
+
+      // Create a map of orders by order_id for quick lookup
+      const ordersMap = new Map()
+      orders.forEach((order: any) => {
+        ordersMap.set(order.order_id, order)
+      })
+
+      // Enhance trades with charge information from orders
+      const enhancedTrades = trades.map((trade: any) => {
+        const order = ordersMap.get(trade.order_id)
+        
+        // Calculate or extract charges
+        const turnover = trade.quantity * trade.price
+        const charges = this.calculateTradeCharges(trade, order, turnover)
+
+        return {
+          ...trade,
+          turnover,
+          charges,
+          order_data: order, // Include order data for reference
+          enhanced: true
+        }
+      })
+
+      console.log(`✅ Enhanced ${enhancedTrades.length} trades with charge information`)
+
+      return {
+        status: 'success',
+        data: enhancedTrades,
+        charges_calculated: true
+      }
+
+    } catch (error) {
+      console.error('Error fetching trades with charges:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Calculate or extract charges for a trade
+   * Zerodha API doesn't always provide detailed charges, so we calculate them
+   */
+  private calculateTradeCharges(trade: any, order: any, turnover: number) {
+    // Try to extract charges from trade data if available
+    if (trade.charges && typeof trade.charges === 'object') {
+      console.log('📊 Using provided charges from trade data')
+      return this.normalizeCharges(trade.charges, turnover)
+    }
+
+    // Try to extract charges from order data if available
+    if (order && order.charges && typeof order.charges === 'object') {
+      console.log('📊 Using provided charges from order data')
+      return this.normalizeCharges(order.charges, turnover)
+    }
+
+    // Calculate charges based on Zerodha's standard rates
+    console.log('🧮 Calculating charges using standard rates')
+    return this.calculateStandardCharges(trade, turnover)
+  }
+
+  /**
+   * Normalize charges from Zerodha API response
+   */
+  private normalizeCharges(rawCharges: any, turnover: number) {
+    return {
+      brokerage: rawCharges.brokerage || 0,
+      stt: rawCharges.stt || rawCharges.securities_transaction_tax || 0,
+      exchangeCharges: rawCharges.exchange_charges || rawCharges.transaction_charges || 0,
+      gst: rawCharges.gst || (rawCharges.cgst || 0) + (rawCharges.sgst || 0) + (rawCharges.igst || 0),
+      cgst: rawCharges.cgst || 0,
+      sgst: rawCharges.sgst || 0,
+      igst: rawCharges.igst || 0,
+      sebiCharges: rawCharges.sebi_charges || rawCharges.sebi || 0,
+      stampCharges: rawCharges.stamp_charges || rawCharges.stamp || 0,
+      totalCharges: rawCharges.total || rawCharges.total_charges || this.calculateTotalCharges(rawCharges),
+      netAmount: turnover - (rawCharges.total || rawCharges.total_charges || 0),
+      currency: 'INR',
+      source: 'zerodha_api'
+    }
+  }
+
+  /**
+   * Calculate charges using standard Zerodha rates
+   */
+  private calculateStandardCharges(trade: any, turnover: number) {
+    const isBuy = trade.transaction_type === 'BUY'
+    const isSell = trade.transaction_type === 'SELL'
+    
+    // Standard Zerodha rates for equity derivatives
+    const brokerage = Math.min(turnover * 0.0003, 20) // 0.03% or ₹20 max per order
+    const exchangeCharges = turnover * 0.0019 // 0.0019% of turnover
+    const stt = isSell ? turnover * 0.0125 : 0 // 0.0125% on sell side
+    const stampCharges = isBuy ? turnover * 0.00003 : 0 // 0.003% on buy side
+    const sebiCharges = turnover * 0.000001 // ₹1 per crore
+    
+    const taxableAmount = brokerage + exchangeCharges
+    const cgst = taxableAmount * 0.09 // 9%
+    const sgst = taxableAmount * 0.09 // 9%
+    const gst = cgst + sgst
+    
+    const totalCharges = brokerage + stt + exchangeCharges + gst + sebiCharges + stampCharges
+    
+    return {
+      brokerage,
+      stt,
+      exchangeCharges,
+      gst,
+      cgst,
+      sgst,
+      igst: 0,
+      sebiCharges,
+      stampCharges,
+      totalCharges,
+      netAmount: isBuy ? -(turnover + totalCharges) : (turnover - totalCharges),
+      currency: 'INR',
+      source: 'calculated'
+    }
+  }
+
+  /**
+   * Calculate total charges from charge components
+   */
+  private calculateTotalCharges(charges: any): number {
+    return (charges.brokerage || 0) +
+           (charges.stt || charges.securities_transaction_tax || 0) +
+           (charges.exchange_charges || charges.transaction_charges || 0) +
+           (charges.gst || (charges.cgst || 0) + (charges.sgst || 0) + (charges.igst || 0)) +
+           (charges.sebi_charges || charges.sebi || 0) +
+           (charges.stamp_charges || charges.stamp || 0)
+  }
+
   // New method to fetch historical trades using orders endpoint
   async getHistoricalTrades(fromDate?: string, toDate?: string) {
     if (!this.accessToken) {
