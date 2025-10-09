@@ -39,13 +39,18 @@ export async function GET(request: NextRequest) {
       ]
     }).toArray()
     
-    // Get user details for positions
+    // Get user and bot details for positions
     const positionsWithUsers = await Promise.all(
       openPositions.map(async (position) => {
         const user = await db.collection('users').findOne({ _id: new ObjectId(position.userId) })
+        const bot = await db.collection('bots').findOne({ _id: new ObjectId(position.botId) })
+        
         return {
           ...position,
           userEmail: user?.email || 'Unknown',
+          userName: user?.name || 'Unknown',
+          botName: bot?.name || 'Unknown Bot',
+          botTradingType: bot?.tradingType || 'Unknown',
           currentTime: istTime.toLocaleTimeString(),
           exitTimePassed: position.scheduledExitTime ? 
             calculateIfExitTimePassed(position.scheduledExitTime, istTime) : null
@@ -84,6 +89,9 @@ export async function GET(request: NextRequest) {
           symbol: p.symbol,
           status: p.status,
           userEmail: p.userEmail,
+          userName: p.userName,
+          botName: p.botName,
+          botTradingType: p.botTradingType,
           scheduledExitTime: p.scheduledExitTime,
           autoSquareOffScheduled: p.autoSquareOffScheduled,
           currentQuantity: p.currentQuantity,

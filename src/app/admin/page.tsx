@@ -237,6 +237,10 @@ export default function AdminDashboard() {
                       className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                   ⏰ Scheduler
                 </Link>
+                <Link href="/admin/scheduler-status" 
+                      className="inline-flex items-center px-3 py-2 border border-orange-300 text-sm font-medium rounded-md text-orange-700 bg-orange-50 hover:bg-orange-100">
+                  📊 Scheduler Status
+                </Link>
                 <Link href="/admin/announcements" 
                       className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                   📢 Announcements
