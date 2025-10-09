@@ -179,46 +179,53 @@ export function calculatePositionSize(
  */
 /**
  * Determine option type based on action and strategy
- * Enhanced to support both LONG and SHORT option strategies
+ * CORRECTED: SHORT signals should BUY PUT options for basic bearish strategy
  */
 export function getOptionType(action: string, side?: string): 'CE' | 'PE' {
   const actionUpper = action.toUpperCase()
   const sideUpper = side?.toUpperCase()
   
+  console.log(`🎛️ Option type selection: action=${actionUpper}, side=${sideUpper}`)
+  
   // Handle explicit option type specification
   if (actionUpper.includes('CALL') || actionUpper.includes('CE')) {
+    console.log(`📞 Explicit CALL specified → CE`)
     return 'CE'
   }
   if (actionUpper.includes('PUT') || actionUpper.includes('PE')) {
+    console.log(`📱 Explicit PUT specified → PE`)
     return 'PE'
   }
   
   // Strategy-based logic for LONG and SHORT positions
   
-  // LONG Strategies (buying options)
+  // LONG Strategies (bullish outlook - buy calls)
   if (actionUpper === 'BUY' || actionUpper === 'LONG') {
-    // For LONG positions, typically buy calls for bullish view
+    console.log(`📈 LONG/BUY signal → BUY CALL options (CE)`)
     return 'CE'
   }
   
-  // SHORT Strategies (selling/writing options)
+  // SHORT Strategies (bearish outlook - buy puts)
+  // CORRECTED: For basic SHORT entry signals, buy PUT options (not sell calls)
   if (actionUpper === 'SELL_SHORT' || actionUpper === 'SHORT' || 
       actionUpper === 'SELL_ENTRY' || sideUpper === 'SHORT') {
-    // For SHORT positions, can sell calls (bearish) or puts (bullish)
-    // Default to selling calls for bearish outlook
-    return 'CE'  // Sell calls = bearish strategy
+    console.log(`📉 SHORT signal → BUY PUT options (PE) for bearish strategy`)
+    return 'PE'  // Buy puts = bearish strategy (CORRECTED)
   }
   
   // Standard BUY/SELL logic
   if (actionUpper === 'BUY' || actionUpper === 'ENTRY') {
+    console.log(`📈 BUY/ENTRY signal → BUY CALL options (CE)`)
     return 'CE'  // Buy calls = bullish
   }
   
   if (actionUpper === 'SELL') {
-    return 'PE'  // Default to puts for sell signals
+    console.log(`📉 SELL signal → BUY PUT options (PE)`)
+    return 'PE'  // Buy puts for sell signals
   }
   
-  // Default fallback
+  // Default fallback (bullish)
+  console.log(`🔄 Default fallback → CE`)
   return 'CE'
 }
 

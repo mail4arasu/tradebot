@@ -121,8 +121,15 @@ export async function executeOptionsBotTrade(
     console.log(`🏆 Selected best contract: ${bestContract.symbol} (Delta: ${bestContract.delta?.toFixed(3)})`)
 
     // Step 9: Calculate position size based on user's position sizing method
-    const premiumPerLot = (bestContract.premium || 0) * config.lotSize
+    // CORRECTED: Use actual options contract premium for accurate position sizing
+    const premiumPerUnit = bestContract.premium || 0
+    const premiumPerLot = premiumPerUnit * config.lotSize
     let positionCalc: any
+    
+    console.log(`💰 Options premium analysis:`)
+    console.log(`   Premium per unit: ₹${premiumPerUnit.toFixed(2)}`)
+    console.log(`   Lot size: ${config.lotSize} units`)
+    console.log(`   Premium per lot: ₹${premiumPerLot.toLocaleString()}`)
     
     if (config.positionSizingMethod === 'FIXED_QUANTITY') {
       // Fixed quantity mode: Use user-specified lots
@@ -130,7 +137,6 @@ export async function executeOptionsBotTrade(
       const totalInvestment = fixedLots * premiumPerLot
       
       console.log(`📊 Using Fixed Quantity mode: ${fixedLots} lots`)
-      console.log(`💰 Premium per lot: ₹${premiumPerLot.toLocaleString()}`)
       console.log(`💵 Total investment required: ₹${totalInvestment.toLocaleString()}`)
       
       // Check if user has sufficient capital for fixed quantity
@@ -144,18 +150,28 @@ export async function executeOptionsBotTrade(
         canTrade: true
       }
     } else {
-      // Risk percentage mode: Use existing logic
+      // Risk percentage mode: Calculate based on options premium
       console.log(`📊 Using Risk Percentage mode: ${config.riskPercentage}%`)
-      positionCalc = calculatePositionSize(
-        config.capital,
-        config.riskPercentage,
-        premiumPerLot,
-        config.lotSize
-      )
-
-      if (!positionCalc.canTrade) {
-        const minCapitalRequired = Math.ceil((premiumPerLot / config.riskPercentage) * 100)
-        throw new Error(`Insufficient capital for minimum position size. Required: ₹${minCapitalRequired.toLocaleString()} (at ${config.riskPercentage}% risk). Current: ₹${config.capital.toLocaleString()}`)
+      console.log(`📊 Capital: ₹${config.capital.toLocaleString()}`)
+      
+      // Calculate risk amount (maximum amount willing to risk)
+      const riskAmount = (config.capital * config.riskPercentage) / 100
+      console.log(`📊 Risk amount: ₹${riskAmount.toLocaleString()} (${config.riskPercentage}% of ₹${config.capital.toLocaleString()})`)
+      
+      // For options, risk amount = premium paid (maximum loss)
+      // So calculate maximum lots based on premium cost
+      const maxLots = Math.floor(riskAmount / premiumPerLot)
+      console.log(`📊 Maximum lots based on risk: ${maxLots} lots`)
+      
+      if (maxLots < 1) {
+        const minCapitalRequired = Math.ceil(premiumPerLot / (config.riskPercentage / 100))
+        throw new Error(`Insufficient capital for minimum position size. Required: ₹${minCapitalRequired.toLocaleString()} (at ${config.riskPercentage}% risk for 1 lot). Current: ₹${config.capital.toLocaleString()}`)
+      }
+      
+      positionCalc = {
+        lots: maxLots,
+        amount: maxLots * premiumPerLot,
+        canTrade: true
       }
     }
 
@@ -177,10 +193,13 @@ export async function executeOptionsBotTrade(
     const zerodha = new ZerodhaAPI(apiKey, apiSecret, accessToken)
     
     // Prepare order parameters for options
+    // CORRECTED: For basic options strategies, all entry signals should be BUY orders
+    // - LONG signals: BUY CALL options (bullish)
+    // - SHORT signals: BUY PUT options (bearish)
     const orderParams = {
       exchange: 'NFO',
       tradingsymbol: bestContract.symbol!,
-      transaction_type: signal.action === 'SELL' || signal.action === 'SHORT' ? 'SELL' : 'BUY',
+      transaction_type: 'BUY', // Always BUY for entry signals (buy calls or buy puts)
       quantity: positionCalc.lots * config.lotSize,
       order_type: 'MARKET', // Use market orders for immediate execution
       product: 'MIS', // Intraday for options
