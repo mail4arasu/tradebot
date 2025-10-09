@@ -55,6 +55,7 @@ export default function AdminDashboard() {
   const [totalPages, setTotalPages] = useState(1)
   const [actionLoading, setActionLoading] = useState<string>('')
   const [activeSection, setActiveSection] = useState('overview')
+  const [expandedSections, setExpandedSections] = useState<string[]>(['trading'])
 
   // Authentication check
   useEffect(() => {
@@ -229,9 +230,10 @@ export default function AdminDashboard() {
     {
       id: 'trading',
       title: 'Trading Management',
-      links: [
-        { href: '/admin/trading', title: 'Trading Control' },
-        { href: '/admin/position-reconciliation', title: 'Position Reconciliation' }
+      isExpandable: true,
+      subsections: [
+        { id: 'trading-control', title: 'Trading Control', description: 'Emergency trading controls and system management' },
+        { id: 'position-reconciliation', title: 'Position Reconciliation', description: 'Check and reconcile hanging positions' }
       ]
     },
     {
@@ -318,6 +320,108 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+    </div>
+  )
+
+  const renderTradingControlContent = () => (
+    <div>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900">Trading Control</h2>
+        <p className="mt-1 text-sm text-gray-600">Emergency trading controls and system management</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Emergency Controls</h3>
+          <div className="space-y-3">
+            <button className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
+              Emergency Stop All Trading
+            </button>
+            <button className="w-full px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors">
+              Emergency Square Off All Positions
+            </button>
+            <button className="w-full px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors">
+              Pause Auto-Exit Scheduler
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">System Status</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Trading Status</span>
+              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Active</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Auto-Exit Scheduler</span>
+              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Running</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Webhook Processing</span>
+              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">Quick Actions</h4>
+          <p className="text-sm text-blue-800 mb-3">For full trading control features, visit the dedicated page:</p>
+          <a href="/admin/trading" 
+             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            Go to Full Trading Control
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderPositionReconciliationContent = () => (
+    <div>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900">Position Reconciliation</h2>
+        <p className="mt-1 text-sm text-gray-600">Check and reconcile hanging positions with Zerodha</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-lg border border-gray-200 text-center">
+          <div className="text-2xl font-bold text-gray-900">0</div>
+          <div className="text-sm text-gray-600">Total Positions</div>
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200 text-center">
+          <div className="text-2xl font-bold text-green-600">0</div>
+          <div className="text-sm text-gray-600">Keep Open</div>
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200 text-center">
+          <div className="text-2xl font-bold text-red-600">0</div>
+          <div className="text-sm text-gray-600">Need Reconciliation</div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg border border-gray-200">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Reconciliation Actions</h3>
+        <div className="space-y-3">
+          <button className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+            Check Positions
+          </button>
+          <button className="w-full md:w-auto px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors ml-0 md:ml-3">
+            Download Report
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">Full Reconciliation Tools</h4>
+          <p className="text-sm text-blue-800 mb-3">For complete position reconciliation features, visit the dedicated page:</p>
+          <a href="/admin/position-reconciliation" 
+             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+            Go to Full Position Reconciliation
+          </a>
+        </div>
+      </div>
     </div>
   )
 
@@ -482,6 +586,14 @@ export default function AdminDashboard() {
     </div>
   )
 
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => 
+      prev.includes(sectionId) 
+        ? prev.filter(id => id !== sectionId)
+        : [...prev, sectionId]
+    )
+  }
+
   const renderMainContent = () => {
     const section = sidebarSections.find(s => s.id === activeSection)
     
@@ -489,6 +601,10 @@ export default function AdminDashboard() {
       return renderOverviewContent()
     } else if (activeSection === 'users') {
       return renderUserManagementContent()
+    } else if (activeSection === 'trading-control') {
+      return renderTradingControlContent()
+    } else if (activeSection === 'position-reconciliation') {
+      return renderPositionReconciliationContent()
     } else if (section?.links) {
       return renderExternalLinksContent(section)
     }
@@ -512,17 +628,49 @@ export default function AdminDashboard() {
           
           <nav className="px-3 pb-6">
             {sidebarSections.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium mb-1 transition-colors ${
-                  activeSection === section.id
-                    ? 'bg-blue-100 text-blue-900 border-r-2 border-blue-500'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {section.title}
-              </button>
+              <div key={section.id} className="mb-1">
+                {section.isExpandable ? (
+                  <div>
+                    <button
+                      onClick={() => toggleSection(section.id)}
+                      className="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 flex items-center justify-between"
+                    >
+                      <span>{section.title}</span>
+                      <span className={`transform transition-transform ${expandedSections.includes(section.id) ? 'rotate-90' : ''}`}>
+                        ▶
+                      </span>
+                    </button>
+                    {expandedSections.includes(section.id) && section.subsections && (
+                      <div className="ml-4 mt-1 space-y-1">
+                        {section.subsections.map((subsection: any) => (
+                          <button
+                            key={subsection.id}
+                            onClick={() => setActiveSection(subsection.id)}
+                            className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                              activeSection === subsection.id
+                                ? 'bg-blue-100 text-blue-900 border-r-2 border-blue-500'
+                                : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            {subsection.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setActiveSection(section.id)}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeSection === section.id
+                        ? 'bg-blue-100 text-blue-900 border-r-2 border-blue-500'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {section.title}
+                  </button>
+                )}
+              </div>
             ))}
           </nav>
         </div>
