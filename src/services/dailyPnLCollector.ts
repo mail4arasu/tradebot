@@ -14,6 +14,7 @@ import { decrypt } from '@/lib/encryption'
  */
 export class DailyPnLCollector {
   private isRunning = false
+  private schedulerTimeout: NodeJS.Timeout | null = null
 
   /**
    * Collect P&L snapshots for all users
@@ -256,7 +257,7 @@ export class DailyPnLCollector {
 
     console.log(`⏰ Scheduling daily P&L collection for ${targetTime.toISOString()}`)
 
-    setTimeout(async () => {
+    this.schedulerTimeout = setTimeout(async () => {
       try {
         await this.collectAllUserSnapshots()
       } catch (error) {
@@ -269,11 +270,31 @@ export class DailyPnLCollector {
   }
 
   /**
+   * Stop the scheduled daily collection
+   */
+  stopScheduledCollection(): void {
+    if (this.schedulerTimeout) {
+      clearTimeout(this.schedulerTimeout)
+      this.schedulerTimeout = null
+      console.log('❌ Stopped daily P&L collection scheduler')
+    }
+  }
+
+  /**
+   * Check if scheduler is currently active
+   */
+  isSchedulerActive(): boolean {
+    // Check if we have an active timeout scheduled
+    return this.schedulerTimeout !== null
+  }
+
+  /**
    * Get collection status
    */
   getStatus() {
     return {
       isRunning: this.isRunning,
+      schedulerActive: this.isSchedulerActive(),
       lastRun: null, // TODO: Store in database
       nextScheduled: null // TODO: Calculate from schedule
     }

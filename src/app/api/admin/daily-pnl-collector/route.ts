@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const { action, userId, date, startDate, endDate } = await request.json()
+    const { action, userId, date, startDate, endDate, enable } = await request.json()
 
     switch (action) {
       case 'collect_all':
@@ -153,12 +153,21 @@ export async function POST(request: NextRequest) {
         })
 
       case 'schedule':
-        console.log(`📅 Daily P&L collection scheduling enabled by ${session.user.email}`)
-        dailyPnLCollector.scheduleDailyCollection()
-        return NextResponse.json({
-          success: true,
-          message: 'Daily P&L collection scheduled'
-        })
+        if (enable) {
+          console.log(`📅 Daily P&L collection scheduling enabled by ${session.user.email}`)
+          dailyPnLCollector.scheduleDailyCollection()
+          return NextResponse.json({
+            success: true,
+            message: 'Daily P&L collection scheduler enabled'
+          })
+        } else {
+          console.log(`📅 Daily P&L collection scheduling disabled by ${session.user.email}`)
+          dailyPnLCollector.stopScheduledCollection()
+          return NextResponse.json({
+            success: true,
+            message: 'Daily P&L collection scheduler disabled'
+          })
+        }
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 interface CollectorStatus {
   isRunning: boolean
+  schedulerActive: boolean
   lastRun: string | null
   nextScheduled: string | null
   totalSnapshots: number
@@ -131,6 +132,9 @@ export default function DailyPnLCollectorPage() {
                   <p className={`text-lg font-semibold ${status_?.isRunning ? 'text-green-600' : 'text-gray-900'}`}>
                     {status_?.isRunning ? 'Running' : 'Idle'}
                   </p>
+                  <p className={`text-xs ${status_?.schedulerActive ? 'text-green-600' : 'text-orange-600'}`}>
+                    Scheduler: {status_?.schedulerActive ? 'Active' : 'Inactive'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -216,18 +220,28 @@ export default function DailyPnLCollectorPage() {
                 </button>
               </div>
 
-              {/* Enable Scheduler */}
+              {/* Enable/Disable Scheduler */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Daily Scheduler</h3>
-                <p className="text-xs text-gray-600 mb-3">
-                  Enable automated daily collection at 4:30 PM IST
+                <p className="text-xs text-gray-600 mb-2">
+                  Automated daily collection at 4:30 PM IST
+                </p>
+                <p className={`text-xs mb-3 ${status_?.schedulerActive ? 'text-green-600' : 'text-gray-500'}`}>
+                  Status: {status_?.schedulerActive ? 'Active' : 'Inactive'}
                 </p>
                 <button
-                  onClick={() => handleAction('schedule')}
+                  onClick={() => handleAction('schedule', { enable: !status_?.schedulerActive })}
                   disabled={actionLoading === 'schedule'}
-                  className="w-full px-3 py-2 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:opacity-50"
+                  className={`w-full px-3 py-2 text-white text-sm rounded-md disabled:opacity-50 ${
+                    status_?.schedulerActive 
+                      ? 'bg-red-600 hover:bg-red-700' 
+                      : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
                 >
-                  {actionLoading === 'schedule' ? 'Enabling...' : 'Enable Scheduler'}
+                  {actionLoading === 'schedule' 
+                    ? (status_?.schedulerActive ? 'Disabling...' : 'Enabling...')
+                    : (status_?.schedulerActive ? 'Disable Scheduler' : 'Enable Scheduler')
+                  }
                 </button>
               </div>
             </div>
