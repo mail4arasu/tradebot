@@ -54,6 +54,7 @@ export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [actionLoading, setActionLoading] = useState<string>('')
+  const [activeSection, setActiveSection] = useState('overview')
 
   // Authentication check
   useEffect(() => {
@@ -214,276 +215,330 @@ export default function AdminDashboard() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Header */}
-        <div className="mb-8">
-          <div className="sm:flex sm:items-start sm:justify-between">
-            <div className="mb-6 sm:mb-0">
-              <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="mt-1 text-sm text-gray-600">Manage users and monitor platform statistics</p>
+  const sidebarSections = [
+    {
+      id: 'overview',
+      title: 'Overview',
+      description: 'Platform statistics and overview'
+    },
+    {
+      id: 'users',
+      title: 'User Management',
+      description: 'Manage users and their permissions'
+    },
+    {
+      id: 'trading',
+      title: 'Trading Management',
+      links: [
+        { href: '/admin/trading', title: 'Trading Control' },
+        { href: '/admin/position-reconciliation', title: 'Position Reconciliation' }
+      ]
+    },
+    {
+      id: 'scheduler',
+      title: 'Scheduler & Automation',
+      links: [
+        { href: '/admin/intraday-scheduler', title: 'Scheduler Control' },
+        { href: '/admin/scheduler-status', title: 'Scheduler Status' }
+      ]
+    },
+    {
+      id: 'data',
+      title: 'Data & Reports',
+      links: [
+        { href: '/admin/data-sync', title: 'Data Sync' },
+        { href: '/admin/reports', title: 'Reports' },
+        { href: '/admin/charges', title: 'Charges' }
+      ]
+    },
+    {
+      id: 'system',
+      title: 'System Management',
+      links: [
+        { href: '/admin/announcements', title: 'Announcements' },
+        { href: '/admin/cleanup', title: 'Cleanup' }
+      ]
+    }
+  ]
+
+  const renderOverviewContent = () => (
+    <div>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900">Platform Overview</h2>
+        <p className="mt-1 text-sm text-gray-600">Monitor platform statistics and key metrics</p>
+      </div>
+
+      {/* Statistics Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-500 truncate">Total Users</p>
+                  <p className="text-2xl font-semibold text-gray-900">{stats.totalUsers || 0}</p>
+                </div>
+              </div>
             </div>
-            
-            {/* Admin Navigation Sidebar */}
-            <div className="w-full sm:w-64 bg-white border border-gray-200 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Admin Controls</h3>
-              
-              {/* Trading Management */}
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Trading Management</h4>
-                <div className="space-y-1">
-                  <Link href="/admin/trading" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Trading Control
-                  </Link>
-                  <Link href="/admin/position-reconciliation" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Position Reconciliation
-                  </Link>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-500 truncate">Active Users</p>
+                  <p className="text-2xl font-semibold text-green-600">{stats.activeUsers || 0}</p>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Scheduler & Automation */}
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Scheduler & Automation</h4>
-                <div className="space-y-1">
-                  <Link href="/admin/intraday-scheduler" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Scheduler Control
-                  </Link>
-                  <Link href="/admin/scheduler-status" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Scheduler Status
-                  </Link>
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-500 truncate">Suspended/Restricted</p>
+                  <p className="text-2xl font-semibold text-red-600">
+                    {(stats.suspendedUsers || 0) + (stats.restrictedUsers || 0)}
+                  </p>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Data & Reports */}
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Data & Reports</h4>
-                <div className="space-y-1">
-                  <Link href="/admin/data-sync" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Data Sync
-                  </Link>
-                  <Link href="/admin/reports" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Reports
-                  </Link>
-                  <Link href="/admin/charges" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Charges
-                  </Link>
-                </div>
-              </div>
-
-              {/* System Management */}
-              <div>
-                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">System Management</h4>
-                <div className="space-y-1">
-                  <Link href="/admin/announcements" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Announcements
-                  </Link>
-                  <Link href="/admin/cleanup" 
-                        className="block px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                    Cleanup
-                  </Link>
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-500 truncate">Zerodha Connected</p>
+                  <p className="text-2xl font-semibold text-blue-600">{stats.zerodhaConnectedUsers || 0}</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      )}
+    </div>
+  )
 
-        {/* Statistics Cards */}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-500 truncate">Total Users</p>
-                    <p className="text-2xl font-semibold text-gray-900">{stats.totalUsers || 0}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+  const renderUserManagementContent = () => (
+    <div>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+        <p className="mt-1 text-sm text-gray-600">View and manage all registered users</p>
+      </div>
 
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-500 truncate">Active Users</p>
-                    <p className="text-2xl font-semibold text-green-600">{stats.activeUsers || 0}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-500 truncate">Suspended/Restricted</p>
-                    <p className="text-2xl font-semibold text-red-600">
-                      {(stats.suspendedUsers || 0) + (stats.restrictedUsers || 0)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-500 truncate">Zerodha Connected</p>
-                    <p className="text-2xl font-semibold text-blue-600">{stats.zerodhaConnectedUsers || 0}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* User Management Table */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:px-6">
-            <h2 className="text-lg font-medium text-gray-900">User Management</h2>
-            <p className="mt-1 text-sm text-gray-500">View and manage all registered users</p>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zerodha</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active Bots</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {users.filter(user => user && user._id).map((user) => (
-                  <tr key={user._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{String(user.name) || 'Unknown'}</div>
-                        <div className="text-sm text-gray-500">{String(user.email) || 'Unknown'}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getRoleBadge(user.role)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(user.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {user.zerodhaConfig?.isConnected ? (
-                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Connected</span>
-                      ) : (
-                        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Not Connected</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {(user.botAllocations || []).length > 0 ? (
-                        <div className="space-y-1">
-                          {(user.botAllocations || [])
-                            .filter(bot => bot && bot.isActive === true)
-                            .map((bot, index) => (
-                              <div key={index} className="text-xs">
-                                <span className="px-2 py-1 rounded bg-blue-100 text-blue-800">
-                                  {String(bot.botName) || 'Unknown Bot'}
-                                </span>
-                                <div className="text-gray-500">
-                                  ₹{(bot.allocatedAmount || 0).toLocaleString()} • {String(bot.strategy) || 'Unknown'}
-                                </div>
+      {/* User Management Table */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zerodha</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active Bots</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {users.filter(user => user && user._id).map((user) => (
+                <tr key={user._id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{String(user.name) || 'Unknown'}</div>
+                      <div className="text-sm text-gray-500">{String(user.email) || 'Unknown'}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getRoleBadge(user.role)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getStatusBadge(user.status)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {user.zerodhaConfig?.isConnected ? (
+                      <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">Connected</span>
+                    ) : (
+                      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">Not Connected</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {(user.botAllocations || []).length > 0 ? (
+                      <div className="space-y-1">
+                        {(user.botAllocations || [])
+                          .filter(bot => bot && bot.isActive === true)
+                          .map((bot, index) => (
+                            <div key={index} className="text-xs">
+                              <span className="px-2 py-1 rounded bg-blue-100 text-blue-800">
+                                {String(bot.botName) || 'Unknown Bot'}
+                              </span>
+                              <div className="text-gray-500">
+                                ₹{(bot.allocatedAmount || 0).toLocaleString()} • {String(bot.strategy) || 'Unknown'}
                               </div>
-                            ))}
-                          {(user.botAllocations || []).filter(bot => bot && bot.isActive === true).length === 0 && (
-                            <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Active Bots</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Bots</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                          onClick={() => handleImpersonateUser(user._id, user.email || 'No email')}
-                          disabled={actionLoading === user._id || user.role === 'admin'}
-                          title={user.role === 'admin' ? 'Cannot impersonate other admins' : 'Login as this user'}
-                        >
-                          {actionLoading === user._id ? 'Loading...' : 'Login as User'}
-                        </button>
-                        
-                        {user.status === 'active' ? (
-                          <button
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                            onClick={() => handleUserStatusChange(user._id, 'suspended')}
-                            disabled={actionLoading === user._id}
-                          >
-                            Suspend
-                          </button>
-                        ) : (
-                          <button
-                            className="text-green-600 hover:text-green-900 disabled:opacity-50"
-                            onClick={() => handleUserStatusChange(user._id, 'active')}
-                            disabled={actionLoading === user._id}
-                          >
-                            Activate
-                          </button>
+                            </div>
+                          ))}
+                        {(user.botAllocations || []).filter(bot => bot && bot.isActive === true).length === 0 && (
+                          <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Active Bots</span>
                         )}
-                        
+                      </div>
+                    ) : (
+                      <span className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-800">No Bots</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
+                      <button
+                        className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                        onClick={() => handleImpersonateUser(user._id, user.email || 'No email')}
+                        disabled={actionLoading === user._id || user.role === 'admin'}
+                        title={user.role === 'admin' ? 'Cannot impersonate other admins' : 'Login as this user'}
+                      >
+                        {actionLoading === user._id ? 'Loading...' : 'Login as User'}
+                      </button>
+                      
+                      {user.status === 'active' ? (
                         <button
                           className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                          onClick={() => handleDeleteUser(user._id, user.email || 'No email')}
+                          onClick={() => handleUserStatusChange(user._id, 'suspended')}
                           disabled={actionLoading === user._id}
                         >
-                          Delete
+                          Suspend
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      ) : (
+                        <button
+                          className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                          onClick={() => handleUserStatusChange(user._id, 'active')}
+                          disabled={actionLoading === user._id}
+                        >
+                          Activate
+                        </button>
+                      )}
+                      
+                      <button
+                        className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                        onClick={() => handleDeleteUser(user._id, user.email || 'No email')}
+                        disabled={actionLoading === user._id}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Pagination */}
-          <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-            <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-700">
-                Page {currentPage} of {totalPages}
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <button
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
-              </div>
+        {/* Pagination */}
+        <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-gray-700">
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <button
+                className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderExternalLinksContent = (section: any) => (
+    <div>
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900">{section.title}</h2>
+        <p className="mt-1 text-sm text-gray-600">Quick access to {section.title.toLowerCase()} tools</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {section.links.map((link: any, index: number) => (
+          <Link key={index} href={link.href} 
+                className="block p-6 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <h3 className="text-lg font-medium text-gray-900">{link.title}</h3>
+            <p className="mt-2 text-sm text-gray-600">Click to access {link.title.toLowerCase()}</p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderMainContent = () => {
+    const section = sidebarSections.find(s => s.id === activeSection)
+    
+    if (activeSection === 'overview') {
+      return renderOverviewContent()
+    } else if (activeSection === 'users') {
+      return renderUserManagementContent()
+    } else if (section?.links) {
+      return renderExternalLinksContent(section)
+    }
+    
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Section not found</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex">
+        {/* Left Sidebar */}
+        <div className="w-64 bg-white shadow-sm border-r border-gray-200 min-h-screen">
+          <div className="p-6">
+            <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
+            <p className="text-sm text-gray-600 mt-1">System management</p>
+          </div>
+          
+          <nav className="px-3 pb-6">
+            {sidebarSections.map((section) => (
+              <button
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                className={`w-full text-left px-3 py-2 rounded-md text-sm font-medium mb-1 transition-colors ${
+                  activeSection === section.id
+                    ? 'bg-blue-100 text-blue-900 border-r-2 border-blue-500'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {section.title}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 px-8 py-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="text-lg font-medium text-gray-900">Loading...</div>
+                <div className="text-sm text-gray-500 mt-2">Please wait</div>
+              </div>
+            </div>
+          ) : (
+            renderMainContent()
+          )}
         </div>
       </div>
     </div>
