@@ -18,6 +18,7 @@
 - **Historical Data Management**: Complete Zerodha historical data sync system
 - **Local Backtest Engine**: Full backtesting with real historical data
 - **Continuous Contract Creation**: Synthetic continuous futures contracts
+- **Automated Daily P&L Collection**: Comprehensive daily P&L snapshots for equity curve
 - **Authentication**: Email/password system with NextAuth
 - **Zerodha Integration**: Complete API integration with order placement capabilities
 - **Production Deployment**: Running on GCP with professional setup
@@ -27,7 +28,21 @@
 - **GitHub Repository**: https://github.com/mail4arasu/tradebot
 - **Domain**: https://niveshawealth.in (SSL configured)
 
-## 🚀 **Recent Major Improvements (October 8, 2025)**
+## 🚀 **Recent Major Improvements (October 9, 2025)**
+
+### **📊 Automated Daily P&L Collector System (October 9, 2025)**
+- **Complete Implementation**: Fully automated daily P&L snapshot collection for all users
+- **Smart Scheduling**: Runs daily at 4:30 PM IST after market close with weekend detection
+- **Credential Security**: Enhanced with proper credential decryption using encryption utilities
+- **Admin Interface**: Comprehensive management dashboard at `/admin/daily-pnl-collector`
+- **API Integration**: Full API endpoints for manual triggers, status monitoring, and collection history
+- **System Integration**: Integrated with existing scheduler system for auto-startup
+- **Production Deployment**: Successfully deployed and running on production VM
+- **Bot Performance Tracking**: Detailed bot-specific P&L breakdown and performance metrics
+- **Rate Limiting**: Respects Zerodha API limits with proper delays and batch processing
+- **Error Handling**: Comprehensive error handling with retry logic and failure reporting
+
+## 🚀 **Previous Major Improvements (October 8, 2025)**
 
 ### **🔧 Bot Management Validation Updates (October 8, 2025)**
 - **Increased Trading Limits**: Enhanced bot management interface with higher validation limits
