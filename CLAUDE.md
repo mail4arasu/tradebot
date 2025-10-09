@@ -42,6 +42,15 @@
 - **Rate Limiting**: Respects Zerodha API limits with proper delays and batch processing
 - **Error Handling**: Comprehensive error handling with retry logic and failure reporting
 
+### **🔧 Daily P&L Collector Fixes & Enhancements (October 9, 2025)**
+- **Scheduler State Tracking**: Fixed scheduler always showing as "disabled" with proper boolean flags
+- **Duplicate Cleanup System**: Enhanced duplicate detection and removal for P&L snapshots
+- **Debug Tools**: Added comprehensive snapshot analysis and debugging endpoints
+- **Manual Grouping Logic**: Improved duplicate detection to handle ObjectId vs string comparisons
+- **Enhanced Admin UI**: Added debug functionality and better status indicators
+- **Detailed Logging**: Comprehensive cleanup logs with user names, timestamps, and removal details
+- **Production Ready**: All fixes deployed and tested on production environment
+
 ## 🚀 **Previous Major Improvements (October 8, 2025)**
 
 ### **🔧 Bot Management Validation Updates (October 8, 2025)**
@@ -863,18 +872,20 @@ Continue development of TradeBot Portal. The system currently has:
 ✅ Continuous contract creation for seamless backtesting
 ✅ Production deployment on GCP with MongoDB
 
-CURRENT STATUS:
-- Historical data sync working (overcame 100-day API limits)
-- Local backtest engine implemented and deployed
-- Need to verify backtest results display correctly
-- Ready for strategy enhancement and optimization
+CURRENT STATUS (October 9, 2025):
+- ✅ Historical data sync working (overcame 100-day API limits)
+- ✅ Local backtest engine implemented and deployed
+- ✅ Automated daily P&L collector fully operational
+- ✅ Equity curve data population system complete
+- ✅ Scheduler state tracking and duplicate cleanup tools deployed
+- ✅ Comprehensive admin interface for P&L management
 
 NEXT IMMEDIATE TASKS:
-1. Test and verify backtest results are displaying properly in UI
-2. Implement additional trading strategies (Mean Reversion, Momentum)
-3. Add strategy parameter optimization tools
-4. Enhance backtest analytics and reporting
-5. Add real-time market data integration
+1. Test enhanced duplicate cleanup tools for equity curve issues
+2. Enable daily P&L scheduler for automated data collection
+3. Implement backfill functionality for historical P&L snapshots
+4. Add additional trading strategies (Mean Reversion, Momentum)
+5. Enhance backtest analytics and portfolio optimization tools
 
 The codebase is at:
 - Production: https://niveshawealth.in
@@ -887,6 +898,6 @@ Focus on enhancing the backtesting capabilities and adding more sophisticated tr
 
 ---
 
-*Last Updated: October 8, 2025*
-*Project Status: Advanced Production System with Complete Historical Data & Enhanced Trading Limits*
-*Version: 3.2.0 - Bot Management Validation Updates & Higher Trading Limits*
+*Last Updated: October 9, 2025*
+*Project Status: Advanced Production System with Automated Daily P&L Collection*
+*Version: 3.4.0 - Automated Daily P&L Collector with Enhanced Debugging & Cleanup Tools*
