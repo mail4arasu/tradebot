@@ -15,6 +15,7 @@ import { decrypt } from '@/lib/encryption'
 export class DailyPnLCollector {
   private isRunning = false
   private schedulerTimeout: NodeJS.Timeout | null = null
+  private _schedulerActive = false
 
   /**
    * Collect P&L snapshots for all users
@@ -89,7 +90,7 @@ export class DailyPnLCollector {
     })
 
     if (existingSnapshot) {
-      console.log(`📋 Snapshot already exists for ${user.email} on ${targetDate}`)
+      console.log(`📋 Snapshot already exists for ${user.email} on ${targetDate} (source: ${existingSnapshot.dataSource})`)
       return
     }
 
@@ -244,6 +245,9 @@ export class DailyPnLCollector {
    * Schedule daily collection (for production use)
    */
   scheduleDailyCollection(): void {
+    // Stop any existing scheduler first
+    this.stopScheduledCollection()
+    
     const now = new Date()
     const targetTime = new Date()
     targetTime.setHours(16, 30, 0, 0) // 4:30 PM IST (after market close)
@@ -267,6 +271,8 @@ export class DailyPnLCollector {
       // Schedule next day
       this.scheduleDailyCollection()
     }, delayMs)
+    
+    this._schedulerActive = true
   }
 
   /**
@@ -278,14 +284,14 @@ export class DailyPnLCollector {
       this.schedulerTimeout = null
       console.log('❌ Stopped daily P&L collection scheduler')
     }
+    this._schedulerActive = false
   }
 
   /**
    * Check if scheduler is currently active
    */
   isSchedulerActive(): boolean {
-    // Check if we have an active timeout scheduled
-    return this.schedulerTimeout !== null
+    return this._schedulerActive && this.schedulerTimeout !== null
   }
 
   /**

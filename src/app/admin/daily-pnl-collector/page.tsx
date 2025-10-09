@@ -89,6 +89,36 @@ export default function DailyPnLCollectorPage() {
     }
   }
 
+  const handleCleanup = async () => {
+    if (!confirm('Are you sure you want to remove duplicate P&L snapshots? This will keep only the latest snapshot for each date.')) {
+      return
+    }
+
+    try {
+      setActionLoading('cleanup')
+      
+      const response = await fetch('/api/admin/cleanup-pnl-snapshots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_duplicates' })
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        alert(result.message)
+        await loadStatus() // Refresh status
+      } else {
+        alert(`Error: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Error cleaning duplicates:', error)
+      alert('Error cleaning duplicates')
+    } finally {
+      setActionLoading('')
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -186,7 +216,7 @@ export default function DailyPnLCollectorPage() {
             <h2 className="text-lg font-medium text-gray-900">Collection Actions</h2>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Collect All Users */}
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Collect All Users</h3>
@@ -242,6 +272,21 @@ export default function DailyPnLCollectorPage() {
                     ? (status_?.schedulerActive ? 'Disabling...' : 'Enabling...')
                     : (status_?.schedulerActive ? 'Disable Scheduler' : 'Enable Scheduler')
                   }
+                </button>
+              </div>
+
+              {/* Cleanup Duplicates */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-2">Cleanup Duplicates</h3>
+                <p className="text-xs text-gray-600 mb-3">
+                  Remove duplicate snapshots for the same date
+                </p>
+                <button
+                  onClick={() => handleCleanup()}
+                  disabled={actionLoading === 'cleanup'}
+                  className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 disabled:opacity-50"
+                >
+                  {actionLoading === 'cleanup' ? 'Cleaning...' : 'Clean Duplicates'}
                 </button>
               </div>
             </div>
