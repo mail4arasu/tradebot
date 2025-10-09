@@ -51,18 +51,34 @@ export async function GET(_request: NextRequest) {
       console.log(`📊 Processing dashboard data for user: ${user.email}`)
       console.log(`📊 Margins API response:`, JSON.stringify(margins, null, 2))
       
-      if (margins && margins.data && margins.data.equity && margins.data.equity.available) {
-        currentBalance = margins.data.equity.available.cash || 0
-        availableMargin = margins.data.equity.available.adhoc_margin || margins.data.equity.available.net || 0
+      // Check if equity segment exists in margins response
+      if (margins && margins.data) {
+        console.log(`📋 Available segments:`, Object.keys(margins.data))
+        console.log(`📋 Has equity segment:`, !!margins.data.equity)
+        console.log(`📋 Has commodity segment:`, !!margins.data.commodity)
         
-        console.log(`💰 Extracted balance: ₹${currentBalance}`)
-        console.log(`💰 Extracted margin: ₹${availableMargin}`)
-        
-        // Update database with fresh balance
-        await User.findByIdAndUpdate(user._id, {
-          'zerodhaConfig.balance': currentBalance,
-          'zerodhaConfig.lastSync': new Date()
-        })
+        if (margins.data.equity && margins.data.equity.available) {
+          // Equity segment available - extract balance and margin
+          currentBalance = margins.data.equity.available.cash || 0
+          availableMargin = margins.data.equity.available.adhoc_margin || margins.data.equity.available.net || 0
+          
+          console.log(`💰 Extracted from EQUITY segment - Balance: ₹${currentBalance}, Margin: ₹${availableMargin}`)
+          
+          // Update database with fresh balance
+          await User.findByIdAndUpdate(user._id, {
+            'zerodhaConfig.balance': currentBalance,
+            'zerodhaConfig.lastSync': new Date()
+          })
+        } else {
+          console.log(`❌ EQUITY SEGMENT MISSING for user: ${user.email}`)
+          console.log(`❌ This user's account may not have equity trading enabled`)
+          console.log(`❌ Available segments: ${Object.keys(margins.data).join(', ')}`)
+          
+          // Check if commodity is available as fallback
+          if (margins.data.commodity && margins.data.commodity.available) {
+            console.log(`📊 Commodity segment data:`, margins.data.commodity.available)
+          }
+        }
       } else {
         console.log(`❌ No valid margins data found for user: ${user.email}`)
         console.log(`❌ Margins response structure:`, margins)
