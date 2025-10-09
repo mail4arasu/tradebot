@@ -448,7 +448,11 @@ export const intradayScheduler = IntradayScheduler.getInstance()
 
 // Auto-initialize when module is loaded (in production environment)
 if (process.env.NODE_ENV === 'production') {
-  intradayScheduler.initialize().catch(error => {
-    console.error('❌ Failed to auto-initialize intraday scheduler:', error)
-  })
+  // Delay initialization to allow proper database connection
+  setTimeout(() => {
+    intradayScheduler.initialize().catch(error => {
+      console.error('❌ Failed to auto-initialize intraday scheduler:', error)
+      console.log('💡 Try manual initialization via /api/admin/initialize-scheduler')
+    })
+  }, 5000) // 5 second delay
 }

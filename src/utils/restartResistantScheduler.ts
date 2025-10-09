@@ -173,20 +173,42 @@ export class RestartResistantScheduler {
   private async detectRestartAndRecover(): Promise<void> {
     console.log(`🔍 Detecting restart and recovering state...`)
     
-    // Find any pending exits from previous processes
-    const pendingExits = await ScheduledExit.find({ status: 'PENDING' })
-    
-    console.log(`📊 Found ${pendingExits.length} pending exits from previous sessions`)
-    
-    for (const exit of pendingExits) {
-      exit.addAuditLog('RESTART_DETECTED', 
-        `Process restart detected. Previous process: ${exit.scheduledBy?.processId || 'unknown'}`, 
-        this.state.processId)
-      await exit.save()
-    }
-    
-    if (pendingExits.length > 0) {
-      console.log(`🔄 Restart detected! Recovering ${pendingExits.length} scheduled exits`)
+    try {
+      // Find any pending exits from previous processes
+      const pendingExits = await ScheduledExit.find({ status: 'PENDING' })
+      
+      console.log(`📊 Found ${pendingExits.length} pending exits from previous sessions`)
+      
+      for (const exit of pendingExits) {
+        exit.addAuditLog('RESTART_DETECTED', 
+          `Process restart detected. Previous process: ${exit.scheduledBy?.processId || 'unknown'}`, 
+          this.state.processId)
+        await exit.save()
+      }
+      
+      if (pendingExits.length > 0) {
+        console.log(`🔄 Restart detected! Recovering ${pendingExits.length} scheduled exits`)
+      }
+    } catch (error) {
+      console.error(`❌ Error detecting restart state:`, error)
+      console.log(`💡 ScheduledExit collection may not exist yet. Creating...`)
+      
+      // Try to create the collection by creating a dummy document
+      try {
+        const dummyExit = new ScheduledExit({
+          positionId: '507f1f77bcf86cd799439011',
+          userId: '507f1f77bcf86cd799439011', 
+          symbol: 'INIT_DUMMY',
+          scheduledExitTime: '15:15',
+          status: 'CANCELLED'
+        })
+        await dummyExit.save()
+        await ScheduledExit.deleteOne({ _id: dummyExit._id })
+        console.log(`✅ ScheduledExit collection created successfully`)
+      } catch (createError) {
+        console.error(`❌ Failed to create ScheduledExit collection:`, createError)
+        throw createError
+      }
     }
   }
 
