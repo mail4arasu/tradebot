@@ -57,6 +57,8 @@ export async function GET(_request: NextRequest) {
       phoneVerified: user.phoneVerified,
       role: user.role || 'user',
       status: user.status || 'active',
+      lastLoginAt: user.lastLoginAt,
+      lastPasswordReset: user.lastPasswordReset,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       zerodhaConfig: user.zerodhaConfig ? {

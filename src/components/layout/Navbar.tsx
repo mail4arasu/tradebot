@@ -4,7 +4,7 @@ import { useSession, signIn, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Settings, History, Bot, TrendingUp, LogOut, Shield } from 'lucide-react'
+import { LayoutDashboard, Settings, History, Bot, TrendingUp, LogOut, Shield, User } from 'lucide-react'
 import { useAdmin } from '@/hooks/useAdmin'
 
 export default function Navbar() {
@@ -65,9 +65,15 @@ export default function Navbar() {
               )}
 
               <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-600">
-                  {session.user?.name || session.user?.email}
-                </span>
+                <Link 
+                  href="/profile" 
+                  className="flex items-center space-x-1 text-gray-700 hover:text-blue-600 transition-colors"
+                >
+                  <User size={16} />
+                  <span className="text-sm">
+                    {session.user?.name || session.user?.email}
+                  </span>
+                </Link>
                 <Button
                   variant="ghost"
                   size="sm"
