@@ -126,6 +126,22 @@ export async function POST(request: NextRequest) {
 
         console.log(`📤 Placing EMERGENCY exit order: ${exitOrderType} ${exitQuantity} ${position.symbol}`)
 
+        // Validate exchange field exists
+        if (!position.exchange) {
+          const error = `Position ${position.positionId} missing exchange information`
+          console.error(`❌ ${error}`)
+          results.errors.push(error)
+          results.failed++
+          results.details.push({
+            positionId: position.positionId,
+            symbol: position.symbol,
+            userId: user.email,
+            status: 'FAILED',
+            error: 'Missing exchange information'
+          })
+          continue
+        }
+
         // Place market order to square off position
         const orderResponse = await zerodhaAPI.placeOrder({
           tradingsymbol: position.symbol,

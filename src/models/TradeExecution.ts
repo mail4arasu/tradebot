@@ -77,7 +77,7 @@ TradeExecutionSchema.index({ botId: 1, status: 1 })
 TradeExecutionSchema.index({ signalId: 1 })
 TradeExecutionSchema.index({ zerodhaOrderId: 1 })
 TradeExecutionSchema.index({ status: 1, createdAt: -1 })
-TradeExecutionSchema.index({ positionId: 1 })
+TradeExecutionSchema.index({ positionId: 1, tradeType: 1 }) // Combined index to avoid duplicate
 TradeExecutionSchema.index({ tradeType: 1, status: 1 })
 TradeExecutionSchema.index({ parentPositionId: 1 })
 
