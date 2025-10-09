@@ -73,15 +73,41 @@ export async function POST(request: NextRequest) {
     )
 
   } catch (error) {
-    console.error('Signup error:', error)
+    console.error('❌ Signup error:', error)
+    console.error('📋 Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack
+    })
+    
+    // Handle MongoDB validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message)
+      console.error('📝 Validation errors:', validationErrors)
+      return NextResponse.json(
+        { error: `Validation error: ${validationErrors.join(', ')}` },
+        { status: 400 }
+      )
+    }
     
     // Handle duplicate key error (in case the unique index catches it)
     if (error.code === 11000) {
+      console.error('🔄 Duplicate email attempted:', email)
       return NextResponse.json(
         { error: 'User with this email already exists' },
         { status: 400 }
       )
     }
+
+    // Log the full error for debugging
+    console.error('🚨 Unhandled signup error:', {
+      errorType: typeof error,
+      errorConstructor: error.constructor.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      fullError: error
+    })
 
     return NextResponse.json(
       { error: 'Internal server error. Please try again.' },

@@ -1,8 +1,8 @@
 import mongoose from 'mongoose'
 
 const ZerodhaConfigSchema = new mongoose.Schema({
-  apiKey: { type: String, required: true },
-  apiSecret: { type: String, required: true },
+  apiKey: { type: String }, // Not required initially, user adds later
+  apiSecret: { type: String }, // Not required initially, user adds later
   accessToken: { type: String }, // OAuth access token for API calls
   isConnected: { type: Boolean, default: false },
   balance: { type: Number },
@@ -17,11 +17,14 @@ const UserSchema = new mongoose.Schema({
   emailVerified: { type: Date },
   phoneVerified: { type: Date },
   zerodhaConfig: ZerodhaConfigSchema,
+  // Authentication fields
+  authProvider: { type: String, enum: ['credentials', 'google', 'github'], default: 'credentials' },
+  password: { type: String },
+  
   // Admin and user management fields
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   status: { type: String, enum: ['active', 'suspended', 'restricted'], default: 'active' },
   lastLoginAt: { type: Date },
-  password: { type: String },
   
   // Password reset functionality
   passwordResetToken: { type: String },
