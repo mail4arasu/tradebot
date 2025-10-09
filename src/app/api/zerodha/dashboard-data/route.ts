@@ -46,14 +46,26 @@ export async function GET(_request: NextRequest) {
       
       // Get fresh balance from margins API
       let currentBalance = user.zerodhaConfig.balance || 0
+      let availableMargin = 0
+      
+      console.log(`📊 Processing dashboard data for user: ${user.email}`)
+      console.log(`📊 Margins API response:`, JSON.stringify(margins, null, 2))
+      
       if (margins && margins.data && margins.data.equity && margins.data.equity.available) {
         currentBalance = margins.data.equity.available.cash || 0
+        availableMargin = margins.data.equity.available.adhoc_margin || margins.data.equity.available.net || 0
+        
+        console.log(`💰 Extracted balance: ₹${currentBalance}`)
+        console.log(`💰 Extracted margin: ₹${availableMargin}`)
         
         // Update database with fresh balance
         await User.findByIdAndUpdate(user._id, {
           'zerodhaConfig.balance': currentBalance,
           'zerodhaConfig.lastSync': new Date()
         })
+      } else {
+        console.log(`❌ No valid margins data found for user: ${user.email}`)
+        console.log(`❌ Margins response structure:`, margins)
       }
 
       return NextResponse.json({
@@ -68,8 +80,8 @@ export async function GET(_request: NextRequest) {
         totalPnLPercentage: portfolio.totalPnLPercentage || 0,
         dayPnL: portfolio.totalDayPnL || 0,
         
-        // Margin Information
-        availableMargin: portfolio.availableMargin || 0,
+        // Margin Information  
+        availableMargin: availableMargin || portfolio.availableMargin || 0,
         usedMargin: portfolio.usedMargin || 0,
         totalMargin: portfolio.totalMargin || 0,
         marginUtilization: portfolio.marginUtilization || 0,
