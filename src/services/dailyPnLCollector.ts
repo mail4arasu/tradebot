@@ -3,6 +3,7 @@ import User from '@/models/User'
 import Position from '@/models/Position'
 import DailyPnLSnapshot from '@/models/DailyPnLSnapshot'
 import { ZerodhaAPI } from '@/lib/zerodha'
+import { decrypt } from '@/lib/encryption'
 
 /**
  * Daily P&L Snapshot Collector Service
@@ -91,11 +92,12 @@ export class DailyPnLCollector {
       return
     }
 
-    const zerodhaAPI = new ZerodhaAPI(
-      user.zerodhaConfig.apiKey,
-      user.zerodhaConfig.apiSecret,
-      user.zerodhaConfig.accessToken
-    )
+    // Decrypt credentials before using
+    const apiKey = decrypt(user.zerodhaConfig.apiKey)
+    const apiSecret = decrypt(user.zerodhaConfig.apiSecret)
+    const accessToken = decrypt(user.zerodhaConfig.accessToken)
+
+    const zerodhaAPI = new ZerodhaAPI(apiKey, apiSecret, accessToken)
 
     // Fetch comprehensive data from Zerodha
     const [portfolioData, botPositions] = await Promise.all([

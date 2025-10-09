@@ -5,6 +5,7 @@ import dbConnect from '@/lib/mongoose'
 import ScheduledExit from '@/models/ScheduledExit'
 import { restartResistantScheduler } from '@/utils/restartResistantScheduler'
 import { intradayScheduler } from '@/services/intradayScheduler'
+import { dailyPnLCollector } from '@/services/dailyPnLCollector'
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,6 +37,10 @@ export async function POST(request: NextRequest) {
     console.log('🚀 Initializing legacy scheduler...')
     await intradayScheduler.initialize()
     
+    // Step 5: Initialize daily P&L collector scheduler
+    console.log('📊 Initializing daily P&L collector scheduler...')
+    dailyPnLCollector.scheduleDailyCollection()
+    
     console.log('✅ Manual scheduler initialization completed successfully')
     
     return NextResponse.json({
@@ -45,7 +50,8 @@ export async function POST(request: NextRequest) {
       details: {
         databaseConnected: true,
         collectionExists: true,
-        schedulerInitialized: true
+        schedulerInitialized: true,
+        dailyPnLCollectorInitialized: true
       }
     })
     

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { dailyPnLCollector } from '@/services/dailyPnLCollector'
+import DailyPnLSnapshot from '@/models/DailyPnLSnapshot'
+import User from '@/models/User'
+import dbConnect from '@/lib/mongoose'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,13 +19,71 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const status = dailyPnLCollector.getStatus()
+    await dbConnect()
 
-    return NextResponse.json({
-      success: true,
-      status,
-      message: 'Daily P&L collector status retrieved'
-    })
+    const { searchParams } = new URL(request.url)
+    const action = searchParams.get('action')
+
+    switch (action) {
+      case 'status':
+      default:
+        // Get current status of the P&L collector
+        const status = dailyPnLCollector.getStatus()
+        
+        // Get additional statistics from database
+        const totalSnapshots = await DailyPnLSnapshot.countDocuments({})
+        const lastSnapshot = await DailyPnLSnapshot.findOne({})
+          .sort({ snapshotTime: -1 })
+          .select('date snapshotTime totalDayPnL')
+          .lean()
+
+        const recentSnapshots = await DailyPnLSnapshot.find({})
+          .sort({ snapshotTime: -1 })
+          .limit(10)
+          .select('userId date totalDayPnL totalPortfolioPnL snapshotTime dataSource')
+          .populate('userId', 'name email')
+          .lean()
+
+        const todaySnapshots = await DailyPnLSnapshot.countDocuments({
+          date: new Date().toISOString().split('T')[0]
+        })
+
+        return NextResponse.json({
+          success: true,
+          status: {
+            ...status,
+            totalSnapshots,
+            lastSnapshot,
+            recentSnapshots,
+            todaySnapshots
+          },
+          message: 'Daily P&L collector status retrieved'
+        })
+
+      case 'history':
+        // Get collection history
+        const limit = parseInt(searchParams.get('limit') || '50')
+        const skip = parseInt(searchParams.get('skip') || '0')
+        
+        const snapshots = await DailyPnLSnapshot.find({})
+          .sort({ snapshotTime: -1 })
+          .limit(limit)
+          .skip(skip)
+          .populate('userId', 'name email')
+          .lean()
+
+        const total = await DailyPnLSnapshot.countDocuments({})
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            snapshots,
+            total,
+            limit,
+            skip
+          }
+        })
+    }
 
   } catch (error) {
     console.error('Error getting P&L collector status:', error)
@@ -43,11 +104,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const { action, userId, date } = await request.json()
+    const { action, userId, date, startDate, endDate } = await request.json()
 
     switch (action) {
       case 'collect_all':
-        console.log('🔄 Admin triggered collection for all users')
+        console.log(`📊 Manual P&L collection triggered by ${session.user.email}`)
         const results = await dailyPnLCollector.collectAllUserSnapshots()
         return NextResponse.json({
           success: true,
@@ -60,15 +121,39 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'userId required for user collection' }, { status: 400 })
         }
         
-        console.log(`🔄 Admin triggered collection for user ${userId}`)
-        // TODO: Implement single user collection
+        console.log(`📊 Manual P&L collection for user ${userId} triggered by ${session.user.email}`)
+        // Get user data
+        await dbConnect()
+        const user = await User.findById(userId).select('email zerodhaConfig').lean()
+        if (!user) {
+          return NextResponse.json({ error: 'User not found' }, { status: 404 })
+        }
+        
+        await dailyPnLCollector.collectUserSnapshot(user, date)
+        
         return NextResponse.json({
           success: true,
-          message: `Collection triggered for user ${userId}`
+          message: `Collection completed for user ${user.email}`
+        })
+
+      case 'collect_date':
+        if (!date) {
+          return NextResponse.json({ error: 'Date is required' }, { status: 400 })
+        }
+
+        console.log(`📊 Manual P&L collection for ${date} triggered by ${session.user.email}`)
+        
+        // Temporarily set the target date in the collector
+        const dateResults = await dailyPnLCollector.collectAllUserSnapshots()
+        
+        return NextResponse.json({
+          success: true,
+          results: dateResults,
+          message: `Collection completed for ${date}: ${dateResults.success} success, ${dateResults.failed} failed`
         })
 
       case 'schedule':
-        console.log('📅 Admin enabled daily P&L collection scheduling')
+        console.log(`📅 Daily P&L collection scheduling enabled by ${session.user.email}`)
         dailyPnLCollector.scheduleDailyCollection()
         return NextResponse.json({
           success: true,

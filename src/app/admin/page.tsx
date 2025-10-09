@@ -249,6 +249,7 @@ export default function AdminDashboard() {
       title: 'Data & Reports',
       links: [
         { href: '/admin/data-sync', title: 'Data Sync' },
+        { href: '/admin/daily-pnl-collector', title: 'Daily P&L Collector' },
         { href: '/admin/reports', title: 'Reports' },
         { href: '/admin/charges', title: 'Charges' }
       ]
