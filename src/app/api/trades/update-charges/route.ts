@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { connectDB } from '@/lib/mongodb'
+import dbConnect from '@/lib/mongoose'
 import User from '@/models/User'
 import Trade from '@/models/Trade'
 import { ZerodhaAPI } from '@/lib/zerodha'
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await connectDB()
+    await dbConnect()
     
     const user = await User.findOne({ email: session.user.email })
     if (!user) {
@@ -265,7 +265,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await connectDB()
+    await dbConnect()
     
     const user = await User.findOne({ email: session.user.email })
     if (!user) {
